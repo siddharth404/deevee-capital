@@ -2,6 +2,22 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { PitchEmailData } from "./email";
 
 /**
+ * Strips or converts non-WinAnsi characters (such as ₹, smart quotes, em dashes)
+ * to ensure pdf-lib standard fonts do not throw encoding exceptions.
+ */
+function sanitizePdfText(text: string | undefined | null): string {
+  if (!text) return "";
+  return String(text)
+    .replace(/₹/g, "INR ")
+    .replace(/[–—]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, "*")
+    .replace(/[^\x00-\x7F]/g, "")
+    .trim();
+}
+
+/**
  * Generates an institutional Executive Pitch Memorandum PDF for Deevee Capital
  */
 export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer> {
@@ -119,14 +135,17 @@ export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer
 
   // Left Column (Startup details)
   const drawField = (label: string, value: string, x: number, y: number, isLink = false) => {
-    page.drawText(label.toUpperCase(), {
+    const cleanLabel = sanitizePdfText(label).toUpperCase();
+    const cleanValue = sanitizePdfText(value).slice(0, 45);
+
+    page.drawText(cleanLabel, {
       x,
       y,
       size: 7.5,
       font: helveticaBold,
       color: grey,
     });
-    page.drawText(value.slice(0, 45), {
+    page.drawText(cleanValue, {
       x,
       y: y - 13,
       size: 10,
@@ -166,7 +185,7 @@ export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer
         font: helveticaBold,
         color: grey,
       });
-      page.drawText(data.websiteUrl.slice(0, 48), {
+      page.drawText(sanitizePdfText(data.websiteUrl).slice(0, 48), {
         x: 145,
         y: currentY - 20,
         size: 9,
@@ -183,7 +202,7 @@ export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer
         font: helveticaBold,
         color: grey,
       });
-      page.drawText(data.pitchDeckUrl.slice(0, 60), {
+      page.drawText(sanitizePdfText(data.pitchDeckUrl).slice(0, 60), {
         x: 145,
         y: currentY - 35,
         size: 9,
@@ -217,7 +236,8 @@ export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer
   const maxWidth = width - 88;
   const fontSize = 10;
   const lineHeight = 15;
-  const words = data.description.split(/\s+/);
+  const cleanDescription = sanitizePdfText(data.description);
+  const words = cleanDescription.split(/\s+/);
   let currentLine = "";
   const lines: string[] = [];
 
