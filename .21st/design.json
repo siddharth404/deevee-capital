@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "project": "Deevee Capital",
+  "stack": {
+    "framework": "nextjs-app-router",
+    "language": "typescript",
+    "styling": "tailwindcss-v4",
+    "animation": "framer-motion",
+    "icons": "lucide-react"
+  },
+  "tokens": {
+    "colors": {
+      "midnightNavy": "#101A24",
+      "deepCharcoal": "#17191C",
+      "warmIvory": "#F7F5F0",
+      "champagneGold": "#C6AD7A",
+      "slateGrey": "#77818B",
+      "pureWhite": "#FFFFFF"
+    },
+    "typography": {
+      "serif": "Cormorant Garamond, Georgia, serif",
+      "sans": "Plus Jakarta Sans, system-ui, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    }
+  },
+  "directionsExplored": [
+    {
+      "id": "direction-a",
+      "name": "Quiet Institutional (Selected)",
+      "summary": "Restrained investment-firm aesthetic with warm ivory (#F7F5F0) primary canvas, editorial serif headlines, fine architectural borders, subtle champagne gold (#C6AD7A) details, and deep midnight navy (#101A24) anchor chambers."
+    },
+    {
+      "id": "direction-b",
+      "name": "Modern Investment Studio",
+      "summary": "All-dark contemporary aesthetic using midnight navy (#101A24) and charcoal (#17191C), asymmetric layouts, and high-contrast display typography."
+    },
+    {
+      "id": "direction-c",
+      "name": "Editorial Founder-First",
+      "summary": "Magazine-inspired long-form narrative layout with oversized pull quotes and essay-style single-column progression."
+    }
+  ],
+  "decisions": [
+    {
+      "date": "2026-10-20",
+      "selectedDirection": "direction-a",
+      "rationale": "Quiet Institutional (Direction A) achieves the highest marks across brand credibility, readability, founder appeal, and mobile usability while honoring the real-world entrepreneurial heritage associated with Dee Vee Projects Limited through subtle architectural drafting grids and corner crosshairs."
+    }
+  ]
+}

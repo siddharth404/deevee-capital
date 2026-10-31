@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  /* Deevee Capital Brand Palette */
+  --color-midnight-navy: #101A24;
+  --color-deep-charcoal: #17191C;
+  --color-warm-ivory: #F7F5F0;
+  --color-champagne-gold: #C6AD7A;
+  --color-slate-grey: #77818B;
+  --color-pure-white: #FFFFFF;
+
+  /* Semantic Theme Tokens (shadcn / 21st.dev compatible) */
+  --background: #F7F5F0;
+  --foreground: #17191C;
+  --card: #FFFFFF;
+  --card-foreground: #17191C;
+  --primary: #101A24;
+  --primary-foreground: #F7F5F0;
+  --accent: #C6AD7A;
+  --accent-foreground: #101A24;
+  --muted: #ECE9E1;
+  --muted-foreground: #77818B;
+  --border: rgba(16, 26, 36, 0.14);
+  --ring: #C6AD7A;
+}
+
+@theme inline {
+  --color-navy: var(--color-midnight-navy);
+  --color-charcoal: var(--color-deep-charcoal);
+  --color-ivory: var(--color-warm-ivory);
+  --color-gold: var(--color-champagne-gold);
+  --color-slate: var(--color-slate-grey);
+  --font-serif: var(--font-cormorant), Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--color-warm-ivory);
+  color: var(--color-deep-charcoal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-warm-ivory);
+  color: var(--color-deep-charcoal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+@keyframes editorialReveal {
+  0% {
+    opacity: 0.92;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes contourPulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-editorial-reveal {
+  animation: editorialReveal 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-contour-pulse {
+  animation: contourPulse 12s ease-in-out infinite;
+}
+
+::selection {
+  background-color: var(--color-champagne-gold);
+  color: var(--color-midnight-navy);
+}
+
+/* Hide Next.js development floating badges & portals */
+nextjs-portal,
+#nextjs-dev-overlay,
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay] {
+  display: none !important;
+}
+
