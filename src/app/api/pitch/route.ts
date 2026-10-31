@@ -5,6 +5,7 @@ import path from "path";
 import { sendPitchNotificationEmail, PitchEmailAttachment } from "@/lib/email";
 import { generatePitchMemoPdf } from "@/lib/pdf-memo";
 import { uploadPitchAttachment } from "@/lib/gcs";
+import { verifyCaptcha } from "@/lib/captcha";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ export interface PitchSubmissionPayload {
   fundingSought?: string;
   pitchDeckUrl?: string;
   privacyConsent: boolean;
+  captchaToken?: string;
+  captchaAnswer?: string;
   companyFaxNumber?: string; // Honeypot
   formRenderedAt?: number;
 }
@@ -139,6 +142,8 @@ export async function POST(request: NextRequest) {
         fundingSought: (formData.get("fundingSought") as string) || undefined,
         pitchDeckUrl: (formData.get("pitchDeckUrl") as string) || undefined,
         privacyConsent: formData.get("privacyConsent") === "true",
+        captchaToken: (formData.get("captchaToken") as string) || undefined,
+        captchaAnswer: (formData.get("captchaAnswer") as string) || undefined,
         companyFaxNumber: (formData.get("companyFaxNumber") as string) || undefined,
         formRenderedAt: Number(formData.get("formRenderedAt")) || undefined,
       };
@@ -245,6 +250,12 @@ export async function POST(request: NextRequest) {
     if (!privacyConsent) {
       fieldErrors.privacyConsent =
         "You must confirm that you consent to sharing this information for evaluation purposes.";
+    }
+
+    // Security Verification / CAPTCHA Validation
+    const captchaCheck = verifyCaptcha(body.captchaToken, body.captchaAnswer);
+    if (!captchaCheck.valid) {
+      fieldErrors.captcha = captchaCheck.error || "Security verification failed. Please try again.";
     }
 
     if (Object.keys(fieldErrors).length > 0) {

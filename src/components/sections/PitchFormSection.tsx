@@ -22,6 +22,8 @@ import {
   Trash2,
   Download,
   Paperclip,
+  ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 
@@ -71,12 +73,36 @@ export function PitchFormSection({
   const [memoUrl, setMemoUrl] = useState<string>("");
   const [deckFile, setDeckFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [captchaData, setCaptchaData] = useState<{
+    token: string;
+    svg: string;
+    prompt: string;
+  } | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState<string>("");
+  const [isLoadingCaptcha, setIsLoadingCaptcha] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRenderedAtRef = useRef<number>(0);
   const isSubmittingRef = useRef<boolean>(false);
 
+  const fetchCaptcha = async () => {
+    setIsLoadingCaptcha(true);
+    try {
+      const res = await fetch("/api/pitch/captcha");
+      if (res.ok) {
+        const data = await res.json();
+        setCaptchaData(data);
+        setCaptchaAnswer("");
+      }
+    } catch (err) {
+      console.warn("Failed to load captcha", err);
+    } finally {
+      setIsLoadingCaptcha(false);
+    }
+  };
+
   useEffect(() => {
     formRenderedAtRef.current = Date.now();
+    fetchCaptcha();
   }, []);
 
   const validateClient = (data: FormValues): Record<string, string> => {
@@ -135,6 +161,9 @@ export function PitchFormSection({
       errors.privacyConsent =
         "Please confirm your consent to the Privacy Policy before submitting.";
     }
+    if (!captchaAnswer.trim()) {
+      errors.captcha = "Please solve the security challenge below to verify you are human.";
+    }
 
     return errors;
   };
@@ -190,6 +219,8 @@ export function PitchFormSection({
       if (values.companyFaxNumber) formData.append("companyFaxNumber", values.companyFaxNumber);
       if (formRenderedAtRef.current) formData.append("formRenderedAt", String(formRenderedAtRef.current));
       if (deckFile) formData.append("pitchDeckFile", deckFile);
+      if (captchaData?.token) formData.append("captchaToken", captchaData.token);
+      formData.append("captchaAnswer", captchaAnswer.trim());
 
       const response = await fetch("/api/pitch", {
         method: "POST",
@@ -201,6 +232,9 @@ export function PitchFormSection({
       if (!response.ok || !data.ok) {
         if (data.fieldErrors) {
           setFieldErrors(data.fieldErrors);
+          if (data.fieldErrors.captcha) {
+            fetchCaptcha();
+          }
         }
         setStatus("error");
         setServerMessage(
@@ -1430,6 +1464,157 @@ export function PitchFormSection({
                         }}
                       >
                         {fieldErrors.privacyConsent}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Anti-Bot Security Verification Challenge (CAPTCHA) */}
+                  <div
+                    style={{
+                      padding: "16px",
+                      background: "var(--ctl-paper)",
+                      border: "1px solid var(--ctl-line)",
+                      boxShadow: "inset 0 0 0 1px rgba(16, 26, 36, 0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          color: "var(--ctl-ink)",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          letterSpacing: "0.16em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                        <span>Security Verification</span>
+                      </div>
+                      <span style={{ fontSize: "11px", color: "var(--ctl-soft)" }}>
+                        Anti-Bot Protection
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "12px",
+                      }}
+                    >
+                      {/* SVG Challenge Preview */}
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          background: "#101A24",
+                          padding: "3px 8px",
+                          border: "1px solid #C6AD7A",
+                          borderRadius: "2px",
+                        }}
+                      >
+                        {captchaData?.svg ? (
+                          <img
+                            src={captchaData.svg}
+                            alt="Security math verification code"
+                            style={{ height: "38px", display: "block" }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              height: "38px",
+                              width: "120px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#C6AD7A",
+                              fontSize: "11px",
+                            }}
+                          >
+                            Generating code...
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={fetchCaptcha}
+                          disabled={isLoadingCaptcha}
+                          title="Generate new verification code"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#C6AD7A",
+                            cursor: "pointer",
+                            padding: "4px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <RefreshCw
+                            className={`h-3.5 w-3.5 ${isLoadingCaptcha ? "animate-spin" : ""}`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </div>
+
+                      {/* User Answer Input */}
+                      <div style={{ flex: 1, minWidth: "140px" }}>
+                        <input
+                          id="captchaAnswer"
+                          name="captchaAnswer"
+                          type="text"
+                          required
+                          placeholder="Enter calculation result..."
+                          value={captchaAnswer}
+                          onChange={(e) => {
+                            setCaptchaAnswer(e.target.value);
+                            if (fieldErrors.captcha) {
+                              setFieldErrors((prev) => {
+                                const n = { ...prev };
+                                delete n.captcha;
+                                return n;
+                              });
+                            }
+                          }}
+                          aria-invalid={Boolean(fieldErrors.captcha)}
+                          style={{
+                            width: "100%",
+                            height: "44px",
+                            padding: "0 14px",
+                            fontSize: "13.5px",
+                            fontWeight: 600,
+                            letterSpacing: "0.04em",
+                            border: `1px solid ${fieldErrors.captcha ? "#b4322a" : "var(--ctl-line)"}`,
+                            background: "var(--ctl-wash)",
+                            color: "var(--ctl-text)",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {fieldErrors.captcha && (
+                      <p
+                        role="alert"
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "12px",
+                          color: "#b4322a",
+                        }}
+                      >
+                        {fieldErrors.captcha}
                       </p>
                     )}
                   </div>
