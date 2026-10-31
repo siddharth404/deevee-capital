@@ -13,7 +13,9 @@
 # Local data & secrets
 .env
 .env*.local
+.env.deeveecapital-site
 /data/submissions.jsonl
+public/uploads/
 
 # Misc
 .DS_Store
