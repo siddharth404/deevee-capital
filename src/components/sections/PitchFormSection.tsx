@@ -18,6 +18,10 @@ import {
   FileText,
   ArrowUpRight,
   RotateCcw,
+  UploadCloud,
+  Trash2,
+  Download,
+  Paperclip,
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 
@@ -64,6 +68,10 @@ export function PitchFormSection({
   const [serverMessage, setServerMessage] = useState<string>("");
   const [referenceId, setReferenceId] = useState<string>("");
   const [submittedAt, setSubmittedAt] = useState<string>("");
+  const [memoUrl, setMemoUrl] = useState<string>("");
+  const [deckFile, setDeckFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const formRenderedAtRef = useRef<number>(0);
   const isSubmittingRef = useRef<boolean>(false);
 
@@ -168,15 +176,24 @@ export function PitchFormSection({
     setServerMessage("");
 
     try {
+      const formData = new FormData();
+      formData.append("founderName", values.founderName);
+      formData.append("founderEmail", values.founderEmail);
+      formData.append("startupName", values.startupName);
+      formData.append("sector", values.sector);
+      formData.append("stage", values.stage);
+      formData.append("description", values.description);
+      if (values.websiteUrl) formData.append("websiteUrl", values.websiteUrl);
+      if (values.fundingSought) formData.append("fundingSought", values.fundingSought);
+      if (values.pitchDeckUrl) formData.append("pitchDeckUrl", values.pitchDeckUrl);
+      formData.append("privacyConsent", String(values.privacyConsent));
+      if (values.companyFaxNumber) formData.append("companyFaxNumber", values.companyFaxNumber);
+      if (formRenderedAtRef.current) formData.append("formRenderedAt", String(formRenderedAtRef.current));
+      if (deckFile) formData.append("pitchDeckFile", deckFile);
+
       const response = await fetch("/api/pitch", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...values,
-          formRenderedAt: formRenderedAtRef.current,
-        }),
+        body: formData,
       });
 
       const data = await response.json();
@@ -195,6 +212,7 @@ export function PitchFormSection({
 
       setReferenceId(data.referenceId || "DVC-CONFIRMED");
       setSubmittedAt(data.submittedAt || new Date().toISOString());
+      setMemoUrl(data.memoUrl || "");
       setServerMessage(
         data.message ||
           "Thank you for sharing your startup with Deevee Capital. Your submission has been securely recorded."
@@ -222,6 +240,11 @@ export function PitchFormSection({
     setStatus("idle");
     setServerMessage("");
     setReferenceId("");
+    setMemoUrl("");
+    setDeckFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     formRenderedAtRef.current = Date.now();
   };
 
@@ -656,7 +679,23 @@ export function PitchFormSection({
                     )}
                   </div>
 
-                  <div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+                    {memoUrl && (
+                      <a
+                        href={memoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ctl-btn"
+                        style={{
+                          textDecoration: "none",
+                          background: "var(--ctl-ink)",
+                          color: "var(--ctl-paper)",
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Download Pitch Memorandum (PDF)</span>
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={handleResetForAnotherPitch}
@@ -1082,7 +1121,7 @@ export function PitchFormSection({
                     )}
                   </div>
 
-                  {/* Row 5: Funding Sought & Pitch Deck URL */}
+                  {/* Row 5: Funding Sought & Pitch Deck (PDF Upload + Link) */}
                   <div
                     style={{
                       display: "grid",
@@ -1112,9 +1151,9 @@ export function PitchFormSection({
 
                     <div>
                       <label htmlFor="pitchDeckUrl" style={labelStyle}>
-                        Pitch Deck URL{" "}
+                        Pitch Deck Link{" "}
                         <span style={{ fontWeight: 400, color: "var(--ctl-soft)" }}>
-                          (Optional)
+                          (DocSend / Drive)
                         </span>
                       </label>
                       <input
@@ -1148,6 +1187,170 @@ export function PitchFormSection({
                         </p>
                       )}
                     </div>
+                  </div>
+
+                  {/* Row 5B: Dedicated Pitch Deck File Upload (PDF) */}
+                  <div style={{ marginTop: "4px" }}>
+                    <label style={labelStyle}>
+                      Upload Pitch Deck (PDF){" "}
+                      <span style={{ fontWeight: 400, color: "var(--ctl-soft)" }}>
+                        (Max 25MB · Recommended)
+                      </span>
+                    </label>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.pptx,.ppt"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file) {
+                          if (file.size > 25 * 1024 * 1024) {
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              pitchDeckFile: "File exceeds 25MB limit. Please upload a smaller PDF or use a link.",
+                            }));
+                            setDeckFile(null);
+                          } else {
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.pitchDeckFile;
+                              return next;
+                            });
+                            setDeckFile(file);
+                          }
+                        }
+                      }}
+                    />
+
+                    {deckFile ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "12px 16px",
+                          background: "var(--ctl-paper)",
+                          border: "1px solid var(--ctl-ink)",
+                          borderRadius: "2px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <FileText className="h-5 w-5 shrink-0" style={{ color: "var(--ctl-ink)" }} />
+                          <div style={{ minWidth: 0 }}>
+                            <strong
+                              style={{
+                                display: "block",
+                                fontSize: "13px",
+                                color: "var(--ctl-text)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {deckFile.name}
+                            </strong>
+                            <span style={{ fontSize: "11px", color: "var(--ctl-soft)" }}>
+                              {(deckFile.size / (1024 * 1024)).toFixed(2)} MB · PDF Deck Attached
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeckFile(null);
+                            if (fileInputRef.current) {
+                              fileInputRef.current.value = "";
+                            }
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#b4322a",
+                            cursor: "pointer",
+                            padding: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "12px",
+                          }}
+                          title="Remove file"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDragging(false);
+                          const file = e.dataTransfer.files?.[0] || null;
+                          if (file) {
+                            if (file.size > 25 * 1024 * 1024) {
+                              setFieldErrors((prev) => ({
+                                ...prev,
+                                pitchDeckFile: "File exceeds 25MB limit. Please upload a smaller PDF or use a link.",
+                              }));
+                            } else {
+                              setFieldErrors((prev) => {
+                                const next = { ...prev };
+                                delete next.pitchDeckFile;
+                                return next;
+                              });
+                              setDeckFile(file);
+                            }
+                          }
+                        }}
+                        style={{
+                          border: isDragging
+                            ? "2px dashed var(--ctl-ink)"
+                            : "1px dashed var(--ctl-line, rgba(34,56,196,0.3))",
+                          background: isDragging
+                            ? "rgba(16,26,36,0.04)"
+                            : "var(--ctl-paper)",
+                          padding: "20px",
+                          textAlign: "center",
+                          cursor: "pointer",
+                          transition: "border-color 0.2s ease, background 0.2s ease",
+                          borderRadius: "2px",
+                        }}
+                      >
+                        <UploadCloud
+                          className="h-6 w-6 mx-auto mb-2"
+                          style={{ color: "var(--ctl-ink)", opacity: 0.8 }}
+                        />
+                        <p style={{ margin: 0, fontSize: "13px", fontWeight: 500, color: "var(--ctl-text)" }}>
+                          <span style={{ color: "var(--ctl-ink)", textDecoration: "underline" }}>
+                            Click to upload your pitch deck (PDF)
+                          </span>{" "}
+                          or drag &amp; drop
+                        </p>
+                        <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--ctl-soft)" }}>
+                          PDF, PPTX up to 25MB. Delivered directly to our investment team.
+                        </p>
+                      </div>
+                    )}
+
+                    {fieldErrors.pitchDeckFile && (
+                      <p
+                        role="alert"
+                        style={{
+                          marginTop: "6px",
+                          fontSize: "12px",
+                          color: "#b4322a",
+                        }}
+                      >
+                        {fieldErrors.pitchDeckFile}
+                      </p>
+                    )}
                   </div>
 
                   {/* Row 6: Privacy Policy Consent */}
