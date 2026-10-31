@@ -72,3 +72,45 @@ export async function uploadPitchAttachment(
   console.log(`[Storage] Saved ${filename} locally to ${localUrl}`);
   return { url: localUrl, storageType: "local" };
 }
+
+/**
+ * Retrieves an attachment buffer from Google Cloud Storage or local fallback
+ */
+export async function getPitchAttachmentBuffer(filename: string): Promise<Buffer | null> {
+  const token = await getGcpAccessToken();
+
+  if (token) {
+    try {
+      const sanitizedName = encodeURIComponent(filename.replace(/[^a-zA-Z0-9._-]/g, "_"));
+      const getUrl = `https://storage.googleapis.com/storage/v1/b/${BUCKET_NAME}/o/pitches%2F${sanitizedName}?alt=media`;
+
+      const res = await fetch(getUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        return Buffer.from(arrayBuf);
+      }
+    } catch (err) {
+      console.warn("[Storage] Failed to retrieve attachment from GCS:", err);
+    }
+  }
+
+  // Local fallback
+  try {
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "pitches");
+    const files = await fs.readdir(uploadsDir);
+    const match = files.find((f) => f.endsWith(filename) || f === filename);
+    if (match) {
+      return await fs.readFile(path.join(uploadsDir, match));
+    }
+  } catch {
+    // Ignore local lookup failure
+  }
+
+  return null;
+}
+

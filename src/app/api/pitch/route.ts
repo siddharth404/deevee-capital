@@ -407,14 +407,19 @@ export async function POST(request: NextRequest) {
 
     recentSubmissionHashes.set(fingerprint, { referenceId, timestamp: now });
 
-    // 10. Return Public Confirmation (Including download link for the generated memo)
+    // 10. Return Public Confirmation (Including streaming download links)
+    const downloadMemoUrl = `/api/pitch/download?file=Deevee_Capital_Pitch_Memo_${referenceId}.pdf`;
+    const downloadDeckUrl = uploadedDeckName
+      ? `/api/pitch/download?file=${referenceId}_${uploadedDeckName}`
+      : undefined;
+
     return NextResponse.json(
       {
         ok: true,
         referenceId,
         submittedAt,
-        memoUrl: memoStorageUrl || undefined,
-        deckUrl: pitchDeckStorageUrl || undefined,
+        memoUrl: downloadMemoUrl,
+        deckUrl: downloadDeckUrl,
         message:
           "Thank you for sharing your startup with Deevee Capital. Your submission has been securely recorded and dispatched to our investment team.",
       },
