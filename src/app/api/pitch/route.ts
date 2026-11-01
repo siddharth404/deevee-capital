@@ -27,6 +27,7 @@ export interface PitchSubmissionPayload {
   startupName: string;
   websiteUrl?: string;
   sector: string;
+  sectorCustom?: string;
   stage: string;
   description: string;
   fundingSought?: string;
@@ -141,6 +142,7 @@ export async function POST(request: NextRequest) {
         startupName: (formData.get("startupName") as string) || "",
         websiteUrl: (formData.get("websiteUrl") as string) || undefined,
         sector: (formData.get("sector") as string) || "",
+        sectorCustom: (formData.get("sectorCustom") as string) || undefined,
         stage: (formData.get("stage") as string) || "",
         description: (formData.get("description") as string) || "",
         fundingSought: (formData.get("fundingSought") as string) || undefined,
@@ -218,7 +220,11 @@ export async function POST(request: NextRequest) {
     const linkedinUrlRaw = sanitizeText(body.linkedinUrl, 300);
     const startupName = sanitizeText(body.startupName, 140);
     const websiteUrlRaw = sanitizeText(body.websiteUrl, 300);
-    const sector = sanitizeText(body.sector, 120);
+    const sectorRaw = sanitizeText(body.sector, 160);
+    const sectorCustomRaw = body.sectorCustom ? sanitizeText(body.sectorCustom, 120) : undefined;
+    const sector = sectorCustomRaw && !sectorRaw.includes(sectorCustomRaw)
+      ? `${sectorRaw} (${sectorCustomRaw})`
+      : sectorRaw;
     const stage = sanitizeText(body.stage, 120);
     const description = sanitizeText(body.description, 3500);
     const fundingSought = sanitizeText(body.fundingSought, 160);

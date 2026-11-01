@@ -48,17 +48,15 @@ export default function HomePage() {
           est: "DEEVEE CAPITAL",
           edition: "EARLY-STAGE INITIATIVE",
         }}
-        clientsLabel="Mandate & Focus"
+        clientsLabel="Guiding Principles"
         clients={[
-          "Pre-Seed & Seed Focus",
-          "Up to ₹1 Crore Capacity",
-          "Artificial Intelligence & Applied AI",
-          "Enterprise SaaS",
-          "Financial Technology",
-          "Deep Technology",
-          "Infrastructure Technology",
-          "Industrial Innovation",
-          "Emerging Technology",
+          "Sector Agnostic",
+          "Exceptional Founders",
+          "Meaningful Problems",
+          "Scalable Businesses",
+          "Sustainable Growth",
+          "Long-Term Potential",
+          "First-Principles Thinking",
         ]}
         mandateSlot={<InvestmentMandateSection />}
         servicesCopy={{
@@ -85,7 +83,7 @@ export default function HomePage() {
           kicker: "05 · What We Look For",
           title: "Four areas of *enduring interest*.",
           intro:
-            "Pull an engraved bookmark from the shelf. These represent areas of interest as we explore early-stage opportunities, rather than fixed or guaranteed investment criteria.",
+            "We approach opportunities with an open mind, without limiting ourselves to predefined industries. Our interest lies in identifying exceptional founders building meaningful businesses with the potential to scale and create lasting value.",
         }}
         solutions={[
           {
@@ -292,13 +290,13 @@ export default function HomePage() {
             ],
           },
           {
-            title: "Sectors of Interest",
+            title: "Evaluation Principles",
             links: [
-              { label: "Applied AI & Automation", href: "#mandate" },
-              { label: "Enterprise SaaS & B2B", href: "#mandate" },
-              { label: "FinTech & Financial Infra", href: "#mandate" },
-              { label: "DeepTech & Computing", href: "#mandate" },
-              { label: "Industrial & Infra Tech", href: "#mandate" },
+              { label: "Exceptional Founders", href: "#solutions" },
+              { label: "Meaningful Problems", href: "#solutions" },
+              { label: "Scalable Models", href: "#solutions" },
+              { label: "Long-Term Potential", href: "#solutions" },
+              { label: "Sector-Agnostic Mandate", href: "#mandate" },
             ],
           },
           {

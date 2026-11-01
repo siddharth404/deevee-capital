@@ -35,6 +35,7 @@ interface FormValues {
   startupName: string;
   websiteUrl: string;
   sector: string;
+  sectorCustom: string;
   stage: string;
   description: string;
   fundingSought: string;
@@ -51,6 +52,7 @@ const INITIAL_VALUES: FormValues = {
   startupName: "",
   websiteUrl: "",
   sector: "",
+  sectorCustom: "",
   stage: "",
   description: "",
   fundingSought: "",
@@ -139,7 +141,7 @@ export function PitchFormSection({
       }
     }
     if (!data.sector) {
-      errors.sector = "Please select a primary sector.";
+      errors.sector = "Please select a primary sector or choose 'Other / Emerging Sector'.";
     }
     if (!data.stage) {
       errors.stage = "Please select your current stage.";
@@ -228,7 +230,11 @@ export function PitchFormSection({
       if (values.founderPhone) formData.append("founderPhone", values.founderPhone);
       if (values.linkedinUrl) formData.append("linkedinUrl", values.linkedinUrl);
       formData.append("startupName", values.startupName);
-      formData.append("sector", values.sector);
+      const combinedSector = values.sectorCustom?.trim()
+        ? `${values.sector} (${values.sectorCustom.trim()})`
+        : values.sector;
+      formData.append("sector", combinedSector);
+      if (values.sectorCustom) formData.append("sectorCustom", values.sectorCustom.trim());
       formData.append("stage", values.stage);
       formData.append("description", values.description);
       if (values.websiteUrl) formData.append("websiteUrl", values.websiteUrl);
@@ -1088,7 +1094,7 @@ export function PitchFormSection({
                     </div>
                   </div>
 
-                  {/* Row 3: Sector & Current Stage */}
+                  {/* Row 3: Sector, Specific Vertical (Optional) & Current Stage */}
                   <div
                     style={{
                       display: "grid",
@@ -1098,7 +1104,7 @@ export function PitchFormSection({
                   >
                     <div>
                       <label htmlFor="sector" style={labelStyle}>
-                        Sector <span>*</span>
+                        Sector / Industry <span>*</span>
                       </label>
                       <select
                         id="sector"
@@ -1112,7 +1118,7 @@ export function PitchFormSection({
                         }
                         style={inputStyle(Boolean(fieldErrors.sector))}
                       >
-                        <option value="">Select primary sector...</option>
+                        <option value="">Select industry category...</option>
                         {siteConfig.form.sectors.map((sec) => (
                           <option key={sec} value={sec}>
                             {sec}
@@ -1132,6 +1138,21 @@ export function PitchFormSection({
                           {fieldErrors.sector}
                         </p>
                       )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="sectorCustom" style={labelStyle}>
+                        Specific Vertical / Domain <span style={{ opacity: 0.65, fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        id="sectorCustom"
+                        name="sectorCustom"
+                        type="text"
+                        placeholder="e.g. Precision Ag, D2C, Specialty Mfg..."
+                        value={values.sectorCustom}
+                        onChange={(e) => handleChange("sectorCustom", e.target.value)}
+                        style={inputStyle(false)}
+                      />
                     </div>
 
                     <div>

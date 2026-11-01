@@ -26,7 +26,7 @@ export function InvestmentMandateSection() {
               {data.index} · {data.eyebrow}
             </span>
             <h2 className="ctl-h2" id="mandate-heading">
-              Early-stage opportunities. <em>Long-term thinking.</em>
+              Open to Ideas. <em>Focused on Potential.</em>
             </h2>
           </div>
           <p className="ctl-lede">{data.description}</p>
@@ -94,7 +94,7 @@ export function InvestmentMandateSection() {
           ))}
         </div>
 
-        {/* Sectors of Interest Sub-section */}
+        {/* Sector-Agnostic Positioning Card */}
         <div
           style={{
             border: "1px solid var(--ctl-line)",
@@ -115,7 +115,7 @@ export function InvestmentMandateSection() {
             }}
           >
             <div>
-              <span className="ctl-kicker">FOCUS AREAS</span>
+              <span className="ctl-kicker">SECTOR-AGNOSTIC POSITIONING</span>
               <h3
                 style={{
                   fontFamily: "var(--ctl-serif)",
@@ -125,22 +125,23 @@ export function InvestmentMandateSection() {
                   marginTop: "6px",
                 }}
               >
-                {data.sectorsHeadline}
+                {data.positioningHeadline}
               </h3>
             </div>
             <p
               style={{
                 fontSize: "13.5px",
                 color: "var(--ctl-soft)",
-                maxWidth: "480px",
+                maxWidth: "520px",
                 margin: 0,
+                lineHeight: 1.6,
               }}
             >
-              {data.sectorsSubheadline}
+              {data.positioningStatement}
             </p>
           </div>
 
-          {/* Sector Cards */}
+          {/* Open Architecture Pillars */}
           <div
             style={{
               display: "grid",
@@ -148,16 +149,16 @@ export function InvestmentMandateSection() {
               gap: "16px",
             }}
           >
-            {data.sectors.map((sec) => (
+            {data.openPillars.map((pillar) => (
               <div
-                key={sec.name}
+                key={pillar.name}
                 style={{
-                  padding: "16px",
+                  padding: "18px",
                   border: "1px solid var(--ctl-line)",
                   background: "var(--ctl-wash)",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "6px",
+                  gap: "8px",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -169,23 +170,23 @@ export function InvestmentMandateSection() {
                   <strong
                     style={{
                       fontFamily: "var(--ctl-serif)",
-                      fontSize: "16px",
+                      fontSize: "17px",
                       color: "var(--ctl-text)",
                     }}
                   >
-                    {sec.name}
+                    {pillar.name}
                   </strong>
                 </div>
                 <p
                   style={{
                     fontSize: "12.5px",
-                    lineHeight: 1.5,
+                    lineHeight: 1.55,
                     color: "var(--ctl-soft)",
                     margin: 0,
                     paddingLeft: "22px",
                   }}
                 >
-                  {sec.description}
+                  {pillar.description}
                 </p>
               </div>
             ))}
@@ -207,7 +208,7 @@ export function InvestmentMandateSection() {
             }}
           >
             <span>
-              * Indicative ticket size up to ₹1 Crore per startup. Submissions do not imply a guaranteed investment commitment or formal endorsement.
+              * Indicative ticket size up to ₹1 Crore per startup across any industry. Submissions do not imply a guaranteed investment commitment or formal endorsement.
             </span>
             <a
               href="#pitch-form"

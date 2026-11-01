@@ -308,7 +308,7 @@ export const PERSPECTIVES: PerspectiveArticle[] = [
         bullets: [
           "Founder Name & Email: How we can contact you directly for a conversation.",
           "Startup Name & Website/Product Link: If you have an active product, MVP, or demo, we love seeing what you have built firsthand.",
-          "Sector & Stage: Understanding whether you are at the concept stage, have an MVP, or are scaling early revenue across enterprise software, AI, fintech, deeptech, or industrial domains.",
+          "Sector & Stage: Understanding whether you are at the concept stage, have an MVP, or are scaling early revenue across any industry—from technology and consumer to manufacturing, infrastructure, and services.",
           "Brief Description: Tell us clearly what problem you are solving, for whom, why existing solutions are inadequate, and what your unique insight is.",
           "Funding Sought & Pitch Deck Link: Share your capital target and a link to your deck or memo (DocSend, Google Drive, Notion) if available.",
         ],

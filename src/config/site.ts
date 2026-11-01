@@ -15,7 +15,7 @@ export const siteConfig = {
   shortStatement:
     "An emerging, promoter-backed initiative exploring early-stage startup investments of up to ₹1 crore.",
   description:
-    "Deevee Capital is an emerging, promoter-backed early-stage investment initiative. We partner with ambitious founders building scalable, technology-driven businesses, considering investment opportunities of up to ₹1 crore.",
+    "Deevee Capital is an emerging, promoter-backed early-stage investment initiative taking a sector-agnostic approach. We partner with ambitious founders building scalable, enduring businesses across industries, considering investment opportunities of up to ₹1 crore.",
   
   /**
    * Associated Industrial & Infrastructure Background
@@ -75,14 +75,14 @@ export const siteConfig = {
   },
 
   /**
-   * Investment Mandate
+   * Investment Mandate — Sector-Agnostic Approach
    */
   mandate: {
     index: "01",
     eyebrow: "INVESTMENT MANDATE",
-    headline: "Early-stage opportunities. Long-term thinking.",
+    headline: "Open to Ideas. Focused on Potential.",
     description:
-      "We are interested in partnering with founders at the early stages of their entrepreneurial journey, particularly those addressing meaningful problems through innovative and scalable business models.",
+      "We are open to exploring promising businesses across industries and sectors. Rather than following a fixed industry mandate, we focus on the strength of the founding team, the problem being addressed, market opportunity, business fundamentals and potential for long-term growth.",
     parameters: [
       {
         label: "Stage",
@@ -100,9 +100,9 @@ export const siteConfig = {
         note: "Backing founders solving meaningful problems for India and global markets.",
       },
       {
-        label: "Sector Focus",
-        value: "Technology & Scalable",
-        note: "Innovative, software, AI, and technology-enabled business models.",
+        label: "Sector Approach",
+        value: "Sector-Agnostic",
+        note: "Open to high-potential businesses across diverse industries and business models.",
       },
       {
         label: "Partnership Approach",
@@ -110,37 +110,29 @@ export const siteConfig = {
         note: "High-engagement, patient capital focused on sustainable value creation.",
       },
     ],
-    sectorsHeadline: "Sectors of Interest",
-    sectorsSubheadline:
-      "While we remain open to exceptional ideas across diverse fields, we are especially drawn to companies leveraging technology to drive real-world transformation:",
-    sectors: [
+    positioningHeadline: "Broad Horizon. Selective Conviction.",
+    positioningStatement:
+      "Deevee Capital takes a sector-agnostic approach to early-stage opportunities. We are interested in founders building meaningful, scalable businesses across industries, guided by conviction in the problem, strength of execution and potential for long-term value creation.",
+    openPillars: [
       {
-        name: "Artificial Intelligence & Applied AI",
-        description: "Intelligent workflows, domain-specific models, and applied automation.",
+        name: "Open to All Industries",
+        description:
+          "From technology and manufacturing to healthcare, consumer, agriculture, climate, and infrastructure—we evaluate every business on its intrinsic merits rather than sector quotas.",
       },
       {
-        name: "Enterprise SaaS",
-        description: "B2B software, mission-critical tooling, and scalable vertical solutions.",
+        name: "First-Principles Inquiry",
+        description:
+          "We examine the gravity of the customer problem, pricing power, unit economics, and operational leverage rather than transient category narratives.",
       },
       {
-        name: "Financial Technology",
-        description: "Financial infrastructure, payments, capital efficiency, and embedded finance.",
+        name: "Execution & Resilience",
+        description:
+          "Great businesses are built on operational discipline and stamina. We back determined teams who understand their customers and execute with precision.",
       },
       {
-        name: "Deep Technology",
-        description: "Proprietary IP, advanced computational systems, and scientific breakthroughs.",
-      },
-      {
-        name: "Infrastructure Technology",
-        description: "Digital systems enhancing modern physical and data infrastructure.",
-      },
-      {
-        name: "Industrial Innovation",
-        description: "Tech-enabled logistics, supply chain efficiency, and manufacturing tech.",
-      },
-      {
-        name: "Emerging Technology",
-        description: "Frontier architectures, decentralized rails, and next-generation platforms.",
+        name: "Active, Patient Partnership",
+        description:
+          "Capital is only the foundation. We provide strategic direction, financial modelling, and pragmatic operational guidance tailored to each founder's journey.",
       },
     ],
   },
@@ -324,7 +316,7 @@ export const siteConfig = {
     eyebrow: "WHAT WE LOOK FOR",
     headline: "Four areas of enduring interest.",
     disclaimer:
-      "These represent areas of interest as we explore early-stage opportunities, rather than fixed or guaranteed investment criteria.",
+      "We approach opportunities with an open mind, without limiting ourselves to predefined industries. Our interest lies in identifying exceptional founders building meaningful businesses with the potential to scale and create lasting value.",
     blocks: [
       {
         id: "exceptional-founders",
@@ -372,7 +364,7 @@ export const siteConfig = {
     eyebrow: "ABOUT DEEVEE CAPITAL",
     headline: "Curious about what comes next.",
     paragraphs: [
-      "Deevee Capital is an emerging, promoter-backed early-stage investment initiative exploring promising startup opportunities and building thoughtful, long-term relationships with ambitious founders.",
+      "Deevee Capital is an emerging, promoter-backed early-stage investment initiative exploring promising startup opportunities and building thoughtful, long-term relationships with ambitious founders across industries.",
       "We believe that conversations with founders are best approached with openness, respect for the craft of company-building, and a willingness to listen carefully before drawing conclusions.",
       "The initiative draws inspiration from the entrepreneurial and engineering heritage of Dee Vee Projects Limited (dvplindia.in)—an Indian infrastructure enterprise founded in 1989 with operations spanning over 13 states. This background instills an appreciation for physical execution stamina, foundational operational discipline, and long-horizon enterprise building.",
     ],
@@ -407,16 +399,18 @@ export const siteConfig = {
       "Undisclosed / Discussion Stage",
     ],
     sectors: [
-      "Artificial Intelligence & Applied AI",
-      "Enterprise SaaS & B2B Software",
-      "Financial Technology & Infrastructure",
-      "Deep Technology & Computing",
-      "Infrastructure Technology & Systems",
-      "Industrial Innovation & Supply Chain",
-      "Consumer Tech & Digital Brands",
-      "Climate & Sustainable Technology",
+      "Technology & Software",
+      "Manufacturing & Industrial",
+      "Consumer & Retail",
       "Healthcare & Life Sciences",
-      "Other Scalable / Cross-Sector",
+      "Financial Services & FinTech",
+      "Infrastructure & Real Assets",
+      "Agriculture & Rural Economy",
+      "Climate & Clean Energy",
+      "Education & Knowledge",
+      "Logistics & Supply Chain",
+      "Media, Entertainment & Gaming",
+      "Other / Emerging Sector",
     ],
     stages: [
       "Idea / Concept Stage",
