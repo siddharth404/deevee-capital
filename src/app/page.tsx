@@ -27,7 +27,6 @@ export default function HomePage() {
           { label: "What We Look For", href: "#solutions" },
           { label: "About", href: "#about" },
           { label: "DVPL Background", href: "#dvpl-heritage" },
-          { label: "Pitch Your Startup", href: "#pitch-form" },
         ]}
         cta={{
           label: "Pitch Your Startup",

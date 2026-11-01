@@ -16,6 +16,7 @@ export function InvestmentMandateSection() {
       style={{
         borderBottom: "1px solid var(--ctl-line)",
         background: "var(--ctl-paper)",
+        scrollMarginTop: "80px",
       }}
     >
       <div className="ctl-wrap">

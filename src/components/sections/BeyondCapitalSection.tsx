@@ -24,6 +24,7 @@ export function BeyondCapitalSection() {
       style={{
         borderBottom: "1px solid var(--ctl-line)",
         background: "var(--ctl-paper)",
+        scrollMarginTop: "80px",
       }}
     >
       <div className="ctl-wrap">
@@ -176,6 +177,7 @@ export function BeyondCapitalSection() {
             lineHeight: 1.6,
             color: "var(--ctl-soft)",
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             gap: "12px",
           }}

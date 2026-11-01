@@ -310,7 +310,7 @@ export function PitchFormSection({
   const inputStyle = (hasError: boolean): React.CSSProperties => ({
     width: "100%",
     padding: "12px 14px",
-    fontSize: "14px",
+    fontSize: "16px",
     lineHeight: 1.4,
     color: "var(--ctl-text, #101A24)",
     background: "var(--ctl-paper, #f7f4ec)",
@@ -340,6 +340,7 @@ export function PitchFormSection({
       style={{
         borderBottom: "1px solid var(--ctl-line)",
         background: "var(--ctl-paper)",
+        scrollMarginTop: "80px",
       }}
     >
       <div className="ctl-wrap">
@@ -363,7 +364,7 @@ export function PitchFormSection({
             border: "1px solid var(--ctl-ink)",
             background: "var(--ctl-wash)",
             boxShadow: "inset 0 0 0 4px var(--ctl-paper), inset 0 0 0 5px var(--ctl-line)",
-            padding: "clamp(24px, 4vw, 52px)",
+            padding: "clamp(16px, 3.5vw, 48px)",
           }}
         >
           <div
@@ -592,7 +593,7 @@ export function PitchFormSection({
               style={{
                 background: "var(--ctl-paper)",
                 border: "1px solid var(--ctl-line)",
-                padding: "clamp(20px, 3vw, 36px)",
+                padding: "clamp(16px, 3vw, 36px)",
               }}
             >
               {status === "success" ? (
@@ -1708,7 +1709,7 @@ export function PitchFormSection({
                             width: "100%",
                             height: "44px",
                             padding: "0 14px",
-                            fontSize: "13.5px",
+                            fontSize: "16px",
                             fontWeight: 600,
                             letterSpacing: "0.04em",
                             border: `1px solid ${fieldErrors.captcha ? "#b4322a" : "var(--ctl-line)"}`,
