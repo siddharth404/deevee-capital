@@ -22,6 +22,8 @@ const DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 export interface PitchSubmissionPayload {
   founderName: string;
   founderEmail: string;
+  founderPhone?: string;
+  linkedinUrl?: string;
   startupName: string;
   websiteUrl?: string;
   sector: string;
@@ -134,6 +136,8 @@ export async function POST(request: NextRequest) {
       body = {
         founderName: (formData.get("founderName") as string) || "",
         founderEmail: (formData.get("founderEmail") as string) || "",
+        founderPhone: (formData.get("founderPhone") as string) || undefined,
+        linkedinUrl: (formData.get("linkedinUrl") as string) || undefined,
         startupName: (formData.get("startupName") as string) || "",
         websiteUrl: (formData.get("websiteUrl") as string) || undefined,
         sector: (formData.get("sector") as string) || "",
@@ -210,6 +214,8 @@ export async function POST(request: NextRequest) {
     // 4. Sanitize & Validate Form Fields
     const founderName = sanitizeText(body.founderName, 120);
     const founderEmail = sanitizeText(body.founderEmail, 160).toLowerCase();
+    const founderPhone = sanitizeText(body.founderPhone, 60);
+    const linkedinUrlRaw = sanitizeText(body.linkedinUrl, 300);
     const startupName = sanitizeText(body.startupName, 140);
     const websiteUrlRaw = sanitizeText(body.websiteUrl, 300);
     const sector = sanitizeText(body.sector, 120);
@@ -226,6 +232,9 @@ export async function POST(request: NextRequest) {
     }
     if (!founderEmail || !isValidEmail(founderEmail)) {
       fieldErrors.founderEmail = "Please enter a valid work or founder email address.";
+    }
+    if (linkedinUrlRaw && !isValidOptionalUrl(linkedinUrlRaw)) {
+      fieldErrors.linkedinUrl = "Please enter a valid LinkedIn URL.";
     }
     if (startupName.length < 2) {
       fieldErrors.startupName = "Please enter your startup or project name.";
@@ -271,6 +280,7 @@ export async function POST(request: NextRequest) {
     }
 
     const websiteUrl = normalizeOptionalUrl(websiteUrlRaw);
+    const linkedinUrl = normalizeOptionalUrl(linkedinUrlRaw);
     const pitchDeckUrl = normalizeOptionalUrl(pitchDeckUrlRaw);
 
     // 5. Duplicate Submission Detection
@@ -321,6 +331,8 @@ export async function POST(request: NextRequest) {
         submittedAt,
         founderName,
         founderEmail,
+        founderPhone: founderPhone || undefined,
+        linkedinUrl: linkedinUrl || undefined,
         startupName,
         websiteUrl: websiteUrl || undefined,
         sector,
@@ -349,6 +361,8 @@ export async function POST(request: NextRequest) {
       submittedAt,
       founderName,
       founderEmail,
+      founderPhone: founderPhone || null,
+      linkedinUrl: linkedinUrl || null,
       startupName,
       websiteUrl: websiteUrl || null,
       sector,
@@ -401,6 +415,8 @@ export async function POST(request: NextRequest) {
         submittedAt,
         founderName,
         founderEmail,
+        founderPhone: founderPhone || undefined,
+        linkedinUrl: linkedinUrl || undefined,
         startupName,
         websiteUrl: websiteUrl || undefined,
         sector,

@@ -11,6 +11,8 @@ export interface PitchEmailData {
   submittedAt: string;
   founderName: string;
   founderEmail: string;
+  founderPhone?: string;
+  linkedinUrl?: string;
   startupName: string;
   websiteUrl?: string;
   sector: string;
@@ -70,15 +72,17 @@ Recorded At: ${new Date(data.submittedAt).toUTCString()}
 
 FOUNDER DETAILS
 ---------------
-Founder Name:  ${data.founderName}
-Founder Email: ${data.founderEmail}
+Founder Name:     ${data.founderName}
+Founder Email:    ${data.founderEmail}
+Founder Phone:    ${data.founderPhone || "Not provided"}
+Founder LinkedIn: ${data.linkedinUrl || "Not provided"}
 
 STARTUP OVERVIEW
 ----------------
-Startup Name:  ${data.startupName}
-Website Link:  ${data.websiteUrl || "Not provided"}
-Sector:        ${data.sector}
-Stage:         ${data.stage}
+Startup Name:   ${data.startupName}
+Website Link:   ${data.websiteUrl || "Not provided"}
+Sector:         ${data.sector}
+Stage:          ${data.stage}
 Funding Sought: ${data.fundingSought || "Not specified"}
 Pitch Deck URL: ${data.pitchDeckUrl || "Not provided"}
 ${data.pitchDeckFileName ? `Attached Deck File: ${data.pitchDeckFileName}` : ""}
@@ -162,6 +166,16 @@ Deevee Capital (https://deeveecapital.com)
         <span class="field-label">Email Address:</span>
         <span class="field-val"><a href="mailto:${data.founderEmail}">${data.founderEmail}</a></span>
       </div>
+      ${data.founderPhone ? `
+      <div class="field-row">
+        <span class="field-label">Phone / WhatsApp:</span>
+        <span class="field-val"><a href="tel:${data.founderPhone}">${data.founderPhone}</a></span>
+      </div>` : ""}
+      ${data.linkedinUrl ? `
+      <div class="field-row">
+        <span class="field-label">LinkedIn Profile:</span>
+        <span class="field-val"><a href="${data.linkedinUrl}" target="_blank" rel="noopener">${data.linkedinUrl}</a></span>
+      </div>` : ""}
 
       <div class="section-title">Overview &amp; Problem Solved</div>
       <div class="desc-box">${data.description}</div>

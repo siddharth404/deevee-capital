@@ -2,6 +2,9 @@
 
 import React, { useState } from "react";
 import { CobaltToileLanding } from "@/components/templates/CobaltToileLanding";
+import { InvestmentMandateSection } from "@/components/sections/InvestmentMandateSection";
+import { BeyondCapitalSection } from "@/components/sections/BeyondCapitalSection";
+import { InvestmentProcessSection } from "@/components/sections/InvestmentProcessSection";
 import { PitchFormSection } from "@/components/sections/PitchFormSection";
 import { PrivacyPolicyModal } from "@/components/sections/PrivacyPolicyModal";
 import { siteConfig } from "@/config/site";
@@ -19,71 +22,67 @@ export default function HomePage() {
         intro={false}
         nav={[
           { label: "Our Approach", href: "#services" },
+          { label: "Beyond Capital", href: "#beyond-capital" },
+          { label: "Process", href: "#process" },
           { label: "What We Look For", href: "#solutions" },
           { label: "About", href: "#about" },
           { label: "DVPL Background", href: "#dvpl-heritage" },
-          { label: "Contact", href: "#pitch-form" },
+          { label: "Pitch Your Startup", href: "#pitch-form" },
         ]}
         cta={{
           label: "Pitch Your Startup",
           href: "#pitch-form",
         }}
         hero={{
-          title: "Big ideas deserve a chance\nto become big businesses.",
+          title: "Backing Ambition.\nBuilding Enduring Businesses.",
           subtitle:
-            "We are interested in ambitious founders building scalable businesses and solving meaningful problems.",
+            "We partner with ambitious founders building scalable businesses. Through thoughtful capital deployment, strategic guidance and meaningful partnerships, we aim to help exceptional businesses realise their potential.",
           action: {
             label: "Pitch Your Startup",
             href: "#pitch-form",
           },
           secondaryAction: {
-            label: "Our Approach",
+            label: "Explore Our Approach",
             href: "#services",
           },
           est: "DEEVEE CAPITAL",
           edition: "EARLY-STAGE INITIATIVE",
         }}
-        clientsLabel="Areas of enduring interest"
+        clientsLabel="Mandate & Focus"
         clients={[
-          "Exceptional Founders",
-          "Meaningful Problems",
-          "Scalable Models",
-          "Long-Term Potential",
-          "Enterprise Software & SaaS",
-          "Applied AI & Data",
-          "Fintech Infrastructure",
-          "Industrial & DeepTech",
+          "Pre-Seed & Seed Focus",
+          "Up to ₹1 Crore Capacity",
+          "Artificial Intelligence & Applied AI",
+          "Enterprise SaaS",
+          "Financial Technology",
+          "Deep Technology",
+          "Infrastructure Technology",
+          "Industrial Innovation",
+          "Emerging Technology",
         ]}
-        about={{
-          kicker: "03 · About Deevee Capital",
-          statement:
-            "Curious about *what comes next* — exploring early-stage businesses and building relationships with *ambitious entrepreneurs*.",
-          body: [...siteConfig.about.paragraphs],
-          regulatoryNote: siteConfig.about.regulatoryNote,
-          associatedEntity: siteConfig.associatedEntity,
-          seal: "Deevee Capital · Early-Stage Initiative · ",
-          stats: [
-            {
-              display: "I.",
-              label: "First-Principles Inquiry — Every pitch reviewed directly",
-            },
-            {
-              display: "II.",
-              label: "Early-Stage Focus — Exploring pre-seed & seed builders",
-            },
-            {
-              display: "III.",
-              label:
-                "Entrepreneurial Roots — Associated with Dee Vee Projects Limited (dvplindia.in)",
-            },
-            {
-              display: "IV.",
-              label: "Direct Founder Review — Reviewed by Investment Team",
-            },
-          ],
+        mandateSlot={<InvestmentMandateSection />}
+        servicesCopy={{
+          kicker: "04 · Investment Philosophy",
+          title: "Good businesses begin with *the right questions*.",
+          intro:
+            "Rather than starting with rigid preconditions or formulaic checklists, we begin every conversation with curiosity and first-principles inquiry across five foundational dimensions.",
         }}
+        services={siteConfig.philosophy.questions.map((q) => ({
+          title: q.dimension,
+          summary: q.question,
+          details: q.elaboration,
+          deliverables: [
+            `Dimension ${q.number}`,
+            "First-Principles Inquiry",
+            "Founder Dialogue",
+          ],
+          durationLabel: "Core question · ",
+          duration: q.question,
+        }))}
+        beyondCapitalSlot={<BeyondCapitalSection />}
+        investmentProcessSlot={<InvestmentProcessSection />}
         solutionsCopy={{
-          kicker: "02 · What We Look For",
+          kicker: "05 · What We Look For",
           title: "Four areas of *enduring interest*.",
           intro:
             "Pull an engraved bookmark from the shelf. These represent areas of interest as we explore early-stage opportunities, rather than fixed or guaranteed investment criteria.",
@@ -161,24 +160,34 @@ export default function HomePage() {
             },
           },
         ]}
-        servicesCopy={{
-          kicker: "01 · Investment Philosophy",
-          title: "Good businesses begin with *the right questions*.",
-          intro:
-            "Rather than starting with rigid preconditions or formulaic checklists, we begin every conversation with curiosity and first-principles inquiry across five foundational dimensions.",
-        }}
-        services={siteConfig.philosophy.questions.map((q) => ({
-          title: q.dimension,
-          summary: q.question,
-          details: q.elaboration,
-          deliverables: [
-            `Dimension ${q.number}`,
-            "First-Principles Inquiry",
-            "Founder Dialogue",
+        about={{
+          kicker: "06 · About Deevee Capital",
+          statement:
+            "Curious about *what comes next* — exploring early-stage businesses and building relationships with *ambitious founders*.",
+          body: [...siteConfig.about.paragraphs],
+          regulatoryNote: siteConfig.about.regulatoryNote,
+          associatedEntity: siteConfig.associatedEntity,
+          seal: "Deevee Capital · Early-Stage Initiative · ",
+          stats: [
+            {
+              display: "I.",
+              label: "First-Principles Inquiry — Every pitch reviewed directly",
+            },
+            {
+              display: "II.",
+              label: "Promoter-Backed Initiative — Exploring investments up to ₹1 crore",
+            },
+            {
+              display: "III.",
+              label:
+                "Infrastructure Heritage — Associated with Dee Vee Projects Limited (dvplindia.in)",
+            },
+            {
+              display: "IV.",
+              label: "Founder-Aligned Diligence — Selective, long-term partnerships",
+            },
           ],
-          durationLabel: "Core question · ",
-          duration: q.question,
-        }))}
+        }}
         pressCopy={{
           kicker: "Founder Notebook",
           title: "Perspectives",
@@ -245,15 +254,15 @@ export default function HomePage() {
           },
         ]}
         contactBand={{
-          kicker: "04 · For Founders",
+          kicker: "07 · For Founders",
           title: "Building something *worth believing in*?",
           body: "If you're working on an ambitious business, tell us what you're building. We'd like to learn about the problem, the team and the opportunity.",
           action: {
-            label: "Share Your Startup",
+            label: "Pitch Your Startup",
             href: "#pitch-form",
           },
           secondary: {
-            label: "Our Approach",
+            label: "Explore Our Approach",
             href: "#services",
           },
         }}
@@ -267,13 +276,15 @@ export default function HomePage() {
         contact={{
           email: siteConfig.contact.primaryEmail,
           location:
-            "Early-Stage Venture Initiative · Associated with Dee Vee Projects Limited",
+            "Early-Stage Venture Initiative · Backed by a Promoter of Dee Vee Projects Limited",
         }}
         columns={[
           {
             title: "Navigation",
             links: [
               { label: "Our Approach", href: "#services" },
+              { label: "Beyond Capital", href: "#beyond-capital" },
+              { label: "Investment Process", href: "#process" },
               { label: "What We Look For", href: "#solutions" },
               { label: "About Deevee Capital", href: "#about" },
               { label: "DVPL Background", href: "#dvpl-heritage" },
@@ -281,12 +292,13 @@ export default function HomePage() {
             ],
           },
           {
-            title: "Areas of Interest",
+            title: "Sectors of Interest",
             links: [
-              { label: "Exceptional Founders", href: "#solutions" },
-              { label: "Meaningful Problems", href: "#solutions" },
-              { label: "Scalable Models", href: "#solutions" },
-              { label: "Long-Term Potential", href: "#solutions" },
+              { label: "Applied AI & Automation", href: "#mandate" },
+              { label: "Enterprise SaaS & B2B", href: "#mandate" },
+              { label: "FinTech & Financial Infra", href: "#mandate" },
+              { label: "DeepTech & Computing", href: "#mandate" },
+              { label: "Industrial & Infra Tech", href: "#mandate" },
             ],
           },
           {
@@ -317,7 +329,7 @@ export default function HomePage() {
           { label: "Dee Vee Projects Ltd (dvplindia.in)", href: "https://dvplindia.in/" },
           { label: "Submit Your Startup", href: "#pitch-form" },
         ]}
-        copyright={`© ${new Date().getFullYear()} Deevee Capital (deeveecapital.com). All rights reserved. An emerging initiative exploring early-stage startup opportunities, associated with the entrepreneurial background of Dee Vee Projects Limited.`}
+        copyright={`© ${new Date().getFullYear()} Deevee Capital (deeveecapital.com). All rights reserved. An emerging early-stage investment initiative backed by one of the promoters of Dee Vee Projects Limited.`}
       />
 
       <PrivacyPolicyModal

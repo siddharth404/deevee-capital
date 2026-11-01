@@ -118,6 +118,9 @@ export interface CobaltToileLandingProps {
   paletteSwitcher?: boolean;
   intro?: boolean;
   onSubscribe?: (email: string) => Promise<void> | void;
+  mandateSlot?: React.ReactNode;
+  beyondCapitalSlot?: React.ReactNode;
+  investmentProcessSlot?: React.ReactNode;
   pitchFormSlot?: React.ReactNode;
   onOpenPrivacyPolicy?: () => void;
   height?: string;

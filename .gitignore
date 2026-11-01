@@ -13,6 +13,7 @@
 # Local data & secrets
 .env
 .env*.local
+.env.production
 .env.deeveecapital-site
 /data/submissions.jsonl
 public/uploads/

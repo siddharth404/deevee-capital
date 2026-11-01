@@ -159,59 +159,52 @@ export async function generatePitchMemoPdf(data: PitchEmailData): Promise<Buffer
   drawField("Development Stage", data.stage, 55, currentY - 114);
 
   // Right Column (Founder details)
-  drawField("Founder Name", data.founderName, 310, currentY - 50);
+  const founderDisplay = data.founderPhone
+    ? `${data.founderName} · ${data.founderPhone}`
+    : data.founderName;
+  drawField("Founder & Contact", founderDisplay, 310, currentY - 50);
   drawField("Contact Email", data.founderEmail, 310, currentY - 82);
   drawField("Capital Sought", data.fundingSought || "Not specified", 310, currentY - 114);
 
   currentY -= 160;
 
-  // 3. Links Section (Website & Deck)
-  if (data.websiteUrl || data.pitchDeckUrl) {
+  // 3. Links Section (Website, Deck, LinkedIn)
+  const links: { label: string; url: string }[] = [];
+  if (data.websiteUrl) links.push({ label: "WEBSITE / DEMO:", url: data.websiteUrl });
+  if (data.pitchDeckUrl) links.push({ label: "PITCH DECK URL:", url: data.pitchDeckUrl });
+  if (data.linkedinUrl) links.push({ label: "FOUNDER LINKEDIN:", url: data.linkedinUrl });
+
+  if (links.length > 0) {
+    const linkBoxHeight = 16 + links.length * 15;
     page.drawRectangle({
       x: 40,
-      y: currentY - 45,
+      y: currentY - linkBoxHeight,
       width: width - 80,
-      height: 45,
+      height: linkBoxHeight,
       color: rgb(1, 1, 1),
       borderColor: borderGrey,
       borderWidth: 1,
     });
 
-    if (data.websiteUrl) {
-      page.drawText("WEBSITE / DEMO:", {
+    links.forEach((lk, idx) => {
+      const lineY = currentY - 16 - idx * 15;
+      page.drawText(lk.label, {
         x: 55,
-        y: currentY - 20,
-        size: 8,
+        y: lineY,
+        size: 7.5,
         font: helveticaBold,
         color: grey,
       });
-      page.drawText(sanitizePdfText(data.websiteUrl).slice(0, 48), {
-        x: 145,
-        y: currentY - 20,
-        size: 9,
+      page.drawText(sanitizePdfText(lk.url).slice(0, 58), {
+        x: 155,
+        y: lineY,
+        size: 8.5,
         font: helvetica,
         color: navy,
       });
-    }
+    });
 
-    if (data.pitchDeckUrl) {
-      page.drawText("PITCH DECK URL:", {
-        x: 55,
-        y: currentY - 35,
-        size: 8,
-        font: helveticaBold,
-        color: grey,
-      });
-      page.drawText(sanitizePdfText(data.pitchDeckUrl).slice(0, 60), {
-        x: 145,
-        y: currentY - 35,
-        size: 9,
-        font: helvetica,
-        color: navy,
-      });
-    }
-
-    currentY -= 65;
+    currentY -= linkBoxHeight + 20;
   }
 
   // 4. Problem & Business Description Section

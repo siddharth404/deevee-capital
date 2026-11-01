@@ -30,6 +30,8 @@ import { siteConfig } from "@/config/site";
 interface FormValues {
   founderName: string;
   founderEmail: string;
+  founderPhone: string;
+  linkedinUrl: string;
   startupName: string;
   websiteUrl: string;
   sector: string;
@@ -44,6 +46,8 @@ interface FormValues {
 const INITIAL_VALUES: FormValues = {
   founderName: "",
   founderEmail: "",
+  founderPhone: "",
+  linkedinUrl: "",
   startupName: "",
   websiteUrl: "",
   sector: "",
@@ -157,6 +161,19 @@ export function PitchFormSection({
         errors.pitchDeckUrl = "Please enter a valid pitch deck URL.";
       }
     }
+    if (data.linkedinUrl.trim()) {
+      const normalized = /^https?:\/\//i.test(data.linkedinUrl.trim())
+        ? data.linkedinUrl.trim()
+        : `https://${data.linkedinUrl.trim()}`;
+      try {
+        const u = new URL(normalized);
+        if (!u.hostname.includes(".")) {
+          errors.linkedinUrl = "Please enter a valid LinkedIn URL.";
+        }
+      } catch {
+        errors.linkedinUrl = "Please enter a valid LinkedIn URL.";
+      }
+    }
     if (!data.privacyConsent) {
       errors.privacyConsent =
         "Please confirm your consent to the Privacy Policy before submitting.";
@@ -208,6 +225,8 @@ export function PitchFormSection({
       const formData = new FormData();
       formData.append("founderName", values.founderName);
       formData.append("founderEmail", values.founderEmail);
+      if (values.founderPhone) formData.append("founderPhone", values.founderPhone);
+      if (values.linkedinUrl) formData.append("linkedinUrl", values.linkedinUrl);
       formData.append("startupName", values.startupName);
       formData.append("sector", values.sector);
       formData.append("stage", values.stage);
@@ -806,6 +825,7 @@ export function PitchFormSection({
                   <div
                     aria-hidden="true"
                     style={{
+                      display: "none",
                       position: "absolute",
                       left: "-9999px",
                       width: 0,
@@ -911,6 +931,75 @@ export function PitchFormSection({
                           }}
                         >
                           {fieldErrors.founderEmail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 1B: Founder Phone & LinkedIn Profile (Optional) */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                      gap: "16px",
+                    }}
+                  >
+                    <div>
+                      <label htmlFor="founderPhone" style={labelStyle}>
+                        Phone / WhatsApp{" "}
+                        <span style={{ fontWeight: 400, color: "var(--ctl-soft)" }}>
+                          (Optional)
+                        </span>
+                      </label>
+                      <input
+                        id="founderPhone"
+                        name="founderPhone"
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="e.g. +91 98765 43210"
+                        value={values.founderPhone}
+                        onChange={(e) =>
+                          handleChange("founderPhone", e.target.value)
+                        }
+                        style={inputStyle(false)}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="linkedinUrl" style={labelStyle}>
+                        Founder LinkedIn{" "}
+                        <span style={{ fontWeight: 400, color: "var(--ctl-soft)" }}>
+                          (Optional)
+                        </span>
+                      </label>
+                      <input
+                        id="linkedinUrl"
+                        name="linkedinUrl"
+                        type="url"
+                        placeholder="https://linkedin.com/in/founder"
+                        value={values.linkedinUrl}
+                        onChange={(e) =>
+                          handleChange("linkedinUrl", e.target.value)
+                        }
+                        aria-invalid={Boolean(fieldErrors.linkedinUrl)}
+                        aria-describedby={
+                          fieldErrors.linkedinUrl
+                            ? "linkedinUrl-error"
+                            : undefined
+                        }
+                        style={inputStyle(Boolean(fieldErrors.linkedinUrl))}
+                      />
+                      {fieldErrors.linkedinUrl && (
+                        <p
+                          id="linkedinUrl-error"
+                          role="alert"
+                          style={{
+                            marginTop: "6px",
+                            fontSize: "12px",
+                            color: "#b4322a",
+                          }}
+                        >
+                          {fieldErrors.linkedinUrl}
                         </p>
                       )}
                     </div>
@@ -1167,20 +1256,25 @@ export function PitchFormSection({
                       <label htmlFor="fundingSought" style={labelStyle}>
                         Funding Sought{" "}
                         <span style={{ fontWeight: 400, color: "var(--ctl-soft)" }}>
-                          (Optional)
+                          (Indicative)
                         </span>
                       </label>
-                      <input
+                      <select
                         id="fundingSought"
                         name="fundingSought"
-                        type="text"
-                        placeholder="e.g. ₹2 Cr / $250k Pre-Seed"
                         value={values.fundingSought}
                         onChange={(e) =>
                           handleChange("fundingSought", e.target.value)
                         }
                         style={inputStyle(false)}
-                      />
+                      >
+                        <option value="">Select funding bracket...</option>
+                        {siteConfig.form.fundingBrackets.map((bracket) => (
+                          <option key={bracket} value={bracket}>
+                            {bracket}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>

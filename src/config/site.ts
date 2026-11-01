@@ -11,11 +11,11 @@ export const siteConfig = {
   name: "Deevee Capital",
   wordmark: "DEEVEE CAPITAL",
   domain: process.env.NEXT_PUBLIC_SITE_URL || "https://deeveecapital.com",
-  tagline: "Big ideas deserve a chance to become big businesses.",
+  tagline: "Backing Ambition. Building Enduring Businesses.",
   shortStatement:
-    "An emerging initiative exploring early-stage startup investment opportunities and inviting founders to share promising businesses.",
+    "An emerging, promoter-backed initiative exploring early-stage startup investments of up to ₹1 crore.",
   description:
-    "Deevee Capital is an emerging initiative exploring early-stage startup investment opportunities. We are interested in ambitious founders building scalable businesses and solving meaningful problems.",
+    "Deevee Capital is an emerging, promoter-backed early-stage investment initiative. We partner with ambitious founders building scalable, technology-driven businesses, considering investment opportunities of up to ₹1 crore.",
   
   /**
    * Associated Industrial & Infrastructure Background
@@ -30,7 +30,7 @@ export const siteConfig = {
     overview:
       "Founded in 1989, Dee Vee Projects Limited (DVPL) is an established Indian infrastructure development and civil engineering enterprise operating across more than 13 states in India. DVPL has executed landmark national infrastructure works including the New Legislative Assembly in Nava Raipur, the All India Institute of Ayurveda in Goa, the Civil Aviation Research Organization (CARO) Complex in Hyderabad, major highways, bridges, railways, and institutional campuses.",
     connectionSummary:
-      "Deevee Capital draws inspiration from this multi-decade legacy of physical execution, foundational operational discipline, and long-horizon enterprise building, while operating as an independent exploratory early-stage initiative.",
+      "Deevee Capital is backed by one of the promoters of Dee Vee Projects Limited, drawing inspiration from this multi-decade legacy of physical execution, foundational operational discipline, and long-horizon enterprise building, while operating as an independent exploratory early-stage investment initiative.",
   },
 
   /**
@@ -51,30 +51,232 @@ export const siteConfig = {
 
   navigation: [
     { name: "Our Approach", href: "#services" },
+    { name: "Beyond Capital", href: "#beyond-capital" },
+    { name: "Process", href: "#process" },
     { name: "What We Look For", href: "#solutions" },
     { name: "About", href: "#about" },
     { name: "DVPL Background", href: "#dvpl-heritage" },
-    { name: "Contact", href: "#pitch-form" },
+    { name: "Pitch Your Startup", href: "#pitch-form" },
   ],
 
   hero: {
-    eyebrow: "EARLY-STAGE VENTURE INITIATIVE",
-    headline: "Big ideas deserve a chance to become big businesses.",
+    eyebrow: "EARLY-STAGE INVESTMENT INITIATIVE",
+    headline: "Backing Ambition.\nBuilding Enduring Businesses.",
     supportingCopy:
-      "We are interested in ambitious founders building scalable businesses and solving meaningful problems.",
+      "We partner with ambitious founders building scalable businesses. Through thoughtful capital deployment, strategic guidance and meaningful partnerships, we aim to help exceptional businesses realise their potential.",
     primaryCta: {
       label: "Pitch Your Startup",
       href: "#pitch-form",
     },
     secondaryCta: {
-      label: "Our Approach",
+      label: "Explore Our Approach",
       href: "#services",
     },
   },
 
-  philosophy: {
+  /**
+   * Investment Mandate
+   */
+  mandate: {
     index: "01",
-    eyebrow: "OUR APPROACH",
+    eyebrow: "INVESTMENT MANDATE",
+    headline: "Early-stage opportunities. Long-term thinking.",
+    description:
+      "We are interested in partnering with founders at the early stages of their entrepreneurial journey, particularly those addressing meaningful problems through innovative and scalable business models.",
+    parameters: [
+      {
+        label: "Stage",
+        value: "Pre-Seed and Seed",
+        note: "Early-stage opportunities with high conviction and strong execution momentum.",
+      },
+      {
+        label: "Investment Capacity",
+        value: "Up to ₹1 Crore",
+        note: "Per startup, subject to opportunity evaluation, diligence, and investment decision.",
+      },
+      {
+        label: "Geography",
+        value: "India-Focused",
+        note: "Backing founders solving meaningful problems for India and global markets.",
+      },
+      {
+        label: "Sector Focus",
+        value: "Technology & Scalable",
+        note: "Innovative, software, AI, and technology-enabled business models.",
+      },
+      {
+        label: "Partnership Approach",
+        value: "Selective & Long-Term",
+        note: "High-engagement, patient capital focused on sustainable value creation.",
+      },
+    ],
+    sectorsHeadline: "Sectors of Interest",
+    sectorsSubheadline:
+      "While we remain open to exceptional ideas across diverse fields, we are especially drawn to companies leveraging technology to drive real-world transformation:",
+    sectors: [
+      {
+        name: "Artificial Intelligence & Applied AI",
+        description: "Intelligent workflows, domain-specific models, and applied automation.",
+      },
+      {
+        name: "Enterprise SaaS",
+        description: "B2B software, mission-critical tooling, and scalable vertical solutions.",
+      },
+      {
+        name: "Financial Technology",
+        description: "Financial infrastructure, payments, capital efficiency, and embedded finance.",
+      },
+      {
+        name: "Deep Technology",
+        description: "Proprietary IP, advanced computational systems, and scientific breakthroughs.",
+      },
+      {
+        name: "Infrastructure Technology",
+        description: "Digital systems enhancing modern physical and data infrastructure.",
+      },
+      {
+        name: "Industrial Innovation",
+        description: "Tech-enabled logistics, supply chain efficiency, and manufacturing tech.",
+      },
+      {
+        name: "Emerging Technology",
+        description: "Frontier architectures, decentralized rails, and next-generation platforms.",
+      },
+    ],
+  },
+
+  /**
+   * Founder Support Proposition — Beyond Capital
+   */
+  beyondCapital: {
+    index: "02",
+    eyebrow: "FOUNDER PARTNERSHIP",
+    headline: "Beyond Capital",
+    subheadline:
+      "Building a successful business requires far more than financial resources. We aim to work alongside founders, offering thoughtful perspectives, strategic guidance and practical support as they navigate the challenges of building and scaling their businesses.",
+    pillars: [
+      {
+        number: "01",
+        title: "Strategic Direction",
+        summary:
+          "Helping founders clarify vision, refine business models, and establish enduring market positioning.",
+        points: [
+          "Business model refinement & differentiation",
+          "Go-to-market and growth strategy",
+          "Competitive market positioning",
+          "Multi-year strategic planning",
+        ],
+      },
+      {
+        number: "02",
+        title: "Financial & Business Understanding",
+        summary:
+          "Instilling disciplined capital allocation and foundational unit economics from day one.",
+        points: [
+          "Financial planning & runway modeling",
+          "Unit economics & pricing architecture",
+          "Capital allocation & cash-flow discipline",
+          "Preparation for future institutional rounds",
+        ],
+      },
+      {
+        number: "03",
+        title: "Operational Support",
+        summary:
+          "Sharing practical execution stamina drawn from complex physical and organizational delivery.",
+        points: [
+          "Process improvement & execution planning",
+          "Operational efficiency & bottleneck removal",
+          "Key performance metrics & dashboarding",
+          "Pragmatic business development guidance",
+        ],
+      },
+      {
+        number: "04",
+        title: "Network & Connections",
+        summary:
+          "Opening doors to trusted enterprise relationships, potential customers, and business allies.",
+        points: [
+          "Relevant enterprise & industry introductions",
+          "Potential commercial customer connections",
+          "Strategic partnership opportunities",
+          "Access to multi-industry business networks",
+        ],
+      },
+      {
+        number: "05",
+        title: "Founder Partnership",
+        summary:
+          "A steady, high-trust sounding board through every phase of company-building.",
+        points: [
+          "Thoughtful, candid problem-solving sessions",
+          "Navigating unpredictable business challenges",
+          "Founder resilience & decision support",
+          "Patient, long-term relationship building",
+        ],
+      },
+    ],
+    disclaimer:
+      "Note: These represent areas where we aim to provide active guidance and support. We collaborate closely with founders without guaranteeing third-party commercial outcomes.",
+  },
+
+  /**
+   * Investment Process
+   */
+  investmentProcess: {
+    index: "03",
+    eyebrow: "INVESTMENT PROCESS",
+    headline: "A straightforward, disciplined process.",
+    subheadline:
+      "We respect founders' time and prioritize transparent, constructive communication at every step of our evaluation.",
+    stages: [
+      {
+        number: "01",
+        stage: "Startup Submission",
+        title: "Materials & Thesis Submission",
+        description:
+          "Founders share their company overview, customer insight, and pitch deck through our secure portal.",
+        timeline: "Direct Review",
+      },
+      {
+        number: "02",
+        stage: "Initial Screening",
+        title: "Opportunity & Team Assessment",
+        description:
+          "We review the business model, problem gravity, market opportunity, and founder conviction against our areas of interest.",
+        timeline: "First-Principles Review",
+      },
+      {
+        number: "03",
+        stage: "Founder Discussion",
+        title: "Direct Strategic Dialogue",
+        description:
+          "We connect with shortlisted founders to discuss their insight, product journey, operational hurdles, and growth ambitions.",
+        timeline: "In-Depth Conversation",
+      },
+      {
+        number: "04",
+        stage: "Detailed Evaluation",
+        title: "Commercial & Operational Due Diligence",
+        description:
+          "We undertake appropriate business, financial, technical, and legal diligence in collaborative partnership with the founders.",
+        timeline: "Collaborative Diligence",
+      },
+      {
+        number: "05",
+        stage: "Investment Decision",
+        title: "Decision & Partnership Formation",
+        description:
+          "Suitable opportunities proceed through formal investment approval, documentation, and the start of our long-term support.",
+        timeline: "Formal Documentation",
+      },
+    ],
+    note: "We do not enforce rigid bureaucratic approval cycles, allowing us to move at a pace respectful of founder momentum.",
+  },
+
+  philosophy: {
+    index: "04",
+    eyebrow: "INVESTMENT PHILOSOPHY",
     headline: "Good businesses begin with the right questions.",
     intro:
       "Rather than starting with rigid preconditions or formulaic checklists, we begin every conversation with curiosity and first-principles inquiry across five foundational dimensions:",
@@ -118,7 +320,7 @@ export const siteConfig = {
   },
 
   whatWeLookFor: {
-    index: "02",
+    index: "05",
     eyebrow: "WHAT WE LOOK FOR",
     headline: "Four areas of enduring interest.",
     disclaimer:
@@ -166,20 +368,20 @@ export const siteConfig = {
   },
 
   about: {
-    index: "03",
+    index: "06",
     eyebrow: "ABOUT DEEVEE CAPITAL",
     headline: "Curious about what comes next.",
     paragraphs: [
-      "Deevee Capital is an emerging initiative exploring promising early-stage businesses and building thoughtful, long-term relationships with entrepreneurs.",
-      "We believe that conversations with ambitious founders are best approached with openness, respect for the craft of company-building, and a willingness to listen carefully before drawing conclusions.",
-      "The initiative draws on an entrepreneurial business background associated with Dee Vee Projects Limited (dvplindia.in)—an Indian infrastructure and civil construction enterprise founded in 1989 with operations spanning over 13 states. This background brings an appreciation for foundational execution, operational stamina, and long-horizon enterprise building to our startup discovery efforts.",
+      "Deevee Capital is an emerging, promoter-backed early-stage investment initiative exploring promising startup opportunities and building thoughtful, long-term relationships with ambitious founders.",
+      "We believe that conversations with founders are best approached with openness, respect for the craft of company-building, and a willingness to listen carefully before drawing conclusions.",
+      "The initiative draws inspiration from the entrepreneurial and engineering heritage of Dee Vee Projects Limited (dvplindia.in)—an Indian infrastructure enterprise founded in 1989 with operations spanning over 13 states. This background instills an appreciation for physical execution stamina, foundational operational discipline, and long-horizon enterprise building.",
     ],
     regulatoryNote:
-      "Important Note: Deevee Capital is an exploratory initiative. Our association with the entrepreneurial background of Dee Vee Projects Limited does not imply that Dee Vee Projects Limited is a regulated investment fund, that specific venture investments have been made to date, or that submitting information guarantees capital or an investment commitment.",
+      "Important Note: Deevee Capital is an exploratory initiative backed by one of the promoters of Dee Vee Projects Limited. Our association with the entrepreneurial background of Dee Vee Projects Limited does not imply that Dee Vee Projects Limited is a regulated investment fund, that specific venture investments have been made to date, or that submitting information guarantees capital or an investment commitment.",
   },
 
   founderCta: {
-    index: "04",
+    index: "07",
     eyebrow: "FOR FOUNDERS",
     headline: "Building something worth believing in?",
     supportingCopy:
@@ -191,22 +393,30 @@ export const siteConfig = {
   },
 
   form: {
-    index: "05",
+    index: "08",
     eyebrow: "STARTUP SUBMISSION",
     headline: "Share what you are building.",
     subheadline:
       "Tell us about your company in your own words. Submissions are reviewed directly by our investment team.",
+    fundingBrackets: [
+      "Up to ₹25 Lakhs",
+      "₹25 Lakhs - ₹50 Lakhs",
+      "₹50 Lakhs - ₹1 Crore (Primary Focus)",
+      "₹1 Crore - ₹2 Crore",
+      "Above ₹2 Crore",
+      "Undisclosed / Discussion Stage",
+    ],
     sectors: [
-      "Enterprise Software & SaaS",
-      "Artificial Intelligence & Data",
-      "Fintech & Financial Infrastructure",
-      "Consumer Products & Brands",
-      "Industrial Tech, Infra & Supply Chain",
-      "Climate, Energy & Sustainability",
+      "Artificial Intelligence & Applied AI",
+      "Enterprise SaaS & B2B Software",
+      "Financial Technology & Infrastructure",
+      "Deep Technology & Computing",
+      "Infrastructure Technology & Systems",
+      "Industrial Innovation & Supply Chain",
+      "Consumer Tech & Digital Brands",
+      "Climate & Sustainable Technology",
       "Healthcare & Life Sciences",
-      "EdTech & Future of Work",
-      "DeepTech & Hardware",
-      "Other / Cross-Sector",
+      "Other Scalable / Cross-Sector",
     ],
     stages: [
       "Idea / Concept Stage",
