@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "firebase": "^13.2.0",
-    "firebase-admin": "^14.5.0",
+    "firebase": "^11.9.1",
+    "firebase-admin": "^13.4.0",
     "framer-motion": "^12.6.2",
     "lucide-react": "^1.16.0",
     "motion": "^12.6.2",
