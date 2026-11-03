@@ -1,11 +1,56 @@
 rules_version = '2';
 
 // Cloud Storage for Firebase Security Rules — Deevee Capital
-// Uploaded pitch decks and generated memorandums are strictly private.
-// All uploads and downloads are mediated server-side via the Cloud Run service account
-// and cryptographically signed HMAC download tokens. Direct client SDK access is denied.
+// Enforces strict role-based & confidentiality-tiered document access.
+// Public pitch deck uploads and downloads are mediated server-side via Admin SDK / signed HMAC tokens.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isActiveUser() {
+      return isSignedIn() && request.auth.token.status == 'active';
+    }
+
+    function hasRole(role) {
+      return isActiveUser() && request.auth.token.role == role;
+    }
+
+    function isAdminOrLead() {
+      return hasRole('SUPER_ADMIN') || hasRole('INVESTMENT_LEAD');
+    }
+
+    function isResearcherOrReviewer() {
+      return hasRole('RESEARCH_ANALYST') || hasRole('REVIEWER');
+    }
+
+    function isValidUploadSize() {
+      return request.resource != null && request.resource.size <= 25 * 1024 * 1024;
+    }
+
+    // 1. Public Website Pitch Vault (Server-mediated only; never directly readable by public or interns)
+    match /pitches/{fileName} {
+      allow read: if isAdminOrLead();
+      allow write: if false;
+    }
+
+    // 2. Internal Workspace Confidential Documents (Financials, Legal, Investment Memos)
+    match /workspace/confidential/{startupId}/{fileName} {
+      allow read: if isAdminOrLead();
+      allow create, update: if isAdminOrLead() && isValidUploadSize();
+      allow delete: if hasRole('SUPER_ADMIN');
+    }
+
+    // 3. Internal Workspace Standard Research Documents (Market Research, Decks, Notes)
+    match /workspace/standard/{startupId}/{fileName} {
+      allow read: if isAdminOrLead() || isResearcherOrReviewer();
+      allow create, update: if (isAdminOrLead() || hasRole('RESEARCH_ANALYST')) && isValidUploadSize();
+      allow delete: if isAdminOrLead();
+    }
+
+    // Default deny all other paths
     match /{allPaths=**} {
       allow read, write: if false;
     }

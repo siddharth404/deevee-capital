@@ -16,6 +16,7 @@
 .env.production
 .env.deeveecapital-site
 /data/submissions.jsonl
+/data/workspace/
 public/uploads/
 
 # Misc

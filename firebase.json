@@ -1,4 +1,12 @@
 {
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "bucket": "deeveecapital-site-vault",
+    "rules": "storage.rules"
+  },
   "hosting": {
     "site": "deeveecapital-site",
     "source": ".",

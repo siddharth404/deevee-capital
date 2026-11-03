@@ -6,6 +6,7 @@ import { sendPitchNotificationEmail, PitchEmailAttachment } from "@/lib/email";
 import { generatePitchMemoPdf } from "@/lib/pdf-memo";
 import { uploadPitchAttachment } from "@/lib/gcs";
 import { verifyCaptcha } from "@/lib/captcha";
+import { ingestWebsitePitchSubmission } from "@/lib/workspace/db";
 
 export const runtime = "nodejs";
 
@@ -391,6 +392,12 @@ export async function POST(request: NextRequest) {
       await persistSubmissionLocally(submissionRecord);
     } catch {
       // Non-critical local ledger fallback
+    }
+
+    try {
+      await ingestWebsitePitchSubmission(submissionRecord);
+    } catch (ingestErr) {
+      console.warn("[Pitch API] Workspace submission ingestion warning:", ingestErr);
     }
 
     // 9. Prepare Email Attachments & Dispatch

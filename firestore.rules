@@ -1,0 +1,2032 @@
+rules_version = '2';
+
+// ===============================================================
+// Deevee Capital — Internal Investment Management Platform
+// Cloud Firestore Security Rules
+// ===============================================================
+//
+// Assumed Data Model (Aligned with src/lib/workspace/types.ts)
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// 1. Collection: users/{userId} (WorkspaceUser)
+//    Fields:
+//      - id, uid: string (optional, immutable)
+//      - email: string (required, immutable for non-admin, valid email <= 254 chars)
+//      - name: string (required, 1..120 chars)
+//      - role: string (required, immutable for non-admin, enum: SUPER_ADMIN, INVESTMENT_LEAD, RESEARCH_ANALYST, REVIEWER, VIEWER)
+//      - status: string (required, immutable for non-admin, enum: active, invited, suspended, deactivated, pending)
+//      - accessScope: string (optional, immutable for non-admin, enum: all, assigned, team, own)
+//      - teamIds: list<string> (optional, immutable for non-admin, max 50 items)
+//      - permissions: list<string> (optional, immutable for non-admin, max 50 items)
+//      - assignedStartupIds: list<string> (optional, immutable for non-admin, max 500 items)
+//      - title, displayName, photoURL, avatarUrl, phone, department, teamId, bio, passwordHash: string (optional)
+//      - createdBy, invitedBy: string (optional, immutable)
+//      - lastLoginAt, createdAt, updatedAt: timestamp | string (optional)
+//
+// 2. Collection: teams/{teamId} (WorkspaceTeam)
+//    Fields:
+//      - id: string (optional, immutable)
+//      - name: string (required, 1..120 chars)
+//      - description, leadUserId, leadUserName, leadId, status, createdBy: string (optional)
+//      - memberIds, sectors, focusAreas: list<string> (optional, max 200 items)
+//      - createdAt: timestamp | string (required, immutable)
+//      - updatedAt: timestamp | string (optional)
+//
+// 3. Collection: invitations/{invitationId} (UserInvitation)
+//    Fields:
+//      - id: string (optional, immutable)
+//      - email: string (required, immutable, valid email <= 254 chars)
+//      - name, inviteCode, teamId, tokenHash, invitedByName, acceptedByUid: string (optional)
+//      - role: string (required, enum: SUPER_ADMIN, INVESTMENT_LEAD, RESEARCH_ANALYST, REVIEWER, VIEWER)
+//      - status: string (required, enum: pending, accepted, expired, revoked, cancelled)
+//      - accessScope: string (optional, enum: all, assigned, team, own)
+//      - teamIds, permissions: list<string> (optional, max 50 items)
+//      - assignedStartupIds: list<string> (optional, max 500 items)
+//      - invitedBy: string (required, immutable)
+//      - createdAt: timestamp | string (required, immutable)
+//      - expiresAt, acceptedAt, revokedAt, updatedAt: timestamp | string (optional)
+//
+// 4. Collection: startups/{startupId} (StartupRecord)
+//    Fields:
+//      - id, startupCode: string (optional, immutable)
+//      - name: string (required, 1..200 chars)
+//      - sector: string (required, 1..160 chars)
+//      - source: string (required, 1..120 chars; RESEARCH_ANALYST must set 'Intern Research')
+//      - createdBy: string (required, immutable, must match request.auth.uid on create)
+//      - createdAt: timestamp | string (required, immutable)
+//      - website, websiteUrl, linkedinUrl, domain, description, logoUrl, headquarters, country,
+//        industry, vertical, yearFounded, incorporationStatus, companyType, pipelineStage, stage,
+//        status, priority, assignedLeadId, assignedLeadName, assignedResearcherId, assignedResearcherName,
+//        reviewerId, reviewerName, originalSubmissionId, originalSubmissionRef, internalSummary: string (optional)
+//      - founders, collaboratorIds, collaboratorNames, assignedUsers, assignedUserIds, tags, decisionHistory: list (optional)
+//      - business, traction, funding, latestDecision: map (optional)
+//      - archived, isArchived: bool (optional)
+//      - stageUpdatedAt, nextFollowUpAt, updatedAt, lastActivityAt, approvedAt: timestamp | string (optional)
+//
+// 5. Collection: submissions/{submissionId} (FounderSubmission)
+//    Fields:
+//      - referenceId, startupName, founderName, founderEmail, sector, stage, description, submittedAt: required
+//      - Public clients are denied direct write access; public pitch submissions are ingested via server-side Admin SDK.
+//
+// 6. Collection: assignments/{assignmentId} (ResearchAssignment)
+//    Fields:
+//      - startupId, status, createdAt: required
+//      - primaryResearcherId, assigneeId, assignedBy, createdBy, reviewerId, assignedUsers, etc.: validated
+//
+// 7. Collection: research/{researchId} (StartupResearchWorkspace)
+//    Fields:
+//      - startupId, status, createdAt: required
+//      - status enum: draft, in_progress, submitted, in_review, revision_requested, changes_requested, approved, rejected, archived
+//      - RESEARCH_ANALYST cannot set status == 'approved'
+//
+// 8. Collection: research_sources/{sourceId} (ResearchCitationSource)
+//    Fields:
+//      - sourceType, createdBy, createdAt: required
+//
+// 9. Collection: competitors/{competitorId} (CompetitorRecord)
+//    Fields:
+//      - startupId, name, createdBy, createdAt: required
+//
+// 10. Collection: scorecards/{scorecardId} (ScorecardConfig)
+//     Fields:
+//       - name, updatedAt, updatedBy: required
+//
+// 11. Collection: evaluations/{evaluationId} (StartupEvaluation)
+//     Fields:
+//       - startupId, evaluatorId, recommendation, createdAt: required
+//
+// 12. Collection: decisions/{decisionId} (DecisionRecord)
+//     Fields:
+//       - startupId, decidedBy: required (writes restricted to SUPER_ADMIN & INVESTMENT_LEAD)
+//
+// 13. Collection: tasks/{taskId} (WorkspaceTask)
+//     Fields:
+//       - title, status, priority, createdBy, createdAt: required
+//
+// 14. Collection: comments/{commentId} (WorkspaceComment)
+//     Fields:
+//       - authorId, content, createdAt: required
+//
+// 15. Collection: notifications/{notificationId} (WorkspaceNotification)
+//     Fields:
+//       - recipientId, type, title, message, read, createdAt: required
+//
+// 16. Collection: documents/{documentId} (WorkspaceDocument)
+//     Fields:
+//       - title, category, confidentiality, uploadedBy, createdAt: required
+//       - confidentiality enum: public_internal, standard, internal, restricted, confidential
+//
+// 17. Collection: research_library/{libraryId} (ResearchLibraryEntry)
+//     Fields:
+//       - title, category, authorId, createdAt: required
+//
+// 18. Collection: pipeline_stages/{stageId} (PipelineStageConfig)
+//     Fields:
+//       - name, order, createdAt: required
+//
+// 19. Collection: saved_views/{viewId} (SavedViewConfig)
+//     Fields:
+//       - name, filters, createdAt: required
+//
+// 20. Collection: research_templates/{templateId} (ResearchTemplate)
+//     Fields:
+//       - name, updatedAt, updatedBy: required
+//
+// 21. Collection: activity_logs/{logId} (AuditLogEntry — Append-Only / Immutable)
+//     Fields:
+//       - actorId, action, summary: required (allow update, delete: if false)
+//
+// 22. Collection: audit_logs/{auditId} (AuditLogEntry — Append-Only / Immutable, Read by SUPER_ADMIN)
+//     Fields:
+//       - actorId, action, summary: required (allow update, delete: if false)
+//
+// 23. Collection: workspace_settings/{settingId} (WorkspaceSettings)
+//     Fields:
+//       - updatedBy, updatedAt: required (read by active users, write by SUPER_ADMIN)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Standard Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the resource (for user-owned documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user is owner based on document's uid field
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    // Verify UID hasn't been tampered with on create
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid);
+    }
+
+    // Validate required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate string length on request.resource.data
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    // Validate URL format (must start with https:// or http:// or relative /api/ path and be bounded)
+    function isValidUrl(url) {
+      return url is string &&
+        url.size() <= 2048 &&
+        (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^/.*"));
+    }
+
+    // Validate optional URL field
+    function isValidOptionalUrl(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] == "" ||
+        isValidUrl(request.resource.data[field]);
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() >= 3 &&
+        email.size() <= 254 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate ISO 8601 date string format
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.size() >= 4 &&
+        dateStr.size() <= 64 &&
+        dateStr.matches("^\\d{4}.*");
+    }
+
+    // Validate timestamp or ISO 8601 date string
+    function isValidTimeField(field) {
+      return (field in request.resource.data) && (
+        request.resource.data[field] is timestamp ||
+        isValidDateString(request.resource.data[field])
+      );
+    }
+
+    // Validate optional timestamp or ISO 8601 date string
+    function isValidOptionalTimeField(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] == "" ||
+        request.resource.data[field] is timestamp ||
+        isValidDateString(request.resource.data[field]);
+    }
+
+    // Validate that a string path is correctly scoped to the user's ID
+    function isScopedPath(path) {
+      return path is string &&
+        path.size() <= 1024 &&
+        path.matches("^users/" + request.auth.uid + "/.*");
+    }
+
+    // Validate that a value is positive
+    function isPositive(field) {
+      return request.resource.data[field] is number && request.resource.data[field] > 0;
+    }
+
+    // Validate optional number within range
+    function isValidOptionalNumber(field, minVal, maxVal) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        (request.resource.data[field] is number &&
+         request.resource.data[field] >= minVal &&
+         request.resource.data[field] <= maxVal);
+    }
+
+    // Validate optional boolean
+    function isValidOptionalBool(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] is bool;
+    }
+
+    // Validate that a list is a list and enforces size limits
+    function isValidList(list, maxSize) {
+      return list is list && list.size() <= maxSize;
+    }
+
+    // Validate optional list with size bound
+    function isValidOptionalList(field, maxSize) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        isValidList(request.resource.data[field], maxSize);
+    }
+
+    // Validate optional string (if present and non-null, must be string and within length)
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    // Validate that a map contains only allowed keys
+    function isValidMap(mapData, allowedKeys) {
+      return mapData is map && mapData.keys().hasOnly(allowedKeys);
+    }
+
+    // Validate optional map with key count bound
+    function isValidOptionalMap(field, maxKeys) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        (request.resource.data[field] is map && request.resource.data[field].size() <= maxKeys);
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that the document hasn't changed in the fields that are not allowed to be changed
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate that a timestamp is recent (within the last 5 minutes)
+    function isRecent(time) {
+      return time is timestamp &&
+        time > request.time - duration.value(5, 'm') &&
+        time <= request.time;
+    }
+
+    // ===============================================================
+    // Role-Based Access Control (RBAC) & Workspace Authority Helpers
+    // ===============================================================
+
+    function userDocExists() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // A user must be authenticated and have an active workspace profile (or active custom claim)
+    function isActiveUser() {
+      return isAuthenticated() && (
+        (userDocExists() && getUserData().status == 'active') ||
+        (!userDocExists() && 'status' in request.auth.token && request.auth.token.status == 'active')
+      );
+    }
+
+    // Resolve authoritative role from user document first, falling back to verified custom claim
+    function getUserRole() {
+      return userDocExists()
+        ? getUserData().role
+        : ('role' in request.auth.token ? request.auth.token.role : '');
+    }
+
+    function hasRole(role) {
+      return isActiveUser() && getUserRole() == role;
+    }
+
+    function hasAnyRole(roles) {
+      return isActiveUser() && (getUserRole() in roles);
+    }
+
+    function isSuperAdmin() {
+      return hasRole('SUPER_ADMIN');
+    }
+
+    function isInvestmentLead() {
+      return hasRole('INVESTMENT_LEAD');
+    }
+
+    function isLeadOrAdmin() {
+      return hasAnyRole(['SUPER_ADMIN', 'INVESTMENT_LEAD']);
+    }
+
+    function isResearchAnalyst() {
+      return hasRole('RESEARCH_ANALYST');
+    }
+
+    function isReviewer() {
+      return hasRole('REVIEWER');
+    }
+
+    function isViewer() {
+      return hasRole('VIEWER');
+    }
+
+    function hasPermission(perm) {
+      return isSuperAdmin() || (
+        isActiveUser() &&
+        userDocExists() &&
+        'permissions' in getUserData() &&
+        getUserData().permissions is list &&
+        (perm in getUserData().permissions)
+      );
+    }
+
+    // Check if the user has workspace-wide ('all') read scope
+    function hasAllAccessScope() {
+      return isLeadOrAdmin() || (
+        isActiveUser() &&
+        userDocExists() &&
+        (
+          ('accessScope' in getUserData() && getUserData().accessScope == 'all') ||
+          hasPermission('startup.view_all')
+        )
+      ) || (
+        isActiveUser() &&
+        !userDocExists() &&
+        'accessScope' in request.auth.token &&
+        request.auth.token.accessScope == 'all'
+      );
+    }
+
+    // Check if user is assigned to a given startup data map (matches src/lib/workspace/permissions.ts)
+    function isAssignedToStartupData(startupData) {
+      return ('assignedUsers' in startupData && startupData.assignedUsers is list && request.auth.uid in startupData.assignedUsers) ||
+        ('assignedUserIds' in startupData && startupData.assignedUserIds is list && request.auth.uid in startupData.assignedUserIds) ||
+        ('collaboratorIds' in startupData && startupData.collaboratorIds is list && request.auth.uid in startupData.collaboratorIds) ||
+        ('assignedLeadId' in startupData && startupData.assignedLeadId == request.auth.uid) ||
+        ('leadOwnerId' in startupData && startupData.leadOwnerId == request.auth.uid) ||
+        ('assignedResearcherId' in startupData && startupData.assignedResearcherId == request.auth.uid) ||
+        ('reviewerId' in startupData && startupData.reviewerId == request.auth.uid);
+    }
+
+    // Check if user can read a startup given its data map
+    function canReadStartupData(startupData) {
+      return isActiveUser() && (
+        isLeadOrAdmin() ||
+        hasAllAccessScope() ||
+        isAssignedToStartupData(startupData) ||
+        (isResearchAnalyst() && 'createdBy' in startupData && startupData.createdBy == request.auth.uid)
+      );
+    }
+
+    function startupExists(startupId) {
+      return startupId is string &&
+        startupId.size() > 0 &&
+        startupId.size() <= 128 &&
+        exists(/databases/$(database)/documents/startups/$(startupId));
+    }
+
+    function getStartupData(startupId) {
+      return get(/databases/$(database)/documents/startups/$(startupId)).data;
+    }
+
+    // Check if current user can access records linked to a startupId
+    function canAccessStartupId(startupId) {
+      return isActiveUser() && (
+        isLeadOrAdmin() ||
+        hasAllAccessScope() ||
+        (startupExists(startupId) && canReadStartupData(getStartupData(startupId)))
+      );
+    }
+
+    // Check if current user can read a document record based on confidentiality and startup access
+    function canReadDocumentData(docData) {
+      let isConfidential = ('confidentiality' in docData) && docData.confidentiality == 'confidential';
+      let isRestricted = ('confidentiality' in docData) && docData.confidentiality == 'restricted';
+      let isExplicitlyAllowedUser = ('allowedUserIds' in docData && docData.allowedUserIds is list && request.auth.uid in docData.allowedUserIds) ||
+        ('uploadedBy' in docData && docData.uploadedBy == request.auth.uid);
+      let isExplicitlyAllowedRole = ('allowedRoles' in docData && docData.allowedRoles is list && getUserRole() in docData.allowedRoles);
+      let hasStartupAccess = !('startupId' in docData) || docData.startupId == null || docData.startupId == "" || canAccessStartupId(docData.startupId);
+
+      return isActiveUser() && (
+        isLeadOrAdmin() ||
+        (
+          hasStartupAccess && (
+            isConfidential
+              ? (!isViewer() && (isExplicitlyAllowedUser || hasPermission('document.view_confidential')))
+              : (isRestricted
+                  ? (!isViewer() && (isExplicitlyAllowedUser || isExplicitlyAllowedRole))
+                  : true)
+          )
+        )
+      );
+    }
+
+    // ===============================================================
+    // Domain Validators (Called on BOTH create and update)
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['email', 'name', 'role', 'status']) &&
+        hasOnlyAllowedFields([
+          'id', 'uid', 'email', 'name', 'displayName', 'photoURL', 'avatarUrl',
+          'phone', 'title', 'department', 'teamId', 'teamIds', 'role', 'status',
+          'accessScope', 'permissions', 'assignedStartupIds', 'bio', 'passwordHash',
+          'lastLoginAt', 'createdAt', 'updatedAt', 'createdBy', 'invitedBy'
+        ]) &&
+        isValidEmail(data.email) &&
+        validStringLength('name', 1, 120) &&
+        (data.role in ['SUPER_ADMIN', 'INVESTMENT_LEAD', 'RESEARCH_ANALYST', 'REVIEWER', 'VIEWER']) &&
+        (data.status in ['active', 'invited', 'suspended', 'deactivated', 'pending']) &&
+        (!('accessScope' in data) || data.accessScope == null || (data.accessScope in ['all', 'assigned', 'team', 'own'])) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('uid', 1, 128) &&
+        isValidOptionalString('displayName', 0, 120) &&
+        isValidOptionalUrl('photoURL') &&
+        isValidOptionalUrl('avatarUrl') &&
+        isValidOptionalString('phone', 0, 60) &&
+        isValidOptionalString('title', 0, 120) &&
+        isValidOptionalString('department', 0, 120) &&
+        isValidOptionalString('teamId', 0, 128) &&
+        isValidOptionalString('bio', 0, 2000) &&
+        isValidOptionalString('passwordHash', 0, 512) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalString('invitedBy', 0, 128) &&
+        isValidOptionalList('permissions', 50) &&
+        isValidOptionalList('assignedStartupIds', 500) &&
+        isValidOptionalList('teamIds', 50) &&
+        isValidOptionalTimeField('lastLoginAt') &&
+        isValidOptionalTimeField('createdAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidTeam(data) {
+      return hasRequiredFields(['name', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'description', 'leadUserId', 'leadUserName', 'leadId',
+          'memberIds', 'sectors', 'focusAreas', 'status', 'createdAt', 'updatedAt', 'createdBy'
+        ]) &&
+        validStringLength('name', 1, 120) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('description', 0, 2000) &&
+        isValidOptionalString('leadUserId', 0, 128) &&
+        isValidOptionalString('leadUserName', 0, 120) &&
+        isValidOptionalString('leadId', 0, 128) &&
+        isValidOptionalString('status', 0, 60) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalList('memberIds', 200) &&
+        isValidOptionalList('sectors', 100) &&
+        isValidOptionalList('focusAreas', 100) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidInvitation(data) {
+      return hasRequiredFields(['email', 'role', 'status', 'invitedBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'email', 'name', 'role', 'status', 'accessScope', 'teamIds',
+          'permissions', 'inviteCode', 'teamId', 'assignedStartupIds', 'tokenHash',
+          'expiresAt', 'invitedBy', 'invitedByName', 'acceptedAt', 'acceptedByUid',
+          'revokedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidEmail(data.email) &&
+        (data.role in ['SUPER_ADMIN', 'INVESTMENT_LEAD', 'RESEARCH_ANALYST', 'REVIEWER', 'VIEWER']) &&
+        (data.status in ['pending', 'accepted', 'expired', 'revoked', 'cancelled']) &&
+        (!('accessScope' in data) || data.accessScope == null || (data.accessScope in ['all', 'assigned', 'team', 'own'])) &&
+        validStringLength('invitedBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('name', 0, 120) &&
+        isValidOptionalString('inviteCode', 0, 128) &&
+        isValidOptionalString('teamId', 0, 128) &&
+        isValidOptionalString('tokenHash', 0, 256) &&
+        isValidOptionalString('invitedByName', 0, 120) &&
+        isValidOptionalString('acceptedByUid', 0, 128) &&
+        isValidOptionalList('teamIds', 50) &&
+        isValidOptionalList('permissions', 50) &&
+        isValidOptionalList('assignedStartupIds', 500) &&
+        isValidOptionalTimeField('expiresAt') &&
+        isValidOptionalTimeField('acceptedAt') &&
+        isValidOptionalTimeField('revokedAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidStartup(data) {
+      return hasRequiredFields(['name', 'sector', 'source', 'createdBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupCode', 'referenceId', 'submissionId', 'originalSubmissionId',
+          'originalSubmissionRef', 'name', 'legalName', 'website', 'websiteUrl',
+          'domain', 'linkedinUrl', 'logoUrl', 'headquarters', 'location', 'country',
+          'sector', 'subSector', 'industry', 'vertical', 'yearFounded', 'foundedYear',
+          'incorporationStatus', 'companyType', 'teamSize', 'stage', 'pipelineStage',
+          'pipelineStageId', 'stageUpdatedAt', 'status', 'priority', 'source',
+          'description', 'oneLiner', 'problemStatement', 'solutionSummary',
+          'businessModel', 'tractionSummary', 'marketSize', 'fundingSought',
+          'valuation', 'currentRound', 'founderName', 'founderEmail', 'founderPhone',
+          'founders', 'business', 'traction', 'funding', 'tags', 'internalSummary',
+          'nextFollowUpAt', 'assignedLeadId', 'assignedLeadName', 'leadOwnerId',
+          'assignedResearcherId', 'assignedResearcherName', 'reviewerId',
+          'reviewerName', 'collaboratorIds', 'collaboratorNames', 'assignedUsers',
+          'assignedUserIds', 'teamId', 'pitchDeckUrl', 'pitchDeckStorageUrl',
+          'memoStorageUrl', 'overallScore', 'evaluationCount', 'researchStatus',
+          'latestDecision', 'decisionHistory', 'decision', 'decisionStatus',
+          'investmentDecision', 'icDecision', 'approvedBy', 'approvedAt',
+          'confidentiality', 'archived', 'isArchived', 'createdBy', 'createdByName',
+          'updatedBy', 'updatedByName', 'createdAt', 'updatedAt', 'lastActivityAt'
+        ]) &&
+        validStringLength('name', 1, 200) &&
+        validStringLength('sector', 1, 160) &&
+        validStringLength('source', 1, 120) &&
+        validStringLength('createdBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupCode', 0, 64) &&
+        isValidOptionalString('referenceId', 0, 64) &&
+        isValidOptionalString('submissionId', 0, 128) &&
+        isValidOptionalString('originalSubmissionId', 0, 128) &&
+        isValidOptionalString('originalSubmissionRef', 0, 64) &&
+        isValidOptionalString('legalName', 0, 200) &&
+        isValidOptionalString('website', 0, 500) &&
+        isValidOptionalUrl('websiteUrl') &&
+        isValidOptionalString('domain', 0, 255) &&
+        isValidOptionalUrl('linkedinUrl') &&
+        isValidOptionalUrl('logoUrl') &&
+        isValidOptionalString('headquarters', 0, 200) &&
+        isValidOptionalString('location', 0, 200) &&
+        isValidOptionalString('country', 0, 120) &&
+        isValidOptionalString('subSector', 0, 160) &&
+        isValidOptionalString('industry', 0, 160) &&
+        isValidOptionalString('vertical', 0, 160) &&
+        isValidOptionalString('yearFounded', 0, 20) &&
+        isValidOptionalNumber('foundedYear', 1900, 2100) &&
+        isValidOptionalString('incorporationStatus', 0, 120) &&
+        isValidOptionalString('companyType', 0, 120) &&
+        isValidOptionalNumber('teamSize', 0, 1000000) &&
+        isValidOptionalString('stage', 0, 120) &&
+        isValidOptionalString('pipelineStage', 0, 120) &&
+        isValidOptionalString('pipelineStageId', 0, 128) &&
+        isValidOptionalTimeField('stageUpdatedAt') &&
+        isValidOptionalString('status', 0, 80) &&
+        isValidOptionalString('priority', 0, 40) &&
+        isValidOptionalString('description', 0, 10000) &&
+        isValidOptionalString('oneLiner', 0, 500) &&
+        isValidOptionalString('problemStatement', 0, 5000) &&
+        isValidOptionalString('solutionSummary', 0, 5000) &&
+        isValidOptionalString('businessModel', 0, 5000) &&
+        isValidOptionalString('tractionSummary', 0, 5000) &&
+        isValidOptionalString('marketSize', 0, 2000) &&
+        isValidOptionalString('fundingSought', 0, 200) &&
+        isValidOptionalString('valuation', 0, 200) &&
+        isValidOptionalString('currentRound', 0, 120) &&
+        isValidOptionalString('founderName', 0, 160) &&
+        (!('founderEmail' in data) || data.founderEmail == null || data.founderEmail == "" || isValidEmail(data.founderEmail)) &&
+        isValidOptionalString('founderPhone', 0, 60) &&
+        isValidOptionalList('founders', 50) &&
+        isValidOptionalMap('business', 30) &&
+        isValidOptionalMap('traction', 30) &&
+        isValidOptionalMap('funding', 30) &&
+        isValidOptionalList('tags', 100) &&
+        isValidOptionalString('internalSummary', 0, 10000) &&
+        isValidOptionalTimeField('nextFollowUpAt') &&
+        isValidOptionalString('assignedLeadId', 0, 128) &&
+        isValidOptionalString('assignedLeadName', 0, 120) &&
+        isValidOptionalString('leadOwnerId', 0, 128) &&
+        isValidOptionalString('assignedResearcherId', 0, 128) &&
+        isValidOptionalString('assignedResearcherName', 0, 120) &&
+        isValidOptionalString('reviewerId', 0, 128) &&
+        isValidOptionalString('reviewerName', 0, 120) &&
+        isValidOptionalList('collaboratorIds', 100) &&
+        isValidOptionalList('collaboratorNames', 100) &&
+        isValidOptionalList('assignedUsers', 200) &&
+        isValidOptionalList('assignedUserIds', 200) &&
+        isValidOptionalString('teamId', 0, 128) &&
+        isValidOptionalUrl('pitchDeckUrl') &&
+        isValidOptionalString('pitchDeckStorageUrl', 0, 2048) &&
+        isValidOptionalString('memoStorageUrl', 0, 2048) &&
+        isValidOptionalNumber('overallScore', 0, 100) &&
+        isValidOptionalNumber('evaluationCount', 0, 10000) &&
+        isValidOptionalString('researchStatus', 0, 80) &&
+        isValidOptionalMap('latestDecision', 30) &&
+        isValidOptionalList('decisionHistory', 200) &&
+        isValidOptionalString('decision', 0, 80) &&
+        isValidOptionalString('decisionStatus', 0, 80) &&
+        isValidOptionalString('investmentDecision', 0, 80) &&
+        isValidOptionalString('icDecision', 0, 80) &&
+        isValidOptionalString('approvedBy', 0, 128) &&
+        isValidOptionalTimeField('approvedAt') &&
+        (!('confidentiality' in data) || data.confidentiality == null || (data.confidentiality in ['public_internal', 'standard', 'internal', 'restricted', 'confidential'])) &&
+        isValidOptionalBool('archived') &&
+        isValidOptionalBool('isArchived') &&
+        isValidOptionalString('createdByName', 0, 120) &&
+        isValidOptionalString('updatedBy', 0, 128) &&
+        isValidOptionalString('updatedByName', 0, 120) &&
+        isValidOptionalTimeField('updatedAt') &&
+        isValidOptionalTimeField('lastActivityAt');
+    }
+
+    function isValidSubmission(data) {
+      return hasRequiredFields(['referenceId', 'startupName', 'founderName', 'founderEmail', 'sector', 'stage', 'description', 'submittedAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'referenceId', 'startupId', 'startupName', 'founderName', 'founderEmail',
+          'founderPhone', 'linkedinUrl', 'websiteUrl', 'sector', 'stage', 'description',
+          'fundingSought', 'pitchDeckUrl', 'pitchDeckFileName', 'pitchDeckStorageUrl',
+          'memoStorageUrl', 'privacyConsent', 'status', 'reviewStatus', 'assignedUsers',
+          'reviewerId', 'reviewedBy', 'reviewedAt', 'reviewNotes', 'convertedToStartupId',
+          'rawPayload', 'submittedAt', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        validStringLength('referenceId', 3, 64) &&
+        validStringLength('startupName', 1, 200) &&
+        validStringLength('founderName', 1, 160) &&
+        isValidEmail(data.founderEmail) &&
+        validStringLength('sector', 1, 160) &&
+        validStringLength('stage', 1, 120) &&
+        validStringLength('description', 1, 10000) &&
+        isValidTimeField('submittedAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('founderPhone', 0, 60) &&
+        isValidOptionalUrl('linkedinUrl') &&
+        isValidOptionalUrl('websiteUrl') &&
+        isValidOptionalString('fundingSought', 0, 200) &&
+        isValidOptionalUrl('pitchDeckUrl') &&
+        isValidOptionalString('pitchDeckFileName', 0, 256) &&
+        isValidOptionalString('pitchDeckStorageUrl', 0, 2048) &&
+        isValidOptionalString('memoStorageUrl', 0, 2048) &&
+        isValidOptionalBool('privacyConsent') &&
+        isValidOptionalString('status', 0, 80) &&
+        isValidOptionalString('reviewStatus', 0, 80) &&
+        isValidOptionalList('assignedUsers', 200) &&
+        isValidOptionalString('reviewerId', 0, 128) &&
+        isValidOptionalString('reviewedBy', 0, 128) &&
+        isValidOptionalTimeField('reviewedAt') &&
+        isValidOptionalString('reviewNotes', 0, 5000) &&
+        isValidOptionalString('convertedToStartupId', 0, 128) &&
+        isValidOptionalMap('rawPayload', 50) &&
+        isValidOptionalTimeField('createdAt') &&
+        isValidOptionalTimeField('updatedAt') &&
+        isValidOptionalString('updatedBy', 0, 128);
+    }
+
+    function isValidAssignment(data) {
+      return hasRequiredFields(['startupId', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'startupCode', 'title',
+          'primaryResearcherId', 'primaryResearcherName', 'assigneeId',
+          'assigneeName', 'assigneeEmail', 'collaboratorIds', 'collaboratorNames',
+          'reviewerId', 'reviewerName', 'assignedUsers', 'assignedBy',
+          'assignedByName', 'role', 'assignmentType', 'status', 'priority',
+          'dueDate', 'objectives', 'instructions', 'notes', 'templateId',
+          'checklist', 'deliverables', 'researchId', 'completedAt',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('startupId', 1, 128) &&
+        (data.status in [
+          'Assigned', 'In Progress', 'Submitted for Review', 'Revision Requested', 'Approved',
+          'pending', 'active', 'in_progress', 'submitted', 'completed', 'cancelled', 'reassigned'
+        ]) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('startupCode', 0, 64) &&
+        isValidOptionalString('title', 0, 300) &&
+        isValidOptionalString('primaryResearcherId', 0, 128) &&
+        isValidOptionalString('primaryResearcherName', 0, 120) &&
+        isValidOptionalString('assigneeId', 0, 128) &&
+        isValidOptionalString('assigneeName', 0, 120) &&
+        (!('assigneeEmail' in data) || data.assigneeEmail == null || data.assigneeEmail == "" || isValidEmail(data.assigneeEmail)) &&
+        isValidOptionalList('collaboratorIds', 100) &&
+        isValidOptionalList('collaboratorNames', 100) &&
+        isValidOptionalString('reviewerId', 0, 128) &&
+        isValidOptionalString('reviewerName', 0, 120) &&
+        isValidOptionalList('assignedUsers', 200) &&
+        isValidOptionalString('assignedBy', 0, 128) &&
+        isValidOptionalString('assignedByName', 0, 120) &&
+        isValidOptionalString('role', 0, 80) &&
+        isValidOptionalString('assignmentType', 0, 80) &&
+        isValidOptionalString('priority', 0, 40) &&
+        isValidOptionalTimeField('dueDate') &&
+        isValidOptionalString('objectives', 0, 5000) &&
+        isValidOptionalString('instructions', 0, 5000) &&
+        isValidOptionalString('notes', 0, 5000) &&
+        isValidOptionalString('templateId', 0, 128) &&
+        isValidOptionalList('checklist', 100) &&
+        isValidOptionalList('deliverables', 50) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalTimeField('completedAt') &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalString('createdByName', 0, 120) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidResearch(data) {
+      return hasRequiredFields(['startupId', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'assignmentId', 'templateId',
+          'title', 'summary', 'status', 'version', 'primaryResearcherId',
+          'primaryResearcherName', 'authorId', 'authorName', 'createdBy',
+          'collaboratorIds', 'collaboratorNames', 'reviewerId', 'reviewerName',
+          'assignedUsers', 'companyOverview', 'founderResearch', 'marketResearch',
+          'productResearch', 'businessModel', 'tractionFinancials', 'risksRedFlags',
+          'conclusion', 'reviewHistory', 'versionHistory', 'executiveSummary',
+          'marketAnalysis', 'productAnalysis', 'tractionAnalysis', 'teamAnalysis',
+          'financialAnalysis', 'competitiveLandscape', 'keyRisks', 'investmentThesis',
+          'sections', 'content', 'tags', 'sourceIds', 'competitorIds',
+          'reviewNotes', 'reviewedAt', 'approvedBy', 'approvedByName',
+          'approvedAt', 'submittedAt', 'confidentiality', 'createdAt',
+          'updatedAt', 'updatedBy'
+        ]) &&
+        validStringLength('startupId', 1, 128) &&
+        (data.status in ['draft', 'in_progress', 'submitted', 'in_review', 'revision_requested', 'changes_requested', 'approved', 'rejected', 'archived']) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('assignmentId', 0, 128) &&
+        isValidOptionalString('templateId', 0, 128) &&
+        isValidOptionalString('title', 0, 300) &&
+        isValidOptionalString('summary', 0, 10000) &&
+        isValidOptionalNumber('version', 1, 10000) &&
+        isValidOptionalString('primaryResearcherId', 0, 128) &&
+        isValidOptionalString('primaryResearcherName', 0, 120) &&
+        isValidOptionalString('authorId', 0, 128) &&
+        isValidOptionalString('authorName', 0, 120) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalList('collaboratorIds', 100) &&
+        isValidOptionalList('collaboratorNames', 100) &&
+        isValidOptionalString('reviewerId', 0, 128) &&
+        isValidOptionalString('reviewerName', 0, 120) &&
+        isValidOptionalList('assignedUsers', 200) &&
+        isValidOptionalMap('companyOverview', 30) &&
+        isValidOptionalMap('founderResearch', 30) &&
+        isValidOptionalMap('marketResearch', 30) &&
+        isValidOptionalMap('productResearch', 30) &&
+        isValidOptionalMap('businessModel', 30) &&
+        isValidOptionalMap('tractionFinancials', 30) &&
+        isValidOptionalList('risksRedFlags', 200) &&
+        isValidOptionalMap('conclusion', 30) &&
+        isValidOptionalList('reviewHistory', 200) &&
+        isValidOptionalList('versionHistory', 200) &&
+        isValidOptionalString('executiveSummary', 0, 15000) &&
+        isValidOptionalString('marketAnalysis', 0, 20000) &&
+        isValidOptionalString('productAnalysis', 0, 20000) &&
+        isValidOptionalString('tractionAnalysis', 0, 20000) &&
+        isValidOptionalString('teamAnalysis', 0, 20000) &&
+        isValidOptionalString('financialAnalysis', 0, 20000) &&
+        isValidOptionalString('competitiveLandscape', 0, 20000) &&
+        isValidOptionalString('keyRisks', 0, 15000) &&
+        isValidOptionalString('investmentThesis', 0, 15000) &&
+        isValidOptionalMap('sections', 50) &&
+        isValidOptionalString('content', 0, 50000) &&
+        isValidOptionalList('tags', 100) &&
+        isValidOptionalList('sourceIds', 200) &&
+        isValidOptionalList('competitorIds', 200) &&
+        isValidOptionalString('reviewNotes', 0, 10000) &&
+        isValidOptionalTimeField('reviewedAt') &&
+        isValidOptionalString('approvedBy', 0, 128) &&
+        isValidOptionalString('approvedByName', 0, 120) &&
+        isValidOptionalTimeField('approvedAt') &&
+        isValidOptionalTimeField('submittedAt') &&
+        (!('confidentiality' in data) || data.confidentiality == null || (data.confidentiality in ['public_internal', 'standard', 'internal', 'restricted', 'confidential'])) &&
+        isValidOptionalTimeField('updatedAt') &&
+        isValidOptionalString('updatedBy', 0, 128);
+    }
+
+    function isValidResearchSource(data) {
+      return hasRequiredFields(['sourceType', 'createdBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'researchId', 'libraryItemId', 'section',
+          'claimSummary', 'sourceUrl', 'sourceTitle', 'publicationDate',
+          'dateAccessed', 'sourceType', 'analystNotes', 'confidenceLevel',
+          'title', 'url', 'author', 'publishedDate', 'summary', 'keyTakeaways',
+          'reliability', 'citation', 'tags', 'attachmentUrl',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('sourceType', 1, 80) &&
+        validStringLength('createdBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalString('libraryItemId', 0, 128) &&
+        isValidOptionalString('section', 0, 120) &&
+        isValidOptionalString('claimSummary', 0, 5000) &&
+        isValidOptionalString('sourceUrl', 0, 2048) &&
+        isValidOptionalString('sourceTitle', 0, 300) &&
+        isValidOptionalString('publicationDate', 0, 64) &&
+        isValidOptionalString('dateAccessed', 0, 64) &&
+        isValidOptionalString('analystNotes', 0, 5000) &&
+        isValidOptionalString('confidenceLevel', 0, 80) &&
+        isValidOptionalString('title', 0, 300) &&
+        isValidOptionalUrl('url') &&
+        isValidOptionalString('author', 0, 160) &&
+        isValidOptionalString('publishedDate', 0, 64) &&
+        isValidOptionalString('summary', 0, 10000) &&
+        isValidOptionalString('keyTakeaways', 0, 10000) &&
+        isValidOptionalString('reliability', 0, 60) &&
+        isValidOptionalString('citation', 0, 1000) &&
+        isValidOptionalList('tags', 50) &&
+        isValidOptionalUrl('attachmentUrl') &&
+        isValidOptionalString('createdByName', 0, 120) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidCompetitor(data) {
+      return hasRequiredFields(['startupId', 'name', 'createdBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'researchId', 'name', 'website',
+          'websiteUrl', 'geography', 'location', 'sector', 'stage', 'product',
+          'pricing', 'targetMarket', 'fundingHistory', 'fundingRaised',
+          'valuation', 'description', 'strengths', 'weaknesses',
+          'differentiation', 'marketPosition', 'threatLevel', 'metrics',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('startupId', 1, 128) &&
+        validStringLength('name', 1, 200) &&
+        validStringLength('createdBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalString('website', 0, 500) &&
+        isValidOptionalUrl('websiteUrl') &&
+        isValidOptionalString('geography', 0, 200) &&
+        isValidOptionalString('location', 0, 200) &&
+        isValidOptionalString('sector', 0, 160) &&
+        isValidOptionalString('stage', 0, 120) &&
+        isValidOptionalString('product', 0, 5000) &&
+        isValidOptionalString('pricing', 0, 2000) &&
+        isValidOptionalString('targetMarket', 0, 2000) &&
+        isValidOptionalString('fundingHistory', 0, 2000) &&
+        isValidOptionalString('fundingRaised', 0, 200) &&
+        isValidOptionalString('valuation', 0, 200) &&
+        isValidOptionalString('description', 0, 5000) &&
+        isValidOptionalString('strengths', 0, 5000) &&
+        isValidOptionalString('weaknesses', 0, 5000) &&
+        isValidOptionalString('differentiation', 0, 5000) &&
+        isValidOptionalString('marketPosition', 0, 200) &&
+        isValidOptionalString('threatLevel', 0, 60) &&
+        isValidOptionalMap('metrics', 50) &&
+        isValidOptionalString('createdByName', 0, 120) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidScorecard(data) {
+      return hasRequiredFields(['name']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'description', 'sector', 'stage', 'startupId',
+          'dimensions', 'criteria', 'weights', 'maxScore', 'isDefault',
+          'status', 'version', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('name', 1, 200) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('description', 0, 3000) &&
+        isValidOptionalString('sector', 0, 160) &&
+        isValidOptionalString('stage', 0, 120) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalList('dimensions', 50) &&
+        isValidOptionalList('criteria', 50) &&
+        isValidOptionalMap('weights', 50) &&
+        isValidOptionalNumber('maxScore', 1, 1000) &&
+        isValidOptionalBool('isDefault') &&
+        isValidOptionalString('status', 0, 60) &&
+        isValidOptionalNumber('version', 1, 1000) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalString('updatedBy', 0, 128) &&
+        isValidOptionalTimeField('createdAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidEvaluation(data) {
+      return hasRequiredFields(['startupId', 'evaluatorId', 'recommendation', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'scorecardId', 'evaluatorId',
+          'evaluatorName', 'evaluatorRole', 'scores', 'criteriaScores',
+          'overallScore', 'weightedScore', 'reviewerComments', 'recommendation',
+          'conviction', 'strengths', 'weaknesses', 'risks', 'majorRisks',
+          'missingInformation', 'keyQuestions', 'summary', 'notes', 'status',
+          'submittedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('startupId', 1, 128) &&
+        validStringLength('evaluatorId', 1, 128) &&
+        validStringLength('recommendation', 1, 80) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('scorecardId', 0, 128) &&
+        isValidOptionalString('evaluatorName', 0, 120) &&
+        isValidOptionalString('evaluatorRole', 0, 80) &&
+        isValidOptionalList('scores', 50) &&
+        isValidOptionalList('criteriaScores', 50) &&
+        isValidOptionalNumber('overallScore', 0, 100) &&
+        isValidOptionalNumber('weightedScore', 0, 100) &&
+        isValidOptionalString('reviewerComments', 0, 10000) &&
+        isValidOptionalString('conviction', 0, 60) &&
+        isValidOptionalString('strengths', 0, 10000) &&
+        isValidOptionalString('weaknesses', 0, 10000) &&
+        isValidOptionalString('risks', 0, 10000) &&
+        isValidOptionalString('majorRisks', 0, 10000) &&
+        isValidOptionalString('missingInformation', 0, 10000) &&
+        isValidOptionalString('keyQuestions', 0, 10000) &&
+        isValidOptionalString('summary', 0, 10000) &&
+        isValidOptionalString('notes', 0, 10000) &&
+        isValidOptionalString('status', 0, 60) &&
+        isValidOptionalTimeField('submittedAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidDecision(data) {
+      return hasRequiredFields(['startupId', 'decidedBy']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'stage', 'previousStage', 'newStage',
+          'outcome', 'decision', 'status', 'decidedBy', 'decidedByName',
+          'committeeMembers', 'reason', 'rationale', 'conditions', 'nextSteps',
+          'proposedAmount', 'proposedValuation', 'instrument', 'voteSummary',
+          'dissentNotes', 'memoId', 'researchId', 'effectiveDate', 'decidedAt',
+          'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('startupId', 1, 128) &&
+        validStringLength('decidedBy', 1, 128) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('stage', 0, 120) &&
+        isValidOptionalString('previousStage', 0, 120) &&
+        isValidOptionalString('newStage', 0, 120) &&
+        isValidOptionalString('outcome', 0, 80) &&
+        isValidOptionalString('decision', 0, 80) &&
+        isValidOptionalString('status', 0, 80) &&
+        isValidOptionalString('decidedByName', 0, 120) &&
+        isValidOptionalList('committeeMembers', 50) &&
+        isValidOptionalString('reason', 0, 20000) &&
+        isValidOptionalString('rationale', 0, 20000) &&
+        isValidOptionalString('conditions', 0, 10000) &&
+        isValidOptionalString('nextSteps', 0, 10000) &&
+        isValidOptionalString('proposedAmount', 0, 200) &&
+        isValidOptionalString('proposedValuation', 0, 200) &&
+        isValidOptionalString('instrument', 0, 120) &&
+        isValidOptionalMap('voteSummary', 50) &&
+        isValidOptionalString('dissentNotes', 0, 10000) &&
+        isValidOptionalString('memoId', 0, 128) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalTimeField('effectiveDate') &&
+        isValidOptionalTimeField('decidedAt') &&
+        isValidOptionalTimeField('createdAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidTask(data) {
+      return hasRequiredFields(['title', 'status', 'priority', 'createdBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'researchId', 'title', 'description',
+          'category', 'status', 'priority', 'assignedToId', 'assignedToName',
+          'assigneeId', 'assigneeName', 'assignedUsers', 'createdBy',
+          'createdByName', 'dueDate', 'completedAt', 'deliverableUrl',
+          'notes', 'tags', 'checklist', 'attachments', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('title', 1, 300) &&
+        (data.status in [
+          'To Do', 'In Progress', 'In Review', 'Completed', 'Blocked',
+          'todo', 'pending', 'in_progress', 'in_review', 'blocked', 'completed', 'cancelled'
+        ]) &&
+        (data.priority in [
+          'Critical', 'High', 'Medium', 'Low',
+          'low', 'medium', 'high', 'urgent', 'critical'
+        ]) &&
+        validStringLength('createdBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalString('description', 0, 10000) &&
+        isValidOptionalString('category', 0, 80) &&
+        isValidOptionalString('assignedToId', 0, 128) &&
+        isValidOptionalString('assignedToName', 0, 120) &&
+        isValidOptionalString('assigneeId', 0, 128) &&
+        isValidOptionalString('assigneeName', 0, 120) &&
+        isValidOptionalList('assignedUsers', 100) &&
+        isValidOptionalString('createdByName', 0, 120) &&
+        isValidOptionalTimeField('dueDate') &&
+        isValidOptionalTimeField('completedAt') &&
+        isValidOptionalUrl('deliverableUrl') &&
+        isValidOptionalString('notes', 0, 5000) &&
+        isValidOptionalList('tags', 50) &&
+        isValidOptionalList('checklist', 100) &&
+        isValidOptionalList('attachments', 50) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidComment(data) {
+      return hasRequiredFields(['authorId', 'content', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'taskId', 'researchId', 'targetType', 'targetId',
+          'parentId', 'authorId', 'authorName', 'authorRole', 'content',
+          'mentions', 'mentionNames', 'attachments', 'attachmentIds',
+          'isInternal', 'resolved', 'isResolved', 'resolvedBy', 'resolvedByName',
+          'resolvedAt', 'editedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('authorId', 1, 128) &&
+        validStringLength('content', 1, 10000) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('taskId', 0, 128) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalString('targetType', 0, 80) &&
+        isValidOptionalString('targetId', 0, 128) &&
+        isValidOptionalString('parentId', 0, 128) &&
+        isValidOptionalString('authorName', 0, 120) &&
+        isValidOptionalString('authorRole', 0, 80) &&
+        isValidOptionalList('mentions', 50) &&
+        isValidOptionalList('mentionNames', 50) &&
+        isValidOptionalList('attachments', 20) &&
+        isValidOptionalList('attachmentIds', 20) &&
+        isValidOptionalBool('isInternal') &&
+        isValidOptionalBool('resolved') &&
+        isValidOptionalBool('isResolved') &&
+        isValidOptionalString('resolvedBy', 0, 128) &&
+        isValidOptionalString('resolvedByName', 0, 120) &&
+        isValidOptionalTimeField('resolvedAt') &&
+        isValidOptionalTimeField('editedAt') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['recipientId', 'type', 'title', 'message', 'read', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'recipientId', 'actorId', 'actorName', 'senderId', 'senderName',
+          'type', 'title', 'message', 'link', 'startupId', 'entityId',
+          'targetType', 'targetId', 'priority', 'read', 'readAt', 'archived',
+          'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('recipientId', 1, 128) &&
+        validStringLength('type', 1, 80) &&
+        validStringLength('title', 1, 250) &&
+        validStringLength('message', 1, 2000) &&
+        data.read is bool &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('actorId', 0, 128) &&
+        isValidOptionalString('actorName', 0, 120) &&
+        isValidOptionalString('senderId', 0, 128) &&
+        isValidOptionalString('senderName', 0, 120) &&
+        isValidOptionalString('link', 0, 500) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('entityId', 0, 128) &&
+        isValidOptionalString('targetType', 0, 80) &&
+        isValidOptionalString('targetId', 0, 128) &&
+        isValidOptionalString('priority', 0, 40) &&
+        isValidOptionalTimeField('readAt') &&
+        isValidOptionalBool('archived') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidDocument(data) {
+      return hasRequiredFields(['title', 'category', 'confidentiality', 'uploadedBy', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'startupId', 'startupName', 'submissionId', 'researchId', 'title',
+          'fileName', 'fileType', 'mimeType', 'fileSize', 'storagePath',
+          'downloadUrl', 'externalUrl', 'category', 'confidentiality',
+          'allowedUserIds', 'allowedRoles', 'version', 'previousVersionId',
+          'description', 'tags', 'uploadedBy', 'uploadedByName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('title', 1, 300) &&
+        validStringLength('category', 1, 100) &&
+        (data.confidentiality in ['public_internal', 'standard', 'internal', 'restricted', 'confidential']) &&
+        validStringLength('uploadedBy', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('startupName', 0, 200) &&
+        isValidOptionalString('submissionId', 0, 128) &&
+        isValidOptionalString('researchId', 0, 128) &&
+        isValidOptionalString('fileName', 0, 300) &&
+        isValidOptionalString('fileType', 0, 80) &&
+        isValidOptionalString('mimeType', 0, 120) &&
+        isValidOptionalNumber('fileSize', 0, 104857600) &&
+        isValidOptionalString('storagePath', 0, 1024) &&
+        isValidOptionalString('downloadUrl', 0, 2048) &&
+        isValidOptionalUrl('externalUrl') &&
+        isValidOptionalList('allowedUserIds', 200) &&
+        isValidOptionalList('allowedRoles', 20) &&
+        isValidOptionalNumber('version', 1, 1000) &&
+        isValidOptionalString('previousVersionId', 0, 128) &&
+        isValidOptionalString('description', 0, 5000) &&
+        isValidOptionalList('tags', 50) &&
+        isValidOptionalString('uploadedByName', 0, 120) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidResearchLibraryItem(data) {
+      return hasRequiredFields(['title', 'category', 'authorId', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'title', 'summary', 'notes', 'category', 'sector', 'tags',
+          'content', 'sourceUrl', 'sourceUrls', 'attachmentUrl', 'attachments',
+          'startupIds', 'relatedStartupIds', 'relatedStartupNames', 'authorId',
+          'authorName', 'contributorIds', 'contributorNames', 'status',
+          'confidentiality', 'allowedUserIds', 'isFeatured', 'viewCount',
+          'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('title', 1, 300) &&
+        validStringLength('category', 1, 120) &&
+        validStringLength('authorId', 1, 128) &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('summary', 0, 5000) &&
+        isValidOptionalString('notes', 0, 50000) &&
+        isValidOptionalString('sector', 0, 160) &&
+        isValidOptionalList('tags', 100) &&
+        isValidOptionalString('content', 0, 50000) &&
+        isValidOptionalUrl('sourceUrl') &&
+        isValidOptionalList('sourceUrls', 100) &&
+        isValidOptionalUrl('attachmentUrl') &&
+        isValidOptionalList('attachments', 50) &&
+        isValidOptionalList('startupIds', 100) &&
+        isValidOptionalList('relatedStartupIds', 100) &&
+        isValidOptionalList('relatedStartupNames', 100) &&
+        isValidOptionalString('authorName', 0, 120) &&
+        isValidOptionalList('contributorIds', 100) &&
+        isValidOptionalList('contributorNames', 100) &&
+        isValidOptionalString('status', 0, 60) &&
+        (!('confidentiality' in data) || data.confidentiality == null || (data.confidentiality in ['public_internal', 'standard', 'internal', 'restricted', 'confidential'])) &&
+        isValidOptionalList('allowedUserIds', 200) &&
+        isValidOptionalBool('isFeatured') &&
+        isValidOptionalNumber('viewCount', 0, 10000000) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidPipelineStage(data) {
+      return hasRequiredFields(['name', 'order', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'slug', 'description', 'order', 'color', 'isDefault',
+          'isTerminal', 'requiredFields', 'allowedRoles', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('name', 1, 120) &&
+        data.order is number && data.order >= 0 && data.order <= 1000 &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('slug', 0, 120) &&
+        isValidOptionalString('description', 0, 1000) &&
+        isValidOptionalString('color', 0, 40) &&
+        isValidOptionalBool('isDefault') &&
+        isValidOptionalBool('isTerminal') &&
+        isValidOptionalList('requiredFields', 50) &&
+        isValidOptionalList('allowedRoles', 20) &&
+        isValidOptionalString('status', 0, 60) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidSavedView(data) {
+      return hasRequiredFields(['name', 'filters', 'createdAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'description', 'userId', 'ownerId', 'ownerName',
+          'isSystem', 'entityType', 'filters', 'sortBy', 'sortOrder',
+          'columns', 'groupBy', 'isShared', 'sharedWithRoles', 'isDefault',
+          'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('name', 1, 160) &&
+        data.filters is map && data.filters.size() <= 50 &&
+        isValidTimeField('createdAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('description', 0, 1000) &&
+        isValidOptionalString('userId', 0, 128) &&
+        isValidOptionalString('ownerId', 0, 128) &&
+        isValidOptionalString('ownerName', 0, 120) &&
+        isValidOptionalBool('isSystem') &&
+        isValidOptionalString('entityType', 0, 80) &&
+        isValidOptionalString('sortBy', 0, 80) &&
+        isValidOptionalString('sortOrder', 0, 20) &&
+        isValidOptionalList('columns', 50) &&
+        isValidOptionalString('groupBy', 0, 80) &&
+        isValidOptionalBool('isShared') &&
+        isValidOptionalList('sharedWithRoles', 20) &&
+        isValidOptionalBool('isDefault') &&
+        isValidOptionalTimeField('updatedAt');
+    }
+
+    function isValidResearchTemplate(data) {
+      return hasRequiredFields(['name', 'updatedAt', 'updatedBy']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'description', 'category', 'sector', 'stage',
+          'templateType', 'defaultObjectives', 'defaultInstructions',
+          'defaultChecklist', 'requiredSections', 'sections', 'prompts',
+          'requiredSources', 'isSystem', 'isDefault', 'status', 'version',
+          'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('name', 1, 200) &&
+        isValidTimeField('updatedAt') &&
+        validStringLength('updatedBy', 1, 128) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('description', 0, 3000) &&
+        isValidOptionalString('category', 0, 120) &&
+        isValidOptionalString('sector', 0, 160) &&
+        isValidOptionalString('stage', 0, 120) &&
+        isValidOptionalString('templateType', 0, 80) &&
+        isValidOptionalString('defaultObjectives', 0, 5000) &&
+        isValidOptionalString('defaultInstructions', 0, 5000) &&
+        isValidOptionalList('defaultChecklist', 100) &&
+        isValidOptionalList('requiredSections', 50) &&
+        isValidOptionalList('sections', 50) &&
+        isValidOptionalList('prompts', 50) &&
+        isValidOptionalList('requiredSources', 50) &&
+        isValidOptionalBool('isSystem') &&
+        isValidOptionalBool('isDefault') &&
+        isValidOptionalString('status', 0, 60) &&
+        isValidOptionalNumber('version', 1, 1000) &&
+        isValidOptionalString('createdBy', 0, 128) &&
+        isValidOptionalTimeField('createdAt');
+    }
+
+    function isValidActivityLog(data) {
+      return hasRequiredFields(['actorId', 'action']) &&
+        hasOnlyAllowedFields([
+          'id', 'actorId', 'actorName', 'actorEmail', 'actorRole', 'action',
+          'entityType', 'entityId', 'entityName', 'targetType', 'targetId',
+          'targetName', 'startupId', 'summary', 'details', 'previousValue',
+          'newValue', 'metadata', 'ipAddress', 'userAgent', 'timestamp', 'createdAt'
+        ]) &&
+        validStringLength('actorId', 1, 128) &&
+        validStringLength('action', 1, 120) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('actorName', 0, 120) &&
+        (!('actorEmail' in data) || data.actorEmail == null || data.actorEmail == "" || isValidEmail(data.actorEmail)) &&
+        isValidOptionalString('actorRole', 0, 80) &&
+        isValidOptionalString('entityType', 0, 80) &&
+        isValidOptionalString('entityId', 0, 128) &&
+        isValidOptionalString('entityName', 0, 250) &&
+        isValidOptionalString('targetType', 0, 80) &&
+        isValidOptionalString('targetId', 0, 128) &&
+        isValidOptionalString('targetName', 0, 250) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('summary', 0, 2000) &&
+        isValidOptionalString('details', 0, 5000) &&
+        isValidOptionalString('previousValue', 0, 10000) &&
+        isValidOptionalString('newValue', 0, 10000) &&
+        isValidOptionalMap('metadata', 50) &&
+        isValidOptionalString('ipAddress', 0, 80) &&
+        isValidOptionalString('userAgent', 0, 500) &&
+        isValidOptionalTimeField('timestamp') &&
+        isValidOptionalTimeField('createdAt');
+    }
+
+    function isValidAuditLog(data) {
+      return hasRequiredFields(['actorId', 'action']) &&
+        hasOnlyAllowedFields([
+          'id', 'actorId', 'actorName', 'actorEmail', 'actorRole', 'action',
+          'severity', 'entityType', 'entityId', 'entityName', 'resourceType',
+          'resourceId', 'targetUserId', 'startupId', 'summary', 'previousValue',
+          'newValue', 'beforeState', 'afterState', 'metadata', 'ipAddress',
+          'userAgent', 'timestamp', 'createdAt'
+        ]) &&
+        validStringLength('actorId', 1, 128) &&
+        validStringLength('action', 1, 120) &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('actorName', 0, 120) &&
+        (!('actorEmail' in data) || data.actorEmail == null || data.actorEmail == "" || isValidEmail(data.actorEmail)) &&
+        isValidOptionalString('actorRole', 0, 80) &&
+        (!('severity' in data) || data.severity == null || (data.severity in ['info', 'low', 'medium', 'high', 'critical'])) &&
+        isValidOptionalString('entityType', 0, 80) &&
+        isValidOptionalString('entityId', 0, 128) &&
+        isValidOptionalString('entityName', 0, 250) &&
+        isValidOptionalString('resourceType', 0, 80) &&
+        isValidOptionalString('resourceId', 0, 128) &&
+        isValidOptionalString('targetUserId', 0, 128) &&
+        isValidOptionalString('startupId', 0, 128) &&
+        isValidOptionalString('summary', 0, 2000) &&
+        isValidOptionalString('previousValue', 0, 10000) &&
+        isValidOptionalString('newValue', 0, 10000) &&
+        isValidOptionalMap('beforeState', 100) &&
+        isValidOptionalMap('afterState', 100) &&
+        isValidOptionalMap('metadata', 50) &&
+        isValidOptionalString('ipAddress', 0, 80) &&
+        isValidOptionalString('userAgent', 0, 500) &&
+        isValidOptionalTimeField('timestamp') &&
+        isValidOptionalTimeField('createdAt');
+    }
+
+    function isValidWorkspaceSetting(data) {
+      return hasRequiredFields(['updatedBy', 'updatedAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'category', 'workspaceName', 'organizationName', 'domain',
+          'investmentCapNote', 'mandateNote', 'defaultInternAccessScope',
+          'requireTamCitation', 'requireHumanDecisionConfirmation',
+          'customSectors', 'customIndustries', 'roleTemplates',
+          'allowedDomains', 'requireMfa', 'sessionTimeoutMinutes',
+          'defaultAccessScope', 'defaultRole', 'allowInternStartupCreation',
+          'requireTwoStepApproval', 'confidentialityDefaults',
+          'notificationSettings', 'branding', 'integrations',
+          'securityConfig', 'updatedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        validStringLength('updatedBy', 1, 128) &&
+        isValidTimeField('updatedAt') &&
+        isValidOptionalString('id', 1, 128) &&
+        isValidOptionalString('category', 0, 80) &&
+        isValidOptionalString('workspaceName', 0, 160) &&
+        isValidOptionalString('organizationName', 0, 160) &&
+        isValidOptionalString('domain', 0, 160) &&
+        isValidOptionalString('investmentCapNote', 0, 1000) &&
+        isValidOptionalString('mandateNote', 0, 2000) &&
+        (!('defaultInternAccessScope' in data) || data.defaultInternAccessScope == null || (data.defaultInternAccessScope in ['all', 'assigned'])) &&
+        isValidOptionalBool('requireTamCitation') &&
+        isValidOptionalBool('requireHumanDecisionConfirmation') &&
+        isValidOptionalList('customSectors', 100) &&
+        isValidOptionalList('customIndustries', 100) &&
+        isValidOptionalMap('roleTemplates', 20) &&
+        isValidOptionalList('allowedDomains', 50) &&
+        isValidOptionalBool('requireMfa') &&
+        isValidOptionalNumber('sessionTimeoutMinutes', 5, 43200) &&
+        (!('defaultAccessScope' in data) || data.defaultAccessScope == null || (data.defaultAccessScope in ['all', 'assigned', 'team', 'own'])) &&
+        (!('defaultRole' in data) || data.defaultRole == null || (data.defaultRole in ['INVESTMENT_LEAD', 'RESEARCH_ANALYST', 'REVIEWER', 'VIEWER'])) &&
+        isValidOptionalBool('allowInternStartupCreation') &&
+        isValidOptionalBool('requireTwoStepApproval') &&
+        isValidOptionalMap('confidentialityDefaults', 30) &&
+        isValidOptionalMap('notificationSettings', 30) &&
+        isValidOptionalMap('branding', 30) &&
+        isValidOptionalMap('integrations', 30) &&
+        isValidOptionalMap('securityConfig', 30) &&
+        isValidOptionalTimeField('createdAt');
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. Users Collection — strict RBAC & anti-privilege-escalation
+    match /users/{userId} {
+      // Only the user themselves or SUPER_ADMIN / INVESTMENT_LEAD can read user profiles (prevents blanket PII exposure)
+      allow read: if isOwner(userId) || isLeadOrAdmin();
+
+      // Only SUPER_ADMIN (or server-side Admin SDK) can create user documents with roles/permissions
+      allow create: if isSuperAdmin() &&
+        isValidUser(request.resource.data);
+
+      // SUPER_ADMIN can update user records; ordinary active users can only update their own non-privileged profile fields
+      allow update: if isValidUser(request.resource.data) && (
+        isSuperAdmin() ||
+        (
+          isOwner(userId) &&
+          isActiveUser() &&
+          uidNotModified() &&
+          areImmutableFieldsUnchanged([
+            'id', 'uid', 'email', 'role', 'permissions', 'status',
+            'accessScope', 'assignedStartupIds', 'teamId', 'teamIds',
+            'passwordHash', 'createdAt', 'createdBy', 'invitedBy'
+          ])
+        )
+      );
+
+      // Only SUPER_ADMIN can delete user records (and cannot self-delete)
+      allow delete: if isSuperAdmin() && request.auth.uid != userId;
+    }
+
+    // 2. Teams Collection
+    match /teams/{teamId} {
+      allow read: if isActiveUser();
+
+      allow create: if isLeadOrAdmin() &&
+        isValidTeam(request.resource.data);
+
+      allow update: if isLeadOrAdmin() &&
+        isValidTeam(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdBy', 'createdAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 3. Invitations Collection
+    match /invitations/{invitationId} {
+      allow read: if isLeadOrAdmin();
+
+      // INVESTMENT_LEAD cannot invite SUPER_ADMIN users
+      allow create: if isValidInvitation(request.resource.data) &&
+        request.resource.data.invitedBy == request.auth.uid && (
+          isSuperAdmin() ||
+          (isInvestmentLead() && request.resource.data.role != 'SUPER_ADMIN')
+        );
+
+      allow update: if isValidInvitation(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'email', 'invitedBy', 'createdAt']) && (
+          isSuperAdmin() ||
+          (
+            isInvestmentLead() &&
+            resource.data.role != 'SUPER_ADMIN' &&
+            request.resource.data.role != 'SUPER_ADMIN'
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 4. Startups Collection
+    match /startups/{startupId} {
+      allow read: if canReadStartupData(resource.data);
+
+      // SUPER_ADMIN and INVESTMENT_LEAD can create startups from any source;
+      // RESEARCH_ANALYST can create startups ONLY if source == 'Intern Research' and createdBy == request.auth.uid
+      allow create: if isValidStartup(request.resource.data) &&
+        request.resource.data.createdBy == request.auth.uid && (
+          isLeadOrAdmin() ||
+          (
+            isResearchAnalyst() &&
+            request.resource.data.source == 'Intern Research' &&
+            !('latestDecision' in request.resource.data && request.resource.data.latestDecision != null) &&
+            !('decision' in request.resource.data && request.resource.data.decision != null) &&
+            !('investmentDecision' in request.resource.data && request.resource.data.investmentDecision != null) &&
+            !('approvedBy' in request.resource.data && request.resource.data.approvedBy != null)
+          )
+        );
+
+      // SUPER_ADMIN and INVESTMENT_LEAD can update all startup fields;
+      // RESEARCH_ANALYST can update startups they are assigned to (non-decision / non-permission fields only)
+      allow update: if isValidStartup(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupCode', 'createdBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            isResearchAnalyst() &&
+            isAssignedToStartupData(resource.data) &&
+            areImmutableFieldsUnchanged([
+              'source', 'assignedUsers', 'assignedUserIds', 'assignedLeadId',
+              'leadOwnerId', 'assignedResearcherId', 'reviewerId', 'collaboratorIds',
+              'teamId', 'latestDecision', 'decisionHistory', 'decision',
+              'decisionStatus', 'investmentDecision', 'icDecision',
+              'approvedBy', 'approvedAt', 'confidentiality', 'archived', 'isArchived'
+            ])
+          )
+        );
+
+      // RESEARCH_ANALYST, REVIEWER, VIEWER cannot delete startups
+      allow delete: if isSuperAdmin();
+    }
+
+    // 5. Submissions Collection
+    // Public pitch submissions are created exclusively by the server-side /api/pitch Admin SDK endpoint.
+    match /submissions/{submissionId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          hasAllAccessScope() ||
+          hasPermission('submission.view') ||
+          ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers) ||
+          ('startupId' in resource.data && resource.data.startupId is string && canAccessStartupId(resource.data.startupId))
+        )
+      );
+
+      allow create: if isLeadOrAdmin() &&
+        isValidSubmission(request.resource.data);
+
+      allow update: if isLeadOrAdmin() &&
+        isValidSubmission(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'referenceId', 'founderEmail', 'submittedAt', 'createdAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 6. Assignments Collection
+    match /assignments/{assignmentId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          ('assigneeId' in resource.data && resource.data.assigneeId == request.auth.uid) ||
+          ('primaryResearcherId' in resource.data && resource.data.primaryResearcherId == request.auth.uid) ||
+          ('reviewerId' in resource.data && resource.data.reviewerId == request.auth.uid) ||
+          ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers) ||
+          hasAllAccessScope() ||
+          canAccessStartupId(resource.data.startupId)
+        )
+      );
+
+      allow create: if isLeadOrAdmin() &&
+        isValidAssignment(request.resource.data);
+
+      allow update: if isValidAssignment(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'createdBy', 'assignedBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            isActiveUser() &&
+            !isViewer() &&
+            (
+              ('assigneeId' in resource.data && resource.data.assigneeId == request.auth.uid) ||
+              ('primaryResearcherId' in resource.data && resource.data.primaryResearcherId == request.auth.uid) ||
+              ('reviewerId' in resource.data && resource.data.reviewerId == request.auth.uid) ||
+              ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers)
+            ) &&
+            areImmutableFieldsUnchanged(['primaryResearcherId', 'assigneeId', 'reviewerId', 'assignedUsers', 'priority', 'dueDate'])
+          )
+        );
+
+      allow delete: if isLeadOrAdmin();
+    }
+
+    // 7. Research Collection
+    match /research/{researchId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          ('authorId' in resource.data && resource.data.authorId == request.auth.uid) ||
+          ('primaryResearcherId' in resource.data && resource.data.primaryResearcherId == request.auth.uid) ||
+          ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers) ||
+          canAccessStartupId(resource.data.startupId)
+        )
+      );
+
+      // RESEARCH_ANALYST can create their own research drafts (cannot self-approve)
+      allow create: if isValidResearch(request.resource.data) &&
+        canAccessStartupId(request.resource.data.startupId) && (
+          isLeadOrAdmin() ||
+          (
+            isResearchAnalyst() &&
+            (
+              ('primaryResearcherId' in request.resource.data && request.resource.data.primaryResearcherId == request.auth.uid) ||
+              ('authorId' in request.resource.data && request.resource.data.authorId == request.auth.uid)
+            ) &&
+            (request.resource.data.status in ['draft', 'in_progress', 'submitted', 'in_review']) &&
+            !('approvedBy' in request.resource.data && request.resource.data.approvedBy != null) &&
+            !('approvedAt' in request.resource.data && request.resource.data.approvedAt != null)
+          )
+        );
+
+      // Updates:
+      // - SUPER_ADMIN / INVESTMENT_LEAD can update/approve any research record
+      // - RESEARCH_ANALYST can update their own or collaborated non-approved research drafts (cannot set status == 'approved')
+      // - REVIEWER can review, request revisions, or approve research on assigned startups (cannot self-approve own research)
+      allow update: if isValidResearch(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'primaryResearcherId', 'authorId', 'createdBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            isResearchAnalyst() &&
+            (
+              ('primaryResearcherId' in resource.data && resource.data.primaryResearcherId == request.auth.uid) ||
+              ('authorId' in resource.data && resource.data.authorId == request.auth.uid) ||
+              ('collaboratorIds' in resource.data && resource.data.collaboratorIds is list && request.auth.uid in resource.data.collaboratorIds)
+            ) &&
+            resource.data.status != 'approved' &&
+            (request.resource.data.status in ['draft', 'in_progress', 'submitted', 'in_review']) &&
+            areImmutableFieldsUnchanged(['approvedBy', 'approvedByName', 'approvedAt', 'reviewerId', 'reviewedAt', 'reviewNotes', 'confidentiality'])
+          ) ||
+          (
+            isReviewer() &&
+            (!('primaryResearcherId' in resource.data) || resource.data.primaryResearcherId != request.auth.uid) &&
+            (!('authorId' in resource.data) || resource.data.authorId != request.auth.uid) &&
+            canAccessStartupId(resource.data.startupId) &&
+            (request.resource.data.status in ['in_review', 'revision_requested', 'changes_requested', 'approved', 'rejected']) &&
+            areImmutableFieldsUnchanged(['templateId', 'confidentiality'])
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 8. Research Sources Collection
+    match /research_sources/{sourceId} {
+      allow read: if isActiveUser() && (
+        !('startupId' in resource.data) ||
+        resource.data.startupId == null ||
+        resource.data.startupId == "" ||
+        canAccessStartupId(resource.data.startupId)
+      );
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isResearchAnalyst() || isReviewer()) &&
+        isValidResearchSource(request.resource.data) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        (!('startupId' in request.resource.data) || request.resource.data.startupId == null || request.resource.data.startupId == "" || canAccessStartupId(request.resource.data.startupId));
+
+      allow update: if isActiveUser() &&
+        isValidResearchSource(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'createdBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            resource.data.createdBy == request.auth.uid
+          )
+        );
+
+      allow delete: if isLeadOrAdmin() || (
+        isResearchAnalyst() &&
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // 9. Competitors Collection
+    match /competitors/{competitorId} {
+      allow read: if isActiveUser() && canAccessStartupId(resource.data.startupId);
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isResearchAnalyst() || isReviewer()) &&
+        isValidCompetitor(request.resource.data) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        canAccessStartupId(request.resource.data.startupId);
+
+      allow update: if isActiveUser() &&
+        isValidCompetitor(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'createdBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            resource.data.createdBy == request.auth.uid &&
+            canAccessStartupId(resource.data.startupId)
+          )
+        );
+
+      allow delete: if isLeadOrAdmin();
+    }
+
+    // 10. Scorecards Collection
+    match /scorecards/{scorecardId} {
+      allow read: if isActiveUser();
+
+      allow create: if isLeadOrAdmin() &&
+        isValidScorecard(request.resource.data);
+
+      allow update: if isLeadOrAdmin() &&
+        isValidScorecard(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdBy', 'createdAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 11. Evaluations Collection
+    match /evaluations/{evaluationId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          resource.data.evaluatorId == request.auth.uid ||
+          canAccessStartupId(resource.data.startupId)
+        )
+      );
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isReviewer()) &&
+        isValidEvaluation(request.resource.data) &&
+        request.resource.data.evaluatorId == request.auth.uid &&
+        canAccessStartupId(request.resource.data.startupId);
+
+      allow update: if isActiveUser() &&
+        isValidEvaluation(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'evaluatorId', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            isReviewer() &&
+            resource.data.evaluatorId == request.auth.uid &&
+            canAccessStartupId(resource.data.startupId)
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 12. Decisions Collection (Investment Decisions — locked to SUPER_ADMIN & INVESTMENT_LEAD for writes)
+    match /decisions/{decisionId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && canAccessStartupId(resource.data.startupId)
+      );
+
+      allow create: if isLeadOrAdmin() &&
+        isValidDecision(request.resource.data) &&
+        request.resource.data.decidedBy == request.auth.uid;
+
+      allow update: if isLeadOrAdmin() &&
+        isValidDecision(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'decidedBy', 'decidedAt', 'createdAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 13. Tasks Collection
+    match /tasks/{taskId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          ('assigneeId' in resource.data && resource.data.assigneeId == request.auth.uid) ||
+          ('assignedToId' in resource.data && resource.data.assignedToId == request.auth.uid) ||
+          ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers) ||
+          resource.data.createdBy == request.auth.uid ||
+          hasAllAccessScope() ||
+          ('startupId' in resource.data && resource.data.startupId is string && canAccessStartupId(resource.data.startupId))
+        )
+      );
+
+      allow create: if isActiveUser() &&
+        isValidTask(request.resource.data) &&
+        request.resource.data.createdBy == request.auth.uid && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            (
+              ('assigneeId' in request.resource.data && request.resource.data.assigneeId == request.auth.uid) ||
+              ('assignedToId' in request.resource.data && request.resource.data.assignedToId == request.auth.uid)
+            ) &&
+            (!('startupId' in request.resource.data) || request.resource.data.startupId == null || request.resource.data.startupId == "" || canAccessStartupId(request.resource.data.startupId))
+          )
+        );
+
+      allow update: if isActiveUser() &&
+        isValidTask(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            (
+              ('assigneeId' in resource.data && resource.data.assigneeId == request.auth.uid) ||
+              ('assignedToId' in resource.data && resource.data.assignedToId == request.auth.uid) ||
+              ('assignedUsers' in resource.data && resource.data.assignedUsers is list && request.auth.uid in resource.data.assignedUsers) ||
+              resource.data.createdBy == request.auth.uid
+            ) &&
+            areImmutableFieldsUnchanged(['startupId', 'assigneeId', 'assignedToId', 'priority'])
+          )
+        );
+
+      allow delete: if isLeadOrAdmin();
+    }
+
+    // 14. Comments Collection
+    match /comments/{commentId} {
+      allow read: if isLeadOrAdmin() || (
+        isActiveUser() && (
+          hasAllAccessScope() ||
+          resource.data.authorId == request.auth.uid ||
+          ('startupId' in resource.data && resource.data.startupId is string && canAccessStartupId(resource.data.startupId))
+        )
+      );
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isResearchAnalyst() || isReviewer()) &&
+        isValidComment(request.resource.data) &&
+        request.resource.data.authorId == request.auth.uid &&
+        (!('startupId' in request.resource.data) || request.resource.data.startupId == null || request.resource.data.startupId == "" || canAccessStartupId(request.resource.data.startupId));
+
+      allow update: if isActiveUser() &&
+        isValidComment(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'startupId', 'targetType', 'targetId', 'parentId', 'authorId', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            resource.data.authorId == request.auth.uid
+          )
+        );
+
+      allow delete: if isSuperAdmin() || (
+        isActiveUser() &&
+        !isViewer() &&
+        resource.data.authorId == request.auth.uid
+      );
+    }
+
+    // 15. Notifications Collection
+    // VIEWER can mark their own notifications as read; no other writes allowed for VIEWER.
+    match /notifications/{notificationId} {
+      allow read: if isActiveUser() && (
+        resource.data.recipientId == request.auth.uid ||
+        isSuperAdmin()
+      );
+
+      allow create: if isActiveUser() &&
+        !isViewer() &&
+        isValidNotification(request.resource.data) &&
+        (
+          (!('senderId' in request.resource.data) || request.resource.data.senderId == null || request.resource.data.senderId == request.auth.uid) &&
+          (!('actorId' in request.resource.data) || request.resource.data.actorId == null || request.resource.data.actorId == request.auth.uid)
+        );
+
+      allow update: if isActiveUser() &&
+        isValidNotification(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'recipientId', 'actorId', 'senderId', 'type', 'title', 'message', 'link', 'startupId', 'entityId', 'targetType', 'targetId', 'priority', 'createdAt']) && (
+          isSuperAdmin() ||
+          (
+            resource.data.recipientId == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt', 'archived', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 16. Documents Collection (Enforces confidentiality & allowedUserIds restrictions)
+    match /documents/{documentId} {
+      allow read: if canReadDocumentData(resource.data);
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isResearchAnalyst() || isReviewer()) &&
+        isValidDocument(request.resource.data) &&
+        request.resource.data.uploadedBy == request.auth.uid &&
+        (!('startupId' in request.resource.data) || request.resource.data.startupId == null || request.resource.data.startupId == "" || canAccessStartupId(request.resource.data.startupId)) &&
+        (isLeadOrAdmin() || !(request.resource.data.confidentiality in ['confidential', 'restricted']));
+
+      allow update: if isActiveUser() &&
+        isValidDocument(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'uploadedBy', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            resource.data.uploadedBy == request.auth.uid &&
+            !(resource.data.confidentiality in ['confidential', 'restricted']) &&
+            areImmutableFieldsUnchanged(['confidentiality', 'allowedUserIds', 'allowedRoles', 'startupId'])
+          )
+        );
+
+      allow delete: if isSuperAdmin() || (
+        isInvestmentLead() &&
+        !(resource.data.confidentiality in ['confidential', 'restricted'])
+      );
+    }
+
+    // 17. Research Library Collection
+    match /research_library/{libraryId} {
+      allow read: if isActiveUser() && (
+        isLeadOrAdmin() ||
+        !('confidentiality' in resource.data) ||
+        !(resource.data.confidentiality in ['confidential', 'restricted']) ||
+        (!isViewer() && (
+          resource.data.authorId == request.auth.uid ||
+          ('allowedUserIds' in resource.data && resource.data.allowedUserIds is list && request.auth.uid in resource.data.allowedUserIds)
+        ))
+      );
+
+      allow create: if isActiveUser() &&
+        (isLeadOrAdmin() || isResearchAnalyst() || isReviewer()) &&
+        isValidResearchLibraryItem(request.resource.data) &&
+        request.resource.data.authorId == request.auth.uid &&
+        (isLeadOrAdmin() || !('confidentiality' in request.resource.data) || !(request.resource.data.confidentiality in ['confidential', 'restricted']));
+
+      allow update: if isActiveUser() &&
+        isValidResearchLibraryItem(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'authorId', 'createdAt']) && (
+          isLeadOrAdmin() ||
+          (
+            (isResearchAnalyst() || isReviewer()) &&
+            (
+              resource.data.authorId == request.auth.uid ||
+              ('contributorIds' in resource.data && resource.data.contributorIds is list && request.auth.uid in resource.data.contributorIds)
+            ) &&
+            areImmutableFieldsUnchanged(['confidentiality', 'allowedUserIds', 'isFeatured'])
+          )
+        );
+
+      allow delete: if isLeadOrAdmin();
+    }
+
+    // 18. Pipeline Stages Collection
+    match /pipeline_stages/{stageId} {
+      allow read: if isActiveUser();
+
+      allow create: if isLeadOrAdmin() &&
+        isValidPipelineStage(request.resource.data);
+
+      allow update: if isLeadOrAdmin() &&
+        isValidPipelineStage(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdAt']);
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 19. Saved Views Collection
+    match /saved_views/{viewId} {
+      allow read: if isActiveUser() && (
+        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+        ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        ('isSystem' in resource.data && resource.data.isSystem == true) ||
+        ('isShared' in resource.data && resource.data.isShared == true) ||
+        isSuperAdmin()
+      );
+
+      allow create: if isActiveUser() &&
+        !isViewer() &&
+        isValidSavedView(request.resource.data) &&
+        (
+          ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid) ||
+          ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
+        ) &&
+        (isLeadOrAdmin() || (
+          (!('isShared' in request.resource.data) || request.resource.data.isShared == false) &&
+          (!('isSystem' in request.resource.data) || request.resource.data.isSystem == false)
+        ));
+
+      allow update: if isActiveUser() &&
+        !isViewer() &&
+        isValidSavedView(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'ownerId', 'userId', 'entityType', 'createdAt']) && (
+          isSuperAdmin() ||
+          (
+            (
+              ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+              ('userId' in resource.data && resource.data.userId == request.auth.uid)
+            ) &&
+            (isLeadOrAdmin() || (
+              (!('isShared' in request.resource.data) || request.resource.data.isShared == false) &&
+              (!('isSystem' in request.resource.data) || request.resource.data.isSystem == false)
+            ))
+          )
+        );
+
+      allow delete: if isActiveUser() && (
+        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+        ('userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        isSuperAdmin()
+      );
+    }
+
+    // 20. Research Templates Collection
+    match /research_templates/{templateId} {
+      allow read: if isActiveUser();
+
+      allow create: if isLeadOrAdmin() &&
+        isValidResearchTemplate(request.resource.data) &&
+        request.resource.data.updatedBy == request.auth.uid;
+
+      allow update: if isLeadOrAdmin() &&
+        isValidResearchTemplate(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdBy', 'createdAt']) &&
+        request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // 21. Activity Logs Collection (Immutable / Append-Only)
+    match /activity_logs/{logId} {
+      allow read: if isActiveUser() && (
+        isLeadOrAdmin() ||
+        hasAllAccessScope() ||
+        resource.data.actorId == request.auth.uid ||
+        ('startupId' in resource.data && resource.data.startupId is string && canAccessStartupId(resource.data.startupId))
+      );
+
+      allow create: if isActiveUser() &&
+        isValidActivityLog(request.resource.data) &&
+        request.resource.data.actorId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // 22. Audit Logs Collection (Immutable / Append-Only, Read by SUPER_ADMIN only)
+    match /audit_logs/{auditId} {
+      allow read: if isSuperAdmin();
+
+      allow create: if isActiveUser() &&
+        isValidAuditLog(request.resource.data) &&
+        request.resource.data.actorId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // 23. Workspace Settings Collection (Read by active users, Write by SUPER_ADMIN only)
+    match /workspace_settings/{settingId} {
+      allow read: if isActiveUser();
+
+      allow create, update: if isSuperAdmin() &&
+        isValidWorkspaceSetting(request.resource.data) &&
+        request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // Default Deny — Deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
