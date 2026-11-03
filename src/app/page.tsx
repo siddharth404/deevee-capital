@@ -168,20 +168,19 @@ export default function HomePage() {
           stats: [
             {
               display: "I.",
-              label: "First-Principles Inquiry — Every pitch reviewed directly",
+              label: "Direct Evaluation — Every submission reviewed by our team",
             },
             {
               display: "II.",
-              label: "Promoter-Backed Initiative — Exploring investments up to ₹1 crore",
+              label: "Up to ₹1 Crore — Indicative investment capacity per startup",
             },
             {
               display: "III.",
-              label:
-                "Infrastructure Heritage — Associated with Dee Vee Projects Limited (dvplindia.in)",
+              label: "Sector-Agnostic — Open to promising businesses across industries",
             },
             {
               display: "IV.",
-              label: "Founder-Aligned Diligence — Selective, long-term partnerships",
+              label: "Long-Term Partnership — Strategic and operational support beyond capital",
             },
           ],
         }}
@@ -272,8 +271,7 @@ export default function HomePage() {
         tagline={siteConfig.shortStatement}
         contact={{
           email: siteConfig.contact.primaryEmail,
-          location:
-            "Early-Stage Venture Initiative · Backed by a Promoter of Dee Vee Projects Limited",
+          location: "Early-Stage Investment Initiative · India",
         }}
         columns={[
           {
@@ -326,7 +324,7 @@ export default function HomePage() {
           { label: "Dee Vee Projects Ltd (dvplindia.in)", href: "https://dvplindia.in/" },
           { label: "Submit Your Startup", href: "#pitch-form" },
         ]}
-        copyright={`© ${new Date().getFullYear()} Deevee Capital (deeveecapital.com). All rights reserved. An emerging early-stage investment initiative backed by one of the promoters of Dee Vee Projects Limited.`}
+        copyright={`© ${new Date().getFullYear()} Deevee Capital (deeveecapital.com). All rights reserved.`}
       />
 
       <PrivacyPolicyModal

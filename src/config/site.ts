@@ -30,7 +30,7 @@ export const siteConfig = {
     overview:
       "Founded in 1989, Dee Vee Projects Limited (DVPL) is an established Indian infrastructure development and civil engineering enterprise operating across more than 13 states in India. DVPL has executed landmark national infrastructure works including the New Legislative Assembly in Nava Raipur, the All India Institute of Ayurveda in Goa, the Civil Aviation Research Organization (CARO) Complex in Hyderabad, major highways, bridges, railways, and institutional campuses.",
     connectionSummary:
-      "Deevee Capital is backed by one of the promoters of Dee Vee Projects Limited, drawing inspiration from this multi-decade legacy of physical execution, foundational operational discipline, and long-horizon enterprise building, while operating as an independent exploratory early-stage investment initiative.",
+      "Backed by one of DVPL's promoters, Deevee Capital draws on this multi-decade appreciation for execution discipline, sound fundamentals, and long-term enterprise building.",
   },
 
   /**
@@ -220,50 +220,50 @@ export const siteConfig = {
     eyebrow: "INVESTMENT PROCESS",
     headline: "A straightforward, disciplined process.",
     subheadline:
-      "We respect founders' time and prioritize transparent, constructive communication at every step of our evaluation.",
+      "We respect founders' time and prioritize clear, constructive communication at every step of our evaluation.",
     stages: [
       {
         number: "01",
         stage: "Startup Submission",
-        title: "Materials & Thesis Submission",
+        title: "Share Your Story & Pitch Deck",
         description:
-          "Founders share their company overview, customer insight, and pitch deck through our secure portal.",
-        timeline: "Direct Review",
+          "Submit your company overview, problem statement, and pitch deck through our online form.",
+        timeline: "Online Submission",
       },
       {
         number: "02",
         stage: "Initial Screening",
-        title: "Opportunity & Team Assessment",
+        title: "Reviewing the Opportunity",
         description:
-          "We review the business model, problem gravity, market opportunity, and founder conviction against our areas of interest.",
-        timeline: "First-Principles Review",
+          "We review your submission to understand the problem you are solving, your product, market potential, and founding team.",
+        timeline: "Initial Review",
       },
       {
         number: "03",
         stage: "Founder Discussion",
-        title: "Direct Strategic Dialogue",
+        title: "Getting to Know the Team",
         description:
-          "We connect with shortlisted founders to discuss their insight, product journey, operational hurdles, and growth ambitions.",
-        timeline: "In-Depth Conversation",
+          "We meet with shortlisted founders to discuss the business in detail, understand current progress, and explore how we can work together.",
+        timeline: "Direct Conversation",
       },
       {
         number: "04",
         stage: "Detailed Evaluation",
-        title: "Commercial & Operational Due Diligence",
+        title: "Business & Financial Review",
         description:
-          "We undertake appropriate business, financial, technical, and legal diligence in collaborative partnership with the founders.",
-        timeline: "Collaborative Diligence",
+          "We work with you to review key business details, financials, product readiness, and legal documentation.",
+        timeline: "Due Diligence",
       },
       {
         number: "05",
         stage: "Investment Decision",
-        title: "Decision & Partnership Formation",
+        title: "Approval & Partnership",
         description:
-          "Suitable opportunities proceed through formal investment approval, documentation, and the start of our long-term support.",
-        timeline: "Formal Documentation",
+          "Opportunities that receive final approval move forward to investment documentation, funding, and ongoing partnership.",
+        timeline: "Final Approval",
       },
     ],
-    note: "We do not enforce rigid bureaucratic approval cycles, allowing us to move at a pace respectful of founder momentum.",
+    note: "Every submission is reviewed by our team. When there is a strong fit with our evaluation criteria, we reach out directly to begin a conversation.",
   },
 
   philosophy: {
@@ -364,12 +364,12 @@ export const siteConfig = {
     eyebrow: "ABOUT DEEVEE CAPITAL",
     headline: "Curious about what comes next.",
     paragraphs: [
-      "Deevee Capital is an emerging, promoter-backed early-stage investment initiative exploring promising startup opportunities and building thoughtful, long-term relationships with ambitious founders across industries.",
+      "Deevee Capital is an emerging early-stage investment initiative focused on identifying promising startups and building thoughtful, long-term relationships with ambitious founders across industries.",
       "We believe that conversations with founders are best approached with openness, respect for the craft of company-building, and a willingness to listen carefully before drawing conclusions.",
-      "The initiative draws inspiration from the entrepreneurial and engineering heritage of Dee Vee Projects Limited (dvplindia.in)—an Indian infrastructure enterprise founded in 1989 with operations spanning over 13 states. This background instills an appreciation for physical execution stamina, foundational operational discipline, and long-horizon enterprise building.",
+      "Beyond capital of up to ₹1 crore per opportunity, we aim to support founders as a steady sounding board—helping navigate strategic decisions, business fundamentals, and the practical realities of building an enduring company.",
     ],
     regulatoryNote:
-      "Important Note: Deevee Capital is an exploratory initiative backed by one of the promoters of Dee Vee Projects Limited. Our association with the entrepreneurial background of Dee Vee Projects Limited does not imply that Dee Vee Projects Limited is a regulated investment fund, that specific venture investments have been made to date, or that submitting information guarantees capital or an investment commitment.",
+      "Deevee Capital is an early-stage investment initiative operating independently from the infrastructure operations of Dee Vee Projects Limited. Submitting a startup pitch or company information through this website is for evaluation purposes only and does not guarantee an investment commitment.",
   },
 
   founderCta: {
@@ -439,8 +439,8 @@ export const siteConfig = {
         body: "Submissions are transmitted over encrypted TLS connections, stored in access-restricted server storage, and routed via secure notification channels. Public API endpoints never expose submitted pitches.",
       },
       {
-        title: "4. Non-Confidentiality & No Commitment Disclaimer",
-        body: "Important Note: Deevee Capital is an exploratory initiative. Our association with the entrepreneurial background of Dee Vee Projects Limited does not imply that Dee Vee Projects Limited is a regulated investment fund, that specific venture investments have been made to date, or that submitting information guarantees capital or an investment commitment.",
+        title: "4. Important Information & No Commitment",
+        body: "Deevee Capital is an early-stage investment initiative operating independently from the infrastructure operations of Dee Vee Projects Limited. Submitting a startup pitch or company information through this website is for evaluation purposes only and does not guarantee an investment commitment.",
       },
       {
         title: "5. Contact & Deletion Requests",

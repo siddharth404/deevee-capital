@@ -208,7 +208,7 @@ export function InvestmentProcessSection() {
                 display: "block",
               }}
             >
-              Respect for Founder Velocity
+              Clear &amp; Direct Communication
             </span>
             <p
               style={{

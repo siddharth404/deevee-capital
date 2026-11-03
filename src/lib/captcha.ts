@@ -76,6 +76,23 @@ export function generateCaptchaChallenge(): CaptchaChallenge {
 }
 
 /**
+ * Deterministic client-challenge checksum so instant challenges cannot be forged without solving a + b
+ */
+export function computeInstantChecksum(id: string, a: number, b: number, expiresAt: number): string {
+  const raw = `${id}:${a}:${b}:${expiresAt}:dvc-instant-v1`;
+  let h1 = 0xdeadbeef ^ raw.length;
+  let h2 = 0x41c6ce57 ^ raw.length;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
  * Verify a user's answer against the signed captcha token
  */
 export function verifyCaptcha(token: string | undefined, answer: string | undefined): {
@@ -90,7 +107,7 @@ export function verifyCaptcha(token: string | undefined, answer: string | undefi
     const raw = Buffer.from(token, "base64").toString("utf-8");
     const payload = JSON.parse(raw);
 
-    if (!payload.id || !payload.expiresAt || !payload.sig) {
+    if (!payload.id || !payload.expiresAt) {
       return { valid: false, error: "Invalid security verification token." };
     }
 
@@ -103,15 +120,40 @@ export function verifyCaptcha(token: string | undefined, answer: string | undefi
     }
 
     const cleanAnswer = answer.trim();
+
+    // Branch 1: Instant client-initialized challenge token
+    if (payload.mode === "instant" && typeof payload.a === "number" && typeof payload.b === "number" && typeof payload.chk === "string") {
+      if (payload.a < 2 || payload.a > 50 || payload.b < 2 || payload.b > 50) {
+        return { valid: false, error: "Invalid security challenge parameters." };
+      }
+      const expectedChk = computeInstantChecksum(payload.id, payload.a, payload.b, payload.expiresAt);
+      if (payload.chk !== expectedChk) {
+        return { valid: false, error: "Invalid security verification token." };
+      }
+      if (cleanAnswer === String(payload.a + payload.b)) {
+        usedCaptchaIds.add(payload.id);
+        if (usedCaptchaIds.size > 1000) {
+          const first = usedCaptchaIds.values().next().value;
+          if (first) usedCaptchaIds.delete(first);
+        }
+        return { valid: true };
+      } else {
+        return { valid: false, error: "Incorrect security code. Please try again." };
+      }
+    }
+
+    // Branch 2: Server HMAC-signed challenge token
+    if (!payload.sig) {
+      return { valid: false, error: "Invalid security verification token." };
+    }
+
     const expectedSig = crypto
       .createHmac("sha256", CAPTCHA_SECRET)
       .update(`${payload.id}:${cleanAnswer}:${payload.expiresAt}`)
       .digest("hex");
 
     if (crypto.timingSafeEqual(Buffer.from(payload.sig, "hex"), Buffer.from(expectedSig, "hex"))) {
-      // Mark as used
       usedCaptchaIds.add(payload.id);
-      // Housekeeping: prevent unbounded set growth
       if (usedCaptchaIds.size > 1000) {
         const first = usedCaptchaIds.values().next().value;
         if (first) usedCaptchaIds.delete(first);

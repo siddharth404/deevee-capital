@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Cloud Storage for Firebase Security Rules — Deevee Capital
+// Uploaded pitch decks and generated memorandums are strictly private.
+// All uploads and downloads are mediated server-side via the Cloud Run service account
+// and cryptographically signed HMAC download tokens. Direct client SDK access is denied.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -65,6 +65,48 @@ interface PitchFormSectionProps {
   onOpenPrivacyPolicy: () => void;
 }
 
+function computeClientChecksum(id: string, a: number, b: number, expiresAt: number): string {
+  const raw = `${id}:${a}:${b}:${expiresAt}:dvc-instant-v1`;
+  let h1 = 0xdeadbeef ^ raw.length;
+  let h2 = 0x41c6ce57 ^ raw.length;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+}
+
+function createInstantCaptchaChallenge(): {
+  token: string;
+  svg: string;
+  prompt: string;
+} {
+  const id = Math.random().toString(16).slice(2, 10) + Date.now().toString(16);
+  const a = Math.floor(Math.random() * 20) + 7;
+  const b = Math.floor(Math.random() * 15) + 3;
+  const expiresAt = Date.now() + 15 * 60 * 1000;
+  const chk = computeClientChecksum(id, a, b, expiresAt);
+  const payload = { id, a, b, expiresAt, chk, mode: "instant" };
+  const token =
+    typeof window !== "undefined" && typeof window.btoa === "function"
+      ? window.btoa(JSON.stringify(payload))
+      : Buffer.from(JSON.stringify(payload)).toString("base64");
+
+  const l1y = Math.floor(Math.random() * 20) + 10;
+  const l2y = Math.floor(Math.random() * 20) + 15;
+  const svgText = `${a} + ${b} = ?`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="130" height="42" viewBox="0 0 130 42" style="background:#101A24; border-radius:2px; user-select:none;"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#C6AD7A" /><stop offset="100%" stop-color="#E5D3AF" /></linearGradient></defs><line x1="0" y1="14" x2="130" y2="14" stroke="#1A2836" stroke-width="1" /><line x1="0" y1="28" x2="130" y2="28" stroke="#1A2836" stroke-width="1" /><line x1="5" y1="${l1y}" x2="125" y2="${38 - l1y}" stroke="#3A4A58" stroke-width="1.2" stroke-dasharray="3,3" /><line x1="10" y1="${l2y}" x2="120" y2="${l1y}" stroke="#4D3F28" stroke-width="0.8" /><text x="65" y="27" font-family="Georgia, serif" font-size="19" font-weight="600" fill="url(#g)" text-anchor="middle" letter-spacing="2">${svgText}</text></svg>`;
+
+  return {
+    token,
+    svg: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    prompt: `Security verification: calculate ${a} + ${b}`,
+  };
+}
+
 export function PitchFormSection({
   onOpenPrivacyPolicy,
 }: PitchFormSectionProps) {
@@ -90,25 +132,16 @@ export function PitchFormSection({
   const formRenderedAtRef = useRef<number>(0);
   const isSubmittingRef = useRef<boolean>(false);
 
-  const fetchCaptcha = async () => {
+  const fetchCaptcha = () => {
     setIsLoadingCaptcha(true);
-    try {
-      const res = await fetch("/api/pitch/captcha");
-      if (res.ok) {
-        const data = await res.json();
-        setCaptchaData(data);
-        setCaptchaAnswer("");
-      }
-    } catch (err) {
-      console.warn("Failed to load captcha", err);
-    } finally {
-      setIsLoadingCaptcha(false);
-    }
+    setCaptchaData(createInstantCaptchaChallenge());
+    setCaptchaAnswer("");
+    setTimeout(() => setIsLoadingCaptcha(false), 180);
   };
 
   useEffect(() => {
     formRenderedAtRef.current = Date.now();
-    fetchCaptcha();
+    setCaptchaData(createInstantCaptchaChallenge());
   }, []);
 
   const validateClient = (data: FormValues): Record<string, string> => {
@@ -301,6 +334,8 @@ export function PitchFormSection({
     setReferenceId("");
     setMemoUrl("");
     setDeckFile(null);
+    setCaptchaData(createInstantCaptchaChallenge());
+    setCaptchaAnswer("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }

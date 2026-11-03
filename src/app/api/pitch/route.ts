@@ -313,8 +313,10 @@ export async function POST(request: NextRequest) {
     const referenceId = generateReferenceId();
     const submittedAt = new Date().toISOString();
 
-    // 6. Handle Uploaded Pitch Deck File (GCS Upload)
+    // 6. Handle Uploaded Pitch Deck File (Private GCS Vault Upload)
+    const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://deeveecapital.com";
     let pitchDeckStorageUrl = "";
+    let signedDeckRelativeUrl: string | undefined = undefined;
     if (uploadedDeckBuffer) {
       try {
         const uploadResult = await uploadPitchAttachment(
@@ -322,7 +324,8 @@ export async function POST(request: NextRequest) {
           uploadedDeckBuffer,
           uploadedDeckName.endsWith(".pdf") ? "application/pdf" : "application/octet-stream"
         );
-        pitchDeckStorageUrl = uploadResult.url;
+        signedDeckRelativeUrl = uploadResult.url;
+        pitchDeckStorageUrl = `${siteOrigin}${uploadResult.url}`;
       } catch (uploadErr) {
         console.warn("[Pitch API] Deck file upload to storage failed:", uploadErr);
       }
@@ -331,6 +334,7 @@ export async function POST(request: NextRequest) {
     // 7. Generate Executive Pitch Memorandum PDF
     let memoPdfBuffer: Buffer | null = null;
     let memoStorageUrl = "";
+    let signedMemoRelativeUrl = "";
     try {
       memoPdfBuffer = await generatePitchMemoPdf({
         referenceId,
@@ -350,13 +354,14 @@ export async function POST(request: NextRequest) {
         pitchDeckStorageUrl: pitchDeckStorageUrl || undefined,
       });
 
-      // Upload memo PDF to storage vault
+      // Upload memo PDF to private storage vault
       const memoUpload = await uploadPitchAttachment(
         `Deevee_Capital_Pitch_Memo_${referenceId}.pdf`,
         memoPdfBuffer,
         "application/pdf"
       );
-      memoStorageUrl = memoUpload.url;
+      signedMemoRelativeUrl = memoUpload.url;
+      memoStorageUrl = `${siteOrigin}${memoUpload.url}`;
     } catch (pdfErr) {
       console.warn("[Pitch API] Executive PDF Memo generation failed:", pdfErr);
     }
@@ -440,19 +445,14 @@ export async function POST(request: NextRequest) {
 
     recentSubmissionHashes.set(fingerprint, { referenceId, timestamp: now });
 
-    // 10. Return Public Confirmation (Including streaming download links)
-    const downloadMemoUrl = `/api/pitch/download?file=Deevee_Capital_Pitch_Memo_${referenceId}.pdf`;
-    const downloadDeckUrl = uploadedDeckName
-      ? `/api/pitch/download?file=${referenceId}_${uploadedDeckName}`
-      : undefined;
-
+    // 10. Return Public Confirmation (With signed download links)
     return NextResponse.json(
       {
         ok: true,
         referenceId,
         submittedAt,
-        memoUrl: downloadMemoUrl,
-        deckUrl: downloadDeckUrl,
+        memoUrl: signedMemoRelativeUrl,
+        deckUrl: signedDeckRelativeUrl,
         message:
           "Thank you for sharing your startup with Deevee Capital. Your submission has been securely recorded and dispatched to our investment team.",
       },

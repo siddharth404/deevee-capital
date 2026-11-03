@@ -41,7 +41,7 @@ export const PERSPECTIVES: PerspectiveArticle[] = [
       role: "Deevee Capital",
     },
     summary:
-      "Standard institutional venture checklists often filter for yesterday's patterns. At Deevee Capital, we treat every pitch as an inquiry into first principles—exploring the problem, the insight, and the structural unit economics with curiosity rather than bureaucratic preconditions.",
+      "Standard institutional venture checklists often filter for yesterday's patterns. At Deevee Capital, we treat every pitch as an inquiry into first principles—exploring the problem, the insight, and the structural unit economics with curiosity rather than rigid preconditions.",
     sections: [
       {
         heading: "The Limits of the Standard Venture Checklist",
@@ -292,32 +292,32 @@ export const PERSPECTIVES: PerspectiveArticle[] = [
       "We believe founders deserve complete transparency when sharing their company. Here is a clear explanation of how submissions to Deevee Capital are received, who reads them, our confidentiality standards, and what you can expect after hitting submit.",
     sections: [
       {
-        heading: "No Gatekeepers, No Junior Screening",
+        heading: "Direct Review by Our Team",
         paragraphs: [
-          "At many traditional venture capital firms, incoming founder pitches are routed to automated tracking systems, scraped by automated filters, or assigned to junior analysts whose primary mandate is to find reasons to say no before a decision-maker ever sees the deck.",
-          "At Deevee Capital, we deliberately run a direct, founder-first operation. When you submit our Startup Submission Form, your materials are delivered directly to our investment team. There are no intermediary screening layers or bureaucratic committees between you and the partners.",
+          "At many traditional investment firms, incoming founder pitches are routed through automated tracking systems or filtered by rigid checklists before a decision-maker ever reads the deck.",
+          "At Deevee Capital, we take a direct, founder-first approach. When you submit our Startup Submission Form, your materials are delivered directly to our team for evaluation.",
         ],
         quote:
-          "When you submit your startup to Deevee Capital, your materials are delivered directly to our investment team. No intermediaries, no screening algorithms, no junior gatekeepers.",
+          "When you submit your startup to Deevee Capital, your materials are delivered directly to our team for thoughtful evaluation.",
       },
       {
         heading: "What We Look For in Your Submission",
         paragraphs: [
-          "Our form asks for ten essential fields. You do not need a 40-page deck or buzzword-heavy marketing copy. In fact, plain, direct language is significantly more persuasive. Here is what we pay attention to:",
+          "Our form asks for essential information about your business. You do not need a 40-page deck or buzzword-heavy marketing copy. In fact, plain, direct language is significantly more persuasive. Here is what we pay attention to:",
         ],
         bullets: [
           "Founder Name & Email: How we can contact you directly for a conversation.",
           "Startup Name & Website/Product Link: If you have an active product, MVP, or demo, we love seeing what you have built firsthand.",
           "Sector & Stage: Understanding whether you are at the concept stage, have an MVP, or are scaling early revenue across any industry—from technology and consumer to manufacturing, infrastructure, and services.",
           "Brief Description: Tell us clearly what problem you are solving, for whom, why existing solutions are inadequate, and what your unique insight is.",
-          "Funding Sought & Pitch Deck Link: Share your capital target and a link to your deck or memo (DocSend, Google Drive, Notion) if available.",
+          "Funding Sought & Pitch Deck: Share your indicative capital target and upload a PDF pitch deck or share a link (DocSend, Google Drive, Notion) if available.",
         ],
       },
       {
-        heading: "Confidentiality and Privacy Guarantee",
+        heading: "Confidentiality and Important Information",
         paragraphs: [
-          "We treat every founder submission with strict professional discretion and confidentiality. Your proprietary data, product roadmaps, and pitch links are stored in access-restricted server storage and are never sold, rented, or publicly exposed through API responses.",
-          "Furthermore, our institutional clarification ensures transparent alignment from day one: Deevee Capital is an exploratory initiative associated with the entrepreneurial background of Dee Vee Projects Limited, operating with independence, integrity, and respect for founder intellectual property.",
+          "We treat every founder submission with strict professional discretion and confidentiality. Your materials and pitch decks are stored in access-restricted server storage and are never sold, rented, or publicly exposed.",
+          "Deevee Capital is an early-stage investment initiative operating independently from the infrastructure operations of Dee Vee Projects Limited. Submitting a startup pitch is for evaluation purposes and does not guarantee an investment commitment.",
         ],
       },
       {

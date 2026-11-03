@@ -157,13 +157,16 @@ export function AboutSection() {
               </div>
             </ScrollReveal>
 
-            {/* Careful Regulatory / Institutional Clarification Box */}
+            {/* Important Information Box */}
             <ScrollReveal delay={0.28}>
               <div
                 role="note"
-                aria-label="Institutional Clarification"
+                aria-label="Important Information"
                 className="mt-8 border border-navy/15 bg-navy/[0.03] p-5 sm:p-6"
               >
+                <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-navy">
+                  Important Information
+                </p>
                 <p className="text-xs leading-relaxed text-charcoal/75">
                   {siteConfig.about.regulatoryNote}
                 </p>

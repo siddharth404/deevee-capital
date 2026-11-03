@@ -1,7 +1,57 @@
+import crypto from "crypto";
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 
 const BUCKET_NAME = process.env.GCS_BUCKET_NAME || "deeveecapital-site-vault";
+const DOWNLOAD_SECRET =
+  process.env.ADMIN_API_SECRET ||
+  process.env.CAPTCHA_SECRET ||
+  "deevee-capital-private-vault-secret-98124";
+
+/**
+ * Create a cryptographically signed download URL for a private attachment
+ */
+export function createSignedDownloadUrl(
+  filename: string,
+  ttlMs = 7 * 24 * 60 * 60 * 1000 // Default 7 days
+): string {
+  const sanitized = filename.replace(/(\.\.[\/\\])+/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const exp = String(Date.now() + ttlMs);
+  const sig = crypto
+    .createHmac("sha256", DOWNLOAD_SECRET)
+    .update(`${sanitized}:${exp}`)
+    .digest("hex");
+  return `/api/pitch/download?file=${encodeURIComponent(sanitized)}&exp=${exp}&sig=${sig}`;
+}
+
+/**
+ * Verify a signed download request
+ */
+export function verifySignedDownloadToken(
+  filename: string,
+  exp: string | null,
+  sig: string | null
+): boolean {
+  if (!filename || !exp || !sig) return false;
+  const expNum = Number(exp);
+  if (!Number.isFinite(expNum) || Date.now() > expNum) return false;
+
+  const sanitized = filename.replace(/(\.\.[\/\\])+/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const expectedSig = crypto
+    .createHmac("sha256", DOWNLOAD_SECRET)
+    .update(`${sanitized}:${exp}`)
+    .digest("hex");
+
+  try {
+    const a = Buffer.from(sig, "hex");
+    const b = Buffer.from(expectedSig, "hex");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Obtain GCP Access Token from Cloud Run metadata service if running on GCP
@@ -25,20 +75,25 @@ async function getGcpAccessToken(): Promise<string | null> {
   return null;
 }
 
+function getPrivateLocalUploadsDir(): string {
+  return path.join(os.tmpdir(), "deevee-capital-private-vault", "pitches");
+}
+
 /**
- * Uploads a buffer to Google Cloud Storage or falls back to local storage
+ * Uploads a buffer to private Google Cloud Storage bucket or private local storage outside public/
  */
 export async function uploadPitchAttachment(
   filename: string,
   buffer: Buffer,
   contentType = "application/pdf"
-): Promise<{ url: string; storageType: "gcs" | "local" }> {
+): Promise<{ url: string; storageType: "gcs" | "local"; sanitizedName: string }> {
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   const token = await getGcpAccessToken();
 
   if (token) {
     try {
-      const sanitizedName = encodeURIComponent(filename.replace(/[^a-zA-Z0-9._-]/g, "_"));
-      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${BUCKET_NAME}/o?uploadType=media&name=pitches/${sanitizedName}`;
+      const encodedName = encodeURIComponent(sanitizedName);
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${BUCKET_NAME}/o?uploadType=media&name=pitches/${encodedName}`;
 
       const res = await fetch(uploadUrl, {
         method: "POST",
@@ -50,39 +105,39 @@ export async function uploadPitchAttachment(
       });
 
       if (res.ok) {
-        const publicUrl = `https://storage.googleapis.com/${BUCKET_NAME}/pitches/${sanitizedName}`;
-        console.log(`[Storage] Uploaded ${filename} to GCS bucket ${BUCKET_NAME}`);
-        return { url: publicUrl, storageType: "gcs" };
+        const signedPath = createSignedDownloadUrl(sanitizedName, 30 * 24 * 60 * 60 * 1000);
+        console.log(`[Storage] Uploaded ${sanitizedName} to private GCS bucket ${BUCKET_NAME}`);
+        return { url: signedPath, storageType: "gcs", sanitizedName };
       } else {
         const err = await res.text();
         console.warn(`[Storage] GCS upload HTTP ${res.status}: ${err}`);
       }
     } catch (gcsErr) {
-      console.warn("[Storage] GCS upload error, falling back to local:", gcsErr);
+      console.warn("[Storage] GCS upload error, falling back to private local vault:", gcsErr);
     }
   }
 
-  // Local fallback for local dev or when GCS is unreachable
-  const uploadsDir = path.join(process.cwd(), "public", "uploads", "pitches");
-  await fs.mkdir(uploadsDir, { recursive: true });
-  const sanitizedName = `${Date.now()}_${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  // Private local fallback outside public/ directory
+  const uploadsDir = getPrivateLocalUploadsDir();
+  await fs.mkdir(uploadsDir, { recursive: true, mode: 0o700 });
   const localPath = path.join(uploadsDir, sanitizedName);
-  await fs.writeFile(localPath, buffer);
-  const localUrl = `/uploads/pitches/${sanitizedName}`;
-  console.log(`[Storage] Saved ${filename} locally to ${localUrl}`);
-  return { url: localUrl, storageType: "local" };
+  await fs.writeFile(localPath, buffer, { mode: 0o600 });
+  const signedPath = createSignedDownloadUrl(sanitizedName, 30 * 24 * 60 * 60 * 1000);
+  console.log(`[Storage] Saved ${sanitizedName} to private local vault`);
+  return { url: signedPath, storageType: "local", sanitizedName };
 }
 
 /**
- * Retrieves an attachment buffer from Google Cloud Storage or local fallback
+ * Retrieves an attachment buffer from private Google Cloud Storage or private local fallback
  */
 export async function getPitchAttachmentBuffer(filename: string): Promise<Buffer | null> {
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   const token = await getGcpAccessToken();
 
   if (token) {
     try {
-      const sanitizedName = encodeURIComponent(filename.replace(/[^a-zA-Z0-9._-]/g, "_"));
-      const getUrl = `https://storage.googleapis.com/storage/v1/b/${BUCKET_NAME}/o/pitches%2F${sanitizedName}?alt=media`;
+      const encodedName = encodeURIComponent(sanitizedName);
+      const getUrl = `https://storage.googleapis.com/storage/v1/b/${BUCKET_NAME}/o/pitches%2F${encodedName}?alt=media`;
 
       const res = await fetch(getUrl, {
         headers: {
@@ -99,11 +154,11 @@ export async function getPitchAttachmentBuffer(filename: string): Promise<Buffer
     }
   }
 
-  // Local fallback
+  // Private local fallback lookup
   try {
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "pitches");
+    const uploadsDir = getPrivateLocalUploadsDir();
     const files = await fs.readdir(uploadsDir);
-    const match = files.find((f) => f.endsWith(filename) || f === filename);
+    const match = files.find((f) => f === sanitizedName || f.endsWith(sanitizedName));
     if (match) {
       return await fs.readFile(path.join(uploadsDir, match));
     }
