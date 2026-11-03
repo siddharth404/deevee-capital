@@ -11,12 +11,19 @@ import { getFirestore, Firestore } from "firebase-admin/firestore";
 let adminApp: App | null = null;
 
 export function isFirebaseAdminConfigured(): boolean {
-  return Boolean(
-    process.env.FIREBASE_Firestore_ENABLED === "true" &&
-      (process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
-        (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-          process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY))
+  const enabled =
+    process.env.DVC_FIRESTORE_ENABLED === "true" ||
+    process.env.FIREBASE_Firestore_ENABLED === "true";
+  const hasCreds = Boolean(
+    process.env.DVC_SERVICE_ACCOUNT_KEY ||
+      process.env.GCP_SERVICE_ACCOUNT_KEY ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+      (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+        process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY) ||
+      process.env.K_SERVICE ||
+      process.env.FUNCTION_TARGET
   );
+  return enabled && hasCreds;
 }
 
 export function getFirebaseAdminApp(): App | null {
@@ -29,8 +36,13 @@ export function getFirebaseAdminApp(): App | null {
   }
 
   try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+    const rawKeyInput =
+      process.env.DVC_SERVICE_ACCOUNT_KEY ||
+      process.env.GCP_SERVICE_ACCOUNT_KEY ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+    if (rawKeyInput) {
+      const rawKey = rawKeyInput.trim();
       let parsed: Record<string, string>;
       try {
         parsed = JSON.parse(rawKey);
@@ -61,6 +73,14 @@ export function getFirebaseAdminApp(): App | null {
       });
       return adminApp;
     }
+
+    // Fallback to Google Cloud Run / Cloud Functions Application Default Credentials
+    if (process.env.K_SERVICE || process.env.FUNCTION_TARGET) {
+      adminApp = initializeApp({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "deeveecapital-site",
+      });
+      return adminApp;
+    }
   } catch (err) {
     console.warn("[Firebase Admin] Failed to initialize Admin SDK:", err);
   }
@@ -81,16 +101,22 @@ export function getFirebaseAdminFirestore(): Firestore | null {
 export function getFirebaseConfigurationStatus() {
   const hasWebSdk = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
   const hasAdminCreds = Boolean(
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+    process.env.DVC_SERVICE_ACCOUNT_KEY ||
+      process.env.GCP_SERVICE_ACCOUNT_KEY ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
       (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-        process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY)
+        process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY) ||
+      process.env.K_SERVICE ||
+      process.env.FUNCTION_TARGET
   );
-  const firestoreEnabledFlag = process.env.FIREBASE_Firestore_ENABLED === "true";
+  const firestoreEnabledFlag =
+    process.env.DVC_FIRESTORE_ENABLED === "true" ||
+    process.env.FIREBASE_Firestore_ENABLED === "true";
 
   const missingItems: string[] = [];
   if (!firestoreEnabledFlag) {
     missingItems.push(
-      "Enable Cloud Firestore API (firestore.googleapis.com) on GCP project 'deeveecapital-site' and set FIREBASE_Firestore_ENABLED=true"
+      "Enable Cloud Firestore API (firestore.googleapis.com) on GCP project 'deeveecapital-site' and set DVC_FIRESTORE_ENABLED=true"
     );
   }
   if (!hasWebSdk) {
@@ -100,7 +126,7 @@ export function getFirebaseConfigurationStatus() {
   }
   if (!hasAdminCreds) {
     missingItems.push(
-      "Provide FIREBASE_SERVICE_ACCOUNT_KEY (or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY) for Firebase Admin SDK custom claims & server operations"
+      "Provide DVC_SERVICE_ACCOUNT_KEY for Firebase Admin SDK custom claims & server operations"
     );
   }
 
