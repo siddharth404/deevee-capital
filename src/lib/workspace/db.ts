@@ -908,7 +908,7 @@ function syncJsonlSubmissionsIntoDb(
         assignedUsers: ["user-siddharth"],
         dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
         priority: "High",
-        status: "Not Started",
+        status: "Assigned",
         objectives:
           "Validate founder background, product claims, market sizing (with cited TAM methodology), and map direct competitors.",
         instructions:
