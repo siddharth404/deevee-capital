@@ -41,6 +41,7 @@ import {
   UserCheck,
   Users,
   Video,
+  Trash2,
 } from "lucide-react";
 import {
   AIInterviewSessionRecord,
@@ -324,6 +325,46 @@ export default function RecruitmentModuleViews({
       return true;
     });
   }, [aiSessions, submissionFilter, submissionSearch]);
+
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
+  const handleDeleteSession = async (sess: AIInterviewSessionRecord) => {
+    const isSample =
+      sess.candidateCode === "DVC-SAMPLE-001" ||
+      sess.id.includes("sample") ||
+      sess.candidateEmail.includes("sample");
+    const confirmPrompt = isSample
+      ? "Are you sure you want to delete the Sample Sandbox assessment submission? This will clear all recorded responses and reset the sample candidate status."
+      : `Are you sure you want to delete the assessment submission for ${sess.candidateName} (${sess.candidateCode})? This will permanently remove their AI interview transcript, virtual data room submissions, and proctoring telemetry, and reset their candidate status to 'In Assessment Funnel'.`;
+
+    if (!window.confirm(confirmPrompt)) {
+      return;
+    }
+
+    setDeletingSessionId(sess.id);
+    try {
+      const res = await postAction(
+        {
+          action: "ai_interview.delete_session",
+          sessionId: sess.id,
+          candidateId: sess.candidateId,
+        },
+        `Deleted assessment submission for ${sess.candidateName} (${sess.candidateCode})`
+      );
+      if (res?.ok || res?.recruitment) {
+        if (selectedSessionId === sess.id) {
+          const remaining = (res?.recruitment?.aiInterviewSessions || aiSessions).filter(
+            (s: AIInterviewSessionRecord) => s.id !== sess.id && s.candidateId !== sess.candidateId
+          );
+          setSelectedSessionId(remaining[0]?.id || "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete session:", err);
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
 
   const submittedCandidates = useMemo(() => {
     return candidates.filter((c) => {
@@ -748,13 +789,21 @@ export default function RecruitmentModuleViews({
 
                 {promptInspectorCandidate && (
                   <a
-                    href={`/candidate?sample=1&code=${encodeURIComponent(promptInspectorCandidate.candidateCode)}&email=${encodeURIComponent(promptInspectorCandidate.email)}`}
+                    href={
+                      promptInspectorCandidate.candidateCode === "DVC-SAMPLE-001"
+                        ? `/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`
+                        : `/candidate?code=${encodeURIComponent(promptInspectorCandidate.candidateCode)}&email=${encodeURIComponent(promptInspectorCandidate.email)}`
+                    }
                     target="_blank"
                     rel="noreferrer"
                     className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Test This Candidate Link</span>
+                    <span>
+                      {promptInspectorCandidate.candidateCode === "DVC-SAMPLE-001"
+                        ? "Test Sample Candidate Portal"
+                        : "Open Candidate Assessment Portal"}
+                    </span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
@@ -1110,13 +1159,17 @@ export default function RecruitmentModuleViews({
                                 Profile
                               </button>
                               <a
-                                href={`/candidate?sample=1&code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`}
+                                href={
+                                  c.candidateCode === "DVC-SAMPLE-001"
+                                    ? `/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`
+                                    : `/candidate?code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`
+                                }
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-cyan-400 hover:underline font-medium"
-                                title="Open in Sample Test Mode (always ready to take again)"
+                                title={c.candidateCode === "DVC-SAMPLE-001" ? "Open in Sample Sandbox Mode" : "Open Candidate Portal"}
                               >
-                                AI Interview ↗
+                                {c.candidateCode === "DVC-SAMPLE-001" ? "Sample Test ↗" : "AI Interview ↗"}
                               </a>
                             </td>
                           </tr>
@@ -1424,13 +1477,17 @@ export default function RecruitmentModuleViews({
                           View Profile
                         </button>
                         <a
-                          href={`/candidate?sample=1&code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`}
+                          href={
+                            c.candidateCode === "DVC-SAMPLE-001"
+                              ? `/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`
+                              : `/candidate?code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`
+                          }
                           target="_blank"
                           rel="noreferrer"
                           className="text-cyan-400 hover:underline font-medium"
-                          title="Open candidate portal in always-ready sample mode"
+                          title={c.candidateCode === "DVC-SAMPLE-001" ? "Open in Sample Sandbox Mode" : "Open Candidate Portal"}
                         >
-                          Portal ↗
+                          {c.candidateCode === "DVC-SAMPLE-001" ? "Sandbox Portal ↗" : "Portal ↗"}
                         </a>
                       </td>
                     </tr>
@@ -1558,15 +1615,51 @@ export default function RecruitmentModuleViews({
                     </button>
                   )}
 
+                  {recruitment.aiInterviewSessions?.some(
+                    (s) =>
+                      s.candidateId === selectedCandidate.id ||
+                      s.candidateCode === selectedCandidate.candidateCode
+                  ) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sess = recruitment.aiInterviewSessions?.find(
+                          (s) =>
+                            s.candidateId === selectedCandidate.id ||
+                            s.candidateCode === selectedCandidate.candidateCode
+                        );
+                        if (sess) void handleDeleteSession(sess);
+                      }}
+                      disabled={deletingSessionId !== null}
+                      className="px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                      title="Delete assessment submission and reset candidate status"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Delete Response 🗑️</span>
+                    </button>
+                  )}
+
                   <a
-                    href={`/candidate?sample=1&code=${encodeURIComponent(selectedCandidate.candidateCode)}&email=${encodeURIComponent(selectedCandidate.email)}`}
+                    href={
+                      selectedCandidate.candidateCode === "DVC-SAMPLE-001"
+                        ? `/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`
+                        : `/candidate?code=${encodeURIComponent(selectedCandidate.candidateCode)}&email=${encodeURIComponent(selectedCandidate.email)}`
+                    }
                     target="_blank"
                     rel="noreferrer"
                     className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5"
-                    title="Launch candidate portal in always-ready sample mode"
+                    title={
+                      selectedCandidate.candidateCode === "DVC-SAMPLE-001"
+                        ? "Launch candidate portal in always-ready sample sandbox mode"
+                        : "Open official candidate assessment portal"
+                    }
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Launch AI Interview (Sample Mode)</span>
+                    <span>
+                      {selectedCandidate.candidateCode === "DVC-SAMPLE-001"
+                        ? "Launch AI Interview (Sample Mode)"
+                        : "Open Candidate Portal"}
+                    </span>
                   </a>
 
                   <button
@@ -2253,7 +2346,21 @@ export default function RecruitmentModuleViews({
                           Score: {s.scoringBreakdown?.overallAiInterviewScore ?? "In Progress"}/100
                         </span>
                       </div>
-                      <div className="font-bold text-sm text-white truncate">{s.candidateName}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="font-bold text-sm text-white truncate">{s.candidateName}</div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteSession(s);
+                          }}
+                          disabled={deletingSessionId === s.id}
+                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition shrink-0 ml-1"
+                          title={`Delete submission for ${s.candidateName}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
                         <span className="truncate max-w-[130px]">{s.assignedCaseSetId}</span>
                         <span className="font-mono text-emerald-400">
@@ -2302,8 +2409,8 @@ export default function RecruitmentModuleViews({
                           <h3 className="text-xl font-bold text-white">{sess.candidateName}</h3>
                           <p className="text-xs text-slate-400">{sess.candidateEmail}</p>
                         </div>
-                        {sb && (
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3">
+                          {sb && (
                             <div className="text-right">
                               <div className="text-[11px] text-slate-400">
                                 Overall AI Interview + Task Score
@@ -2315,8 +2422,18 @@ export default function RecruitmentModuleViews({
                                 {targetCand?.applicationStatus || sb.recommendedNextStep}
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSession(sess)}
+                            disabled={deletingSessionId === sess.id}
+                            className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center gap-1.5 transition shrink-0 shadow-sm"
+                            title="Delete this assessment submission and reset candidate status"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>{deletingSessionId === sess.id ? "Deleting..." : "Delete Response"}</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* SAMPLE SANDBOX BANNER */}
@@ -2632,6 +2749,17 @@ export default function RecruitmentModuleViews({
                           >
                             <span>Schedule Call</span>
                             <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSession(sess)}
+                            disabled={deletingSessionId === sess.id}
+                            className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-700/50 font-semibold text-xs flex items-center gap-1.5 transition ml-auto"
+                            title="Delete this assessment submission and reset candidate status"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>{deletingSessionId === sess.id ? "Deleting..." : "Delete Response"}</span>
                           </button>
                         </div>
                       </div>

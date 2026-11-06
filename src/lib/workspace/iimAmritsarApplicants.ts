@@ -2600,10 +2600,15 @@ export function sanitizeRecruitmentStateIsolation(state: RecruitmentModuleState)
   }
 
   // Ensure dedicated sample session exists for DVC-SAMPLE-001 so admins can always inspect sample test responses
+  // Do NOT resurrect if it was explicitly deleted by admin or if candidate is actively taking it (In Progress)
   let sampleSession = state.aiInterviewSessions.find(
     (s) => s.candidateCode === "DVC-SAMPLE-001" || s.candidateId === sampleCand!.id
   );
-  if (!sampleSession) {
+  if (
+    !sampleSession &&
+    !sampleCand.sessionDeleted &&
+    sampleCand.assessmentStatus !== "In Progress"
+  ) {
     sampleSession = createDedicatedSampleCompletedSession(sampleCand);
     state.aiInterviewSessions.push(sampleSession);
   }
@@ -2616,6 +2621,13 @@ export function sanitizeRecruitmentStateIsolation(state: RecruitmentModuleState)
     sampleCand.assessmentStatus = "Evaluated";
     sampleCand.applicationStatus = "Assessment Submitted";
     sampleCand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+  } else if (!sampleSession && sampleCand.sessionDeleted) {
+    sampleCand.aiInterviewScore = null;
+    sampleCand.proctoringIntegrityScore = null;
+    sampleCand.proctoringIntegrityStatus = undefined;
+    sampleCand.assessmentStatus = "Invited";
+    sampleCand.applicationStatus = "In Assessment Funnel";
+    sampleCand.currentStage = "Stage 1: Profile Screening";
   }
 
   // 2. Normalize real candidates: everyone is invited for assessment!

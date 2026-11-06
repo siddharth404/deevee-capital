@@ -1225,6 +1225,7 @@ export async function POST(request: NextRequest) {
       cand.competencyScores,
       rec.settings.weights
     );
+    cand.sessionDeleted = false;
     cand.updatedAt = now;
 
     await saveWorkspaceDb(db);
@@ -1261,6 +1262,61 @@ export async function POST(request: NextRequest) {
 
     await saveWorkspaceDb(db);
     return NextResponse.json({ session: sess, recruitment: rec });
+  }
+
+  if (action === "ai_interview.delete_session") {
+    const sessionId = String(body.sessionId || "");
+    const candidateId = String(body.candidateId || "");
+
+    const sess = (rec.aiInterviewSessions || []).find(
+      (s) => s.id === sessionId || (candidateId && s.candidateId === candidateId)
+    );
+
+    const targetCandidateId = candidateId || (sess ? sess.candidateId : "");
+
+    // 1. Remove from rec.aiInterviewSessions
+    if (Array.isArray(rec.aiInterviewSessions)) {
+      rec.aiInterviewSessions = rec.aiInterviewSessions.filter(
+        (s) => s.id !== sessionId && (!targetCandidateId || s.candidateId !== targetCandidateId)
+      );
+    }
+
+    // 2. Remove any candidate submissions from rec.submissions
+    if (Array.isArray(rec.submissions) && targetCandidateId) {
+      rec.submissions = rec.submissions.filter((s) => s.candidateId !== targetCandidateId);
+    }
+
+    // 3. Reset candidate state if found
+    const cand = rec.candidates.find(
+      (c) => c.id === targetCandidateId || (sess && c.candidateCode === sess.candidateCode)
+    );
+    if (cand) {
+      cand.aiInterviewScore = null;
+      cand.manualScoreOverride = null;
+      cand.manualOverrideReason = null;
+      cand.proctoringIntegrityScore = null;
+      cand.proctoringIntegrityStatus = undefined;
+      cand.assessmentStatus = "Invited";
+      cand.applicationStatus = "In Assessment Funnel";
+      cand.currentStage = "Stage 1: Profile Screening";
+      cand.sessionDeleted = true;
+      cand.updatedAt = now;
+      cand.activityTimeline.unshift({
+        id: `act-del-sess-${Date.now()}`,
+        action: "ai_interview.session_deleted",
+        summary: `Assessment response & interview session were deleted by ${user.name}. Status reset to In Assessment Funnel.`,
+        actorName: user.name,
+        timestamp: now,
+      });
+    }
+
+    await saveWorkspaceDb(db);
+    return NextResponse.json({
+      ok: true,
+      deletedSessionId: sessionId,
+      candidateId: targetCandidateId,
+      recruitment: rec,
+    });
   }
 
   // ==========================================================================

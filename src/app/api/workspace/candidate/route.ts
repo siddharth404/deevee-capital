@@ -270,24 +270,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // If ?sample=1 or ?test=1 or ?reset=1 is in the URL, ONLY clear session for the dedicated sample sandbox candidate!
-  // NEVER clear real applicant sessions (such as Shrey Mishra DVC-IIMA-063)!
-  if (
-    isSampleOrReset &&
-    cand &&
-    (cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo") &&
-    Array.isArray(rec.aiInterviewSessions)
-  ) {
-    const hadSession = rec.aiInterviewSessions.some((s) => s.candidateId === cand!.id);
-    if (hadSession) {
-      rec.aiInterviewSessions = rec.aiInterviewSessions.filter(
-        (s) => s.candidateId !== cand!.id
-      );
-      cand.assessmentStatus = "Invited";
-      await saveWorkspaceDb(db);
-    }
-  }
-
   const assignedCaseSet = selectCaseSetForCandidate(cand);
   const existingSession = (rec.aiInterviewSessions || []).find(
     (s) => s.candidateId === cand!.id
@@ -530,6 +512,19 @@ export async function POST(request: NextRequest) {
   // 2. START, RESET, OR SKIP TO TASK IN PROCTORED AI INTERVIEW
   // ==========================================================================
   if (action === "ai_interview.reset") {
+    // SECURITY/AUDIT RULE: Reset and retake is strictly for the Sample Sandbox Candidate (DVC-SAMPLE-001)!
+    // Real cohort applicants CANNOT reset or retake their assessment.
+    const isSample = cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo";
+    if (!isSample) {
+      return NextResponse.json(
+        {
+          error:
+            "Assessment reset and retake is disabled for registered cohort candidates. Each candidate is permitted only a single verified proctored assessment attempt.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (Array.isArray(rec.aiInterviewSessions)) {
       rec.aiInterviewSessions = rec.aiInterviewSessions.filter(
         (s) => s.candidateId !== cand.id
@@ -545,6 +540,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "ai_interview.skip_to_task") {
+    // SECURITY: Fast-forwarding is strictly for testing the Sample Sandbox candidate
+    const isSample = cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo";
+    if (!isSample) {
+      return NextResponse.json(
+        { error: "Fast-forwarding questions is strictly disabled for registered applicants." },
+        { status: 403 }
+      );
+    }
+
     const session = (rec.aiInterviewSessions || []).find((s) => s.candidateId === cand.id);
     if (!session) {
       return NextResponse.json({ error: "Active AI interview session not found." }, { status: 404 });
@@ -558,8 +562,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "ai_interview.start") {
+    const isSample = cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo";
+
     if (
-      cand.candidateCode !== "DVC-SAMPLE-001" &&
+      !isSample &&
       cand.assessmentDeadlineAt &&
       new Date(cand.assessmentDeadlineAt).getTime() < Date.now()
     ) {
@@ -583,7 +589,25 @@ export async function POST(request: NextRequest) {
     let session = rec.aiInterviewSessions.find((s) => s.candidateId === cand.id);
     const assignedCaseSet = selectCaseSetForCandidate(cand);
 
-    if (!session || body.forceRestart === true || session.status === "Completed") {
+    // If candidate is a real candidate and already submitted / completed, reject retake attempt
+    if (
+      !isSample &&
+      session &&
+      (session.status === "Completed" ||
+        cand.assessmentStatus === "Submitted" ||
+        cand.assessmentStatus === "Evaluated")
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Your proctored assessment has already been submitted and finalized. Only a single verified attempt is permitted per applicant.",
+          session: sanitizeSessionForCandidate(session),
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!session || (isSample && (body.forceRestart === true || session.status === "Completed"))) {
       if (body.webcamEnabled !== true || body.micEnabled !== true) {
         return NextResponse.json(
           {
@@ -896,6 +920,7 @@ export async function POST(request: NextRequest) {
     cand.assessmentStatus = "Submitted";
     cand.applicationStatus = "Assessment Submitted";
     cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+    cand.sessionDeleted = false;
 
     cand.competencyScores = {
       researchAptitude: breakdown.phase1ResumeProbeScore,

@@ -364,6 +364,7 @@ export interface CandidateRecord {
   lastCommunicationAt: string | null;
   assignedAssessmentIds: string[];
   assessmentDeadlineAt: string | null;
+  sessionDeleted?: boolean;
   activityTimeline: CandidateActivityEntry[];
   createdAt: string;
   updatedAt: string;
