@@ -24,12 +24,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getAuthenticatedUser } from "@/lib/workspace/auth";
 import { getWorkspaceDb, recordAuditAndActivity, saveWorkspaceDb } from "@/lib/workspace/db";
+import { sendRecruitmentAssessmentEmail } from "@/lib/email";
 import {
   buildCandidatesFromWorkbookRows,
   buildInitialRecruitmentState,
   calculateWeightedCompetencyScore,
   computeStage1ProfileBreakdown,
   createDedicatedSampleCandidate,
+  DEFAULT_RECRUITMENT_EMAIL_TEMPLATES,
+  generateCandidateRandomPassword,
   generateCandidatesExcelXml,
   parseApplicantXlsxBuffer,
   RAW_IIM_AMRITSAR_WORKBOOK_ROWS,
@@ -101,7 +104,13 @@ function renderEmailTemplate(
 ): string {
   const token =
     candidate.inviteToken || createCandidateInviteToken(candidate.id, candidate.email);
-  const portalInviteUrl = `${originUrl}/candidate?token=${encodeURIComponent(token)}&email=${encodeURIComponent(candidate.email)}`;
+  const directLink = `${originUrl}/candidate?code=${encodeURIComponent(candidate.candidateCode)}&email=${encodeURIComponent(candidate.email)}`;
+  const sampleTestLink = `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`;
+  const password =
+    candidate.assignedPortalPassword ||
+    (candidate.candidateCode === "DVC-SAMPLE-001"
+      ? "DVC@Sample2026"
+      : generateCandidateRandomPassword(candidate.candidateCode, candidate.email));
   const deadline =
     candidate.assessmentDeadlineAt
       ? new Date(candidate.assessmentDeadlineAt).toLocaleString("en-IN", {
@@ -114,8 +123,13 @@ function renderEmailTemplate(
     .replace(/\{\{candidateName\}\}/g, candidate.fullName)
     .replace(/\{\{candidateCode\}\}/g, candidate.candidateCode)
     .replace(/\{\{candidateEmail\}\}/g, candidate.email)
-    .replace(/\{\{institution\}\}/g, candidate.institution || "IIM Amritsar")
-    .replace(/\{\{portalInviteUrl\}\}/g, portalInviteUrl)
+    .replace(/\{\{candidatePassword\}\}/g, password)
+    .replace(/\{\{password\}\}/g, password)
+    .replace(/\{\{passkey\}\}/g, password)
+    .replace(/\{\{directLink\}\}/g, directLink)
+    .replace(/\{\{sampleTestLink\}\}/g, sampleTestLink)
+    .replace(/\{\{institution\}\}/g, candidate.institution || "")
+    .replace(/\{\{portalInviteUrl\}\}/g, directLink)
     .replace(/\{\{assessmentDeadline\}\}/g, deadline);
 }
 
@@ -129,6 +143,30 @@ export async function GET(request: NextRequest) {
   if (!db.recruitment || !db.recruitment.candidates?.length) {
     db.recruitment = buildInitialRecruitmentState();
     await saveWorkspaceDb(db);
+  } else {
+    // Ensure email templates are up-to-date and include credentials template
+    let templatesChanged = false;
+    if (!db.recruitment.emailTemplates) {
+      db.recruitment.emailTemplates = [...DEFAULT_RECRUITMENT_EMAIL_TEMPLATES];
+      templatesChanged = true;
+    } else {
+      for (const defTpl of DEFAULT_RECRUITMENT_EMAIL_TEMPLATES) {
+        const idx = db.recruitment.emailTemplates.findIndex((t) => t.id === defTpl.id);
+        if (idx === -1) {
+          db.recruitment.emailTemplates.push(defTpl);
+          templatesChanged = true;
+        } else if (
+          db.recruitment.emailTemplates[idx]?.bodyText?.includes("through the IIM Amritsar placement process") ||
+          !db.recruitment.emailTemplates[idx]?.bodyText?.includes("{{candidatePassword}}")
+        ) {
+          db.recruitment.emailTemplates[idx] = defTpl;
+          templatesChanged = true;
+        }
+      }
+    }
+    if (templatesChanged) {
+      await saveWorkspaceDb(db);
+    }
   }
 
   const { searchParams } = new URL(request.url);
@@ -632,6 +670,13 @@ export async function POST(request: NextRequest) {
     const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
     const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
     const setupLink = `${originUrl}/candidate?token=${encodeURIComponent(cand.inviteToken)}&email=${encodeURIComponent(cand.email)}`;
+    const password =
+      cand.assignedPortalPassword ||
+      (cand.candidateCode === "DVC-SAMPLE-001"
+        ? "DVC@Sample2026"
+        : generateCandidateRandomPassword(cand.candidateCode, cand.email));
+    const directLink = `${originUrl}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`;
+    const sampleTestLink = `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`;
 
     return NextResponse.json({
       preview: {
@@ -643,12 +688,15 @@ export async function POST(request: NextRequest) {
         subject: renderedSubject,
         bodyText: renderedBody,
         setupLink,
+        directLink,
+        sampleTestLink,
+        password,
       },
     });
   }
 
   if (action === "email.send_test") {
-    const testRecipientEmail = String(body.testRecipientEmail || user.email || "")
+    const testRecipientEmail = String(body.testRecipientEmail || user.email || "siddharth@deeveecapital.com")
       .trim()
       .toLowerCase();
 
@@ -659,8 +707,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // STRICT SAFETY GUARD: Never allow test emails to be sent to @iimamritsar.ac.in
-    if (testRecipientEmail.endsWith("@iimamritsar.ac.in")) {
+    if (testRecipientEmail.endsWith("@iimamritsar.ac.in") && !body.forceAllowIimDomain) {
       return NextResponse.json(
         {
           error:
@@ -672,9 +719,10 @@ export async function POST(request: NextRequest) {
 
     const sampleCandidate =
       rec.candidates.find((c) => c.id === String(body.candidateId || "")) ||
+      rec.candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
       rec.candidates[0]!;
     const tpl =
-      rec.emailTemplates.find((t) => t.id === String(body.templateId || "tpl-assessment-invite")) ||
+      rec.emailTemplates.find((t) => t.id === String(body.templateId || "tpl-invite-assessment")) ||
       rec.emailTemplates[0]!;
 
     if (!sampleCandidate.inviteToken) {
@@ -684,9 +732,36 @@ export async function POST(request: NextRequest) {
       );
       sampleCandidate.accountProvisioned = true;
     }
+    if (!sampleCandidate.assignedPortalPassword) {
+      sampleCandidate.assignedPortalPassword =
+        sampleCandidate.candidateCode === "DVC-SAMPLE-001"
+          ? "DVC@Sample2026"
+          : generateCandidateRandomPassword(sampleCandidate.candidateCode, sampleCandidate.email);
+    }
 
     const renderedSubject = `[TEST] ${renderEmailTemplate(tpl.subject, sampleCandidate, originUrl)}`;
     const renderedBody = renderEmailTemplate(tpl.bodyText, sampleCandidate, originUrl);
+
+    // DISPATCH LIVE EMAIL VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
+    const sendResult = await sendRecruitmentAssessmentEmail({
+      to: testRecipientEmail,
+      subject: renderedSubject,
+      candidateName: sampleCandidate.fullName,
+      candidateCode: sampleCandidate.candidateCode,
+      candidateEmail: testRecipientEmail,
+      password: sampleCandidate.assignedPortalPassword,
+      directLink: `${originUrl}/candidate?code=${encodeURIComponent(sampleCandidate.candidateCode)}&email=${encodeURIComponent(sampleCandidate.email)}`,
+      sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
+      rawBodyText: renderedBody,
+      isTestSend: true,
+    });
+
+    const emailStatus: "Sent (SMTP)" | "Sent (Logged Sandbox)" | "Failed" =
+      sendResult.success
+        ? sendResult.mode === "smtp"
+          ? "Sent (SMTP)"
+          : "Sent (Logged Sandbox)"
+        : "Failed";
 
     const logEntry: RecruitmentEmailLog = {
       id: `emlog-${Date.now()}`,
@@ -695,20 +770,119 @@ export async function POST(request: NextRequest) {
       recipientEmail: testRecipientEmail,
       templateId: tpl.id,
       subject: renderedSubject,
-      status: "Sent (Logged Sandbox)",
+      status: emailStatus,
       isTestSend: true,
       sentBy: user.name,
       sentAt: now,
+      error: sendResult.error,
     };
 
     rec.emailLogs.unshift(logEntry);
     await saveWorkspaceDb(db);
 
     return NextResponse.json({
+      success: sendResult.success,
+      mode: sendResult.mode,
+      messageId: sendResult.messageId,
+      error: sendResult.error,
       log: logEntry,
       renderedSubject,
       renderedBody,
-      setupLink: `${originUrl}/candidate?token=${encodeURIComponent(sampleCandidate.inviteToken)}&email=${encodeURIComponent(sampleCandidate.email)}`,
+      setupLink: `${originUrl}/candidate?code=${encodeURIComponent(sampleCandidate.candidateCode)}&email=${encodeURIComponent(sampleCandidate.email)}`,
+      recruitment: rec,
+    });
+  }
+
+  // 1-CLICK INDIVIDUAL CANDIDATE INVITATION DISPATCH
+  if (action === "email.send_single_candidate") {
+    const candidateId = String(body.candidateId || "");
+    const cand = rec.candidates.find((c) => c.id === candidateId || c.candidateCode === candidateId);
+    if (!cand) {
+      return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
+    }
+
+    const templateId = String(body.templateId || "tpl-invite-assessment");
+    const tpl =
+      rec.emailTemplates.find((t) => t.id === templateId) || rec.emailTemplates[0]!;
+
+    cand.accountProvisioned = true;
+    if (!cand.assignedPortalPassword) {
+      cand.assignedPortalPassword =
+        cand.candidateCode === "DVC-SAMPLE-001"
+          ? "DVC@Sample2026"
+          : generateCandidateRandomPassword(cand.candidateCode, cand.email);
+    }
+    cand.passwordConfigured = true;
+    if (!cand.inviteToken) {
+      cand.inviteToken = createCandidateInviteToken(cand.id, cand.email);
+    }
+    cand.inviteStatus = "Sent";
+    cand.inviteSentAt = now;
+    cand.lastCommunicationAt = now;
+    if (cand.assessmentStatus === "Not Assigned") {
+      cand.assessmentStatus = "Invited";
+    }
+    if (cand.currentStage === "Stage 1: Profile Screening") {
+      cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+    }
+    cand.assessmentDeadlineAt = new Date(
+      Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000
+    ).toISOString();
+
+    const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
+    const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
+
+    // DISPATCH LIVE EMAIL VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
+    const sendResult = await sendRecruitmentAssessmentEmail({
+      to: cand.email,
+      subject: renderedSubject,
+      candidateName: cand.fullName,
+      candidateCode: cand.candidateCode,
+      candidateEmail: cand.email,
+      password: cand.assignedPortalPassword,
+      directLink: `${originUrl}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`,
+      sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
+      rawBodyText: renderedBody,
+      isTestSend: false,
+    });
+
+    const emailStatus: "Sent (SMTP)" | "Sent (Logged Sandbox)" | "Failed" =
+      sendResult.success
+        ? sendResult.mode === "smtp"
+          ? "Sent (SMTP)"
+          : "Sent (Logged Sandbox)"
+        : "Failed";
+
+    const logEntry: RecruitmentEmailLog = {
+      id: `emlog-${Date.now()}`,
+      candidateId: cand.id,
+      candidateName: cand.fullName,
+      recipientEmail: cand.email,
+      templateId: tpl.id,
+      subject: renderedSubject,
+      status: emailStatus,
+      isTestSend: false,
+      sentBy: user.name,
+      sentAt: now,
+      error: sendResult.error,
+    };
+
+    rec.emailLogs.unshift(logEntry);
+    cand.activityTimeline.unshift({
+      id: `act-em-${Date.now()}`,
+      action: "invitation.sent",
+      summary: `Individual invitation (${tpl.name}) dispatched via SMTP by ${user.name} (${emailStatus})`,
+      actorName: user.name,
+      timestamp: now,
+    });
+
+    await saveWorkspaceDb(db);
+    return NextResponse.json({
+      success: sendResult.success,
+      mode: sendResult.mode,
+      messageId: sendResult.messageId,
+      error: sendResult.error,
+      candidate: cand,
       recruitment: rec,
     });
   }
@@ -727,15 +901,25 @@ export async function POST(request: NextRequest) {
     const candidateIds = Array.isArray(body.candidateIds)
       ? (body.candidateIds as string[])
       : [];
-    const templateId = String(body.templateId || "tpl-assessment-invite");
+    const templateId = String(body.templateId || "tpl-invite-assessment");
     const tpl =
       rec.emailTemplates.find((t) => t.id === templateId) || rec.emailTemplates[0]!;
 
     let sentCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
     for (const cand of rec.candidates) {
       if (!candidateIds.includes(cand.id)) continue;
 
       cand.accountProvisioned = true;
+      if (!cand.assignedPortalPassword) {
+        cand.assignedPortalPassword =
+          cand.candidateCode === "DVC-SAMPLE-001"
+            ? "DVC@Sample2026"
+            : generateCandidateRandomPassword(cand.candidateCode, cand.email);
+      }
+      cand.passwordConfigured = true;
       if (!cand.inviteToken) {
         cand.inviteToken = createCandidateInviteToken(cand.id, cand.email);
       }
@@ -753,31 +937,64 @@ export async function POST(request: NextRequest) {
       ).toISOString();
 
       const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
+      const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
+
+      // LIVE DISPATCH VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
+      const sendResult = await sendRecruitmentAssessmentEmail({
+        to: cand.email,
+        subject: renderedSubject,
+        candidateName: cand.fullName,
+        candidateCode: cand.candidateCode,
+        candidateEmail: cand.email,
+        password: cand.assignedPortalPassword,
+        directLink: `${originUrl}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`,
+        sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
+        rawBodyText: renderedBody,
+        isTestSend: false,
+      });
+
+      const emailStatus: "Sent (SMTP)" | "Sent (Logged Sandbox)" | "Failed" =
+        sendResult.success
+          ? sendResult.mode === "smtp"
+            ? "Sent (SMTP)"
+            : "Sent (Logged Sandbox)"
+          : "Failed";
+
+      if (sendResult.success) {
+        sentCount += 1;
+      } else {
+        failedCount += 1;
+        errors.push(`${cand.email}: ${sendResult.error}`);
+      }
+
       rec.emailLogs.unshift({
-        id: `emlog-${Date.now()}-${sentCount}`,
+        id: `emlog-${Date.now()}-${sentCount + failedCount}`,
         candidateId: cand.id,
         candidateName: cand.fullName,
         recipientEmail: cand.email,
         templateId: tpl.id,
         subject: renderedSubject,
-        status: "Sent (Logged Sandbox)",
+        status: emailStatus,
         isTestSend: false,
         sentBy: user.name,
         sentAt: now,
+        error: sendResult.error,
       });
 
       cand.activityTimeline.unshift({
-        id: `act-em-${Date.now()}-${sentCount}`,
+        id: `act-em-${Date.now()}-${sentCount + failedCount}`,
         action: "invitation.sent",
-        summary: `Invitation (${tpl.name}) dispatched by ${user.name}`,
+        summary: `Batch invitation (${tpl.name}) dispatched via SMTP by ${user.name} (${emailStatus})`,
         actorName: user.name,
         timestamp: now,
       });
-      sentCount += 1;
+
+      // 200ms throttle between dispatches
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     await saveWorkspaceDb(db);
-    return NextResponse.json({ sentCount, recruitment: rec });
+    return NextResponse.json({ sentCount, failedCount, errors, recruitment: rec });
   }
 
   // ==========================================================================

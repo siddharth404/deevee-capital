@@ -3271,35 +3271,49 @@ export const DEFAULT_ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
 export const DEFAULT_RECRUITMENT_EMAIL_TEMPLATES: RecruitmentEmailTemplate[] = [
   {
     id: "tpl-invite-assessment",
-    name: "Initial Portal & Assessment Invitation",
+    name: "Initial Assessment & Portal Credentials",
     stageTrigger: "Stage 1: Profile Screening",
-    subject: "Invitation – Deevee Capital Internship Assessment",
+    subject: "Invitation: Deevee Capital Investment Assessment & Credentials ({{candidateCode}})",
     bodyText: `Dear {{candidateName}},
 
-Thank you for expressing interest in the Investment Research & Startup Sourcing Intern role at Deevee Capital through the IIM Amritsar placement process.
+Thank you for your interest in the Investment Research & Startup Sourcing Intern role at Deevee Capital.
 
-Deevee Capital is a sector-agnostic early-stage investment initiative focused on discovering and backing promising founders and businesses across India (investing up to ₹1 Crore per opportunity). Our investment research interns work directly with the Investment Team to source under-the-radar Indian startups, evaluate business models and market sizing, conduct competitor diligence, and prepare preliminary investment screening reports.
+Your application ({{candidateCode}}) has been shortlisted for Stage 1B: The 45-Minute Proctored AI Interview & Virtual Startup Assessment.
 
- Internship Overview:
-• Role: Investment Research & Startup Sourcing Intern
-• Eligibility: First-Year MBA, IIM Amritsar
-• Format: 100% Remote | Flexible Working Hours | Stipend: ₹10,000/month
+============================================================
+YOUR CANDIDATE ACCESS CREDENTIALS
+============================================================
+• Candidate ID (Username): {{candidateCode}}
+• Registered Email:        {{candidateEmail}}
+• Portal Password/Passkey: {{candidatePassword}}
+• Direct 1-Click Link:     {{directLink}}
 
-Your application ({{candidateCode}}) has been registered for our multi-stage assessment process:
-1. Research Aptitude & Verification Assessment (35 minutes, timed)
-2. Practical 3-Startup Discovery & Research Trail Assignment (48-hour window, ~3–4 hours effort)
-3. Preliminary Investment Screening Case & Live Research Defence (for shortlisted candidates)
+============================================================
+PRACTICE / SAMPLE TEST SANDBOX (RECOMMENDED BEFORE STARTING)
+============================================================
+Before starting your official 45-minute timed evaluation, you may test your camera, microphone, and screen share in our sample sandbox:
+{{sampleTestLink}}
+(Sandbox Credentials: Username: DVC-SAMPLE-001 | Password: DVC@Sample2026)
 
-Access Your Secure Candidate Assessment Portal:
-{{portalInviteUrl}}
+============================================================
+MANDATORY TECHNICAL & PROCTORING GUIDELINES
+============================================================
+1. LAPTOP OR DESKTOP COMPUTER ONLY: Mobile devices and tablets are strictly blocked by the portal.
+2. CONTINUOUS HARDWARE PROCTORING: Webcam video, microphone audio, and Entire Screen sharing are mandatory throughout the test.
+3. SANCTUARY ANTI-CHEAT: Fullscreen mode is enforced; external clipboard paste is blocked; tab switching will penalize your integrity score.
+4. ASSESSMENT DURATION: 45 Minutes timed.
 
-On first access, please verify your institutional email ({{candidateEmail}}) and set your personal account password to view your assessment instructions and submission deadlines.
+Direct Access Link:
+{{directLink}}
+
+Submission Window: {{assessmentDeadline}}
 
 Warm regards,
-Investment & Talent Team
-Deevee Capital
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+siddharth@deeveecapital.com
 https://deeveecapital.com`,
-    updatedAt: "2026-11-06T00:00:00.000Z",
+    updatedAt: "2026-11-07T00:00:00.000Z",
   },
   {
     id: "tpl-assign-stage3",

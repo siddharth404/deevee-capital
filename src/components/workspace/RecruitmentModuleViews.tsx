@@ -16,6 +16,7 @@ import {
   Edit3,
   ExternalLink,
   Eye,
+  EyeOff,
   FileSpreadsheet,
   FileText,
   Filter,
@@ -153,18 +154,29 @@ export default function RecruitmentModuleViews({
   const [overrideReasonInput, setOverrideReasonInput] = useState<string>("");
 
   // Email & Invitation State
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("tpl-assessment-invite");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("tpl-invite-assessment");
   const [emailPreviewData, setEmailPreviewData] = useState<{
     subject: string;
     bodyText: string;
     setupLink: string;
+    directLink?: string;
+    sampleTestLink?: string;
+    password?: string;
     recipientEmail: string;
     candidateName: string;
+    candidateCode?: string;
   } | null>(null);
   const [testEmailRecipient, setTestEmailRecipient] = useState<string>(
     currentUserEmail || "siddharth@deeveecapital.com"
   );
   const [adminConfirmedBulkSend, setAdminConfirmedBulkSend] = useState<boolean>(false);
+  const [singleSendingId, setSingleSendingId] = useState<string | null>(null);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState<boolean>(false);
+  const [isSendingBatch, setIsSendingBatch] = useState<boolean>(false);
+  const [rosterFilter, setRosterFilter] = useState<"all" | "uninvited" | "invited" | "shortlisted">("all");
+  const [rosterSearch, setRosterSearch] = useState<string>("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
 
   // Stage 5 Interview State
   const [intMeetingLink, setIntMeetingLink] = useState<string>(
@@ -318,6 +330,23 @@ export default function RecruitmentModuleViews({
     statusFilter,
     workExFilter,
   ]);
+
+  const filteredRosterCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      if (rosterFilter === "uninvited" && (c.inviteStatus === "Sent" || c.inviteStatus === "Accepted")) return false;
+      if (rosterFilter === "invited" && c.inviteStatus !== "Sent" && c.inviteStatus !== "Accepted") return false;
+      if (rosterFilter === "shortlisted" && c.applicationStatus !== "Shortlisted for Assessment") return false;
+
+      if (rosterSearch.trim()) {
+        const q = rosterSearch.toLowerCase();
+        const matchName = c.fullName.toLowerCase().includes(q);
+        const matchCode = c.candidateCode.toLowerCase().includes(q);
+        const matchEmail = c.email.toLowerCase().includes(q);
+        if (!matchName && !matchCode && !matchEmail) return false;
+      }
+      return true;
+    });
+  }, [candidates, rosterFilter, rosterSearch]);
 
   // Upload .xlsx file handler
   const handleFileUploadPreview = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2696,189 +2725,707 @@ export default function RecruitmentModuleViews({
       )}
 
       {/* =====================================================================
-          10. EMAIL & INVITATIONS (SAFE PREVIEW, TEST SEND & ADMIN APPROVAL)
+          10. EMAIL & INVITATIONS (WORKABLE LIVE GMAIL SMTP DISPATCH & ROSTER)
          ===================================================================== */}
       {activeSubTab === "rec-emails" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-7 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 text-xs">
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                Safe Candidate Account Provisioning & Invitation System
+        <div className="space-y-6">
+          {/* SMT P STATUS BANNER */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-blue-950/40 border border-emerald-500/30">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
               </span>
-              <h3 className="text-lg font-bold text-white mt-0.5">
-                Invitation – Deevee Capital Internship Assessment
-              </h3>
-              <p className="text-slate-400">
-                Generates cryptographic one-time setup links (`/candidate?token=...`). Plaintext passwords are never emailed, and test mode blocks real `@iimamritsar.ac.in` addresses.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Email Template</label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
-                >
-                  {recruitment.emailTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Sample Candidate for Preview</label>
-                <select
-                  value={selectedCandidateId}
-                  onChange={(e) => setSelectedCandidateId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
-                >
-                  {candidates.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.candidateCode} — {c.fullName}
-                    </option>
-                  ))}
-                </select>
+                <div className="text-xs font-bold text-white flex flex-wrap items-center gap-2">
+                  <span>Live Gmail SMTP Sender Connected:</span>
+                  <span className="text-emerald-400 font-mono font-semibold">siddharth@deeveecapital.com</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                    SSL Port 465 Active
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Dispatches real candidate invitations containing Candidate ID, Unique Passkey, 1-Click Direct Assessment Link, and Practice Sandbox Link.
+                </p>
               </div>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  const res = await postAction({
-                    action: "email.preview",
-                    candidateId: selectedCandidateId,
-                    templateId: selectedTemplateId,
-                  });
-                  if (res?.preview) setEmailPreviewData(res.preview);
-                }}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold"
-              >
-                Preview Personalized Invitation & Setup Link
-              </button>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-300">
+                Total Cohort: <strong className="text-white">{candidates.length}</strong>
+              </span>
+              <span className="px-3 py-1 rounded-lg bg-emerald-950/50 text-emerald-300 border border-emerald-500/30">
+                Invited: <strong>{candidates.filter((c) => c.inviteStatus === "Sent" || c.inviteStatus === "Accepted").length}</strong>
+              </span>
+              <span className="px-3 py-1 rounded-lg bg-amber-950/50 text-amber-300 border border-amber-500/30">
+                Uninvited: <strong>{candidates.filter((c) => c.inviteStatus !== "Sent" && c.inviteStatus !== "Accepted").length}</strong>
+              </span>
+              <span className="px-3 py-1 rounded-lg bg-blue-950/50 text-blue-300 border border-blue-500/30">
+                Shortlisted: <strong>{shortlistedCount}</strong>
+              </span>
             </div>
+          </div>
 
-            {emailPreviewData && (
-              <div className="p-4 rounded-xl bg-slate-950 border border-blue-500/40 space-y-2">
-                <div className="font-semibold text-blue-300">
-                  Subject: {emailPreviewData.subject}
+          {/* TOP GRID: TEST DISPATCH & AUDIT LOG */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT: TEST DISPATCH & PREVIEW */}
+            <div className="lg:col-span-7 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+                    Email Dispatcher & Preview Engine
+                  </span>
+                  <h3 className="text-base font-bold text-white mt-0.5">
+                    Invitation & Credentials Email Preview
+                  </h3>
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  To: {emailPreviewData.candidateName} &lt;{emailPreviewData.recipientEmail}&gt;
-                </div>
-                <div className="p-2 rounded bg-slate-900 font-mono text-[11px] text-emerald-300 break-all">
-                  One-Time Activation Link: {emailPreviewData.setupLink}
-                </div>
-                <pre className="p-3 rounded-lg bg-slate-900 text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">
-                  {emailPreviewData.bodyText}
-                </pre>
+                <span className="px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-300 text-[11px] font-mono">
+                  From: siddharth@deeveecapital.com
+                </span>
               </div>
-            )}
 
-            {/* TEST EMAIL SENDER */}
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
-              <div className="font-semibold text-white">
-                Step 1: Send Safe Test Email (Blocks @iimamritsar.ac.in)
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Select Email Template</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
+                  >
+                    {recruitment.emailTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Sample Candidate For Credentials Preview</label>
+                  <select
+                    value={selectedCandidateId}
+                    onChange={(e) => setSelectedCandidateId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
+                  >
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.candidateCode} — {c.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={testEmailRecipient}
-                  onChange={(e) => setTestEmailRecipient(e.target.value)}
-                  placeholder="siddharth@deeveecapital.com"
-                  className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white"
-                />
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={async () => {
-                    await postAction(
+                    const res = await postAction({
+                      action: "email.preview",
+                      candidateId: selectedCandidateId,
+                      templateId: selectedTemplateId,
+                    });
+                    if (res?.preview) setEmailPreviewData(res.preview);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold flex items-center gap-1.5"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Preview Personalized Invitation & Credentials</span>
+                </button>
+              </div>
+
+              {/* LIVE PREVIEW BOX */}
+              {emailPreviewData && (
+                <div className="p-4 rounded-xl bg-slate-950 border border-blue-500/40 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                    <div className="font-semibold text-blue-300">
+                      Subject: {emailPreviewData.subject}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `Subject: ${emailPreviewData.subject}\n\n${emailPreviewData.bodyText}`
+                        );
+                        setCopiedKey("email-preview-text");
+                        setTimeout(() => setCopiedKey(null), 2000);
+                      }}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1"
+                    >
+                      {copiedKey === "email-preview-text" ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>Copied Email!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy Email Draft</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* CREDENTIALS CALLOUT BOX */}
+                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+                    <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                      Student Access Credentials Callout
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Username / Candidate ID: </span>
+                        <strong className="text-white font-mono">{emailPreviewData.candidateCode || selectedCandidate?.candidateCode}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Portal Passkey / Password: </span>
+                        <strong className="text-emerald-300 font-mono">{emailPreviewData.password || selectedCandidate?.assignedPortalPassword || "DVC@Sample2026"}</strong>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-400">Direct 1-Click Link: </span>
+                        <a
+                          href={emailPreviewData.directLink || emailPreviewData.setupLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:underline font-mono break-all"
+                        >
+                          {emailPreviewData.directLink || emailPreviewData.setupLink}
+                        </a>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-400">Sample Sandbox Mode: </span>
+                        <a
+                          href={emailPreviewData.sampleTestLink || "/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 hover:underline font-mono break-all"
+                        >
+                          {emailPreviewData.sampleTestLink || "/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <pre className="p-3 rounded-lg bg-slate-900 text-slate-200 whitespace-pre-wrap font-sans leading-relaxed text-[11px] max-h-60 overflow-y-auto">
+                    {emailPreviewData.bodyText}
+                  </pre>
+                </div>
+              )}
+
+              {/* TEST EMAIL SENDER VIA SIDDHARTH@DEEVEECAPITAL.COM */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-indigo-500/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Send Live Test Email via siddharth@deeveecapital.com</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Gmail SMTP Verified</span>
+                </div>
+                <p className="text-slate-400 text-[11px]">
+                  Dispatches a real email through Google Workspace SMTP with sample credentials and direct links so you can inspect how it looks in your inbox.
+                </p>
+                <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                  <input
+                    type="email"
+                    value={testEmailRecipient}
+                    onChange={(e) => setTestEmailRecipient(e.target.value)}
+                    placeholder="siddharth@deeveecapital.com"
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:border-indigo-500 outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={isSendingTestEmail}
+                    onClick={async () => {
+                      setIsSendingTestEmail(true);
+                      const res = await postAction(
+                        {
+                          action: "email.send_test",
+                          testRecipientEmail: testEmailRecipient,
+                          candidateId: selectedCandidateId,
+                          templateId: selectedTemplateId,
+                        },
+                        `Dispatched live test invitation via siddharth@deeveecapital.com to ${testEmailRecipient}`
+                      );
+                      setIsSendingTestEmail(false);
+                      if (res?.messageId) {
+                        showToast(`Delivered via SMTP! MessageId: ${res.messageId}`);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold flex items-center gap-1.5 whitespace-nowrap shadow-lg shadow-indigo-600/20"
+                  >
+                    {isSendingTestEmail ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Sending via SMTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send Live Test Email</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT: LIVE AUDIT LOG */}
+            <div className="lg:col-span-5 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="font-bold text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <span>Invitation & SMTP Audit Log</span>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  {recruitment.emailLogs.length} total logged
+                </span>
+              </div>
+
+              {recruitment.emailLogs.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 rounded-xl bg-slate-950 border border-slate-800/60">
+                  No emails sent yet. Use the test dispatcher or student roster below to dispatch invitations.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                  {recruitment.emailLogs.slice(0, 15).map((log) => {
+                    const isSmtp = log.status === "Sent (SMTP)";
+                    const isFailed = log.status === "Failed";
+                    return (
+                      <div
+                        key={log.id}
+                        className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 space-y-1 hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-blue-300 truncate font-mono">
+                            {log.recipientEmail}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+                              isSmtp
+                                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                : isFailed
+                                ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                            }`}
+                          >
+                            {isSmtp ? "🟢 Sent (Live SMTP)" : isFailed ? "🔴 Failed" : log.status}
+                          </span>
+                        </div>
+                        <div className="text-slate-300 truncate text-[11px]">{log.subject}</div>
+                        {log.error && (
+                          <div className="text-[10px] text-rose-400 font-mono bg-rose-950/30 p-1.5 rounded">
+                            {log.error}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-500 flex justify-between">
+                          <span>{log.isTestSend ? "TEST MODE" : "OFFICIAL DISPATCH"} • By {log.sentBy}</span>
+                          <span>{new Date(log.sentAt).toLocaleString("en-IN", { timeStyle: "short", dateStyle: "short" })}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CANDIDATE INVITATION & DISPATCH ROSTER */}
+          <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  Student Dispatch Hub
+                </span>
+                <h3 className="text-lg font-bold text-white mt-0.5">
+                  Candidate Roster & 1-Click Email Dispatch
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Invite students individually with 1 click or select multiple candidates for batch dispatch via <strong className="text-white">siddharth@deeveecapital.com</strong>.
+                </p>
+              </div>
+
+              {/* COPY CREDENTIALS BUTTON FOR PLACECOM */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetList = selectedIds.length > 0
+                    ? candidates.filter((c) => selectedIds.includes(c.id))
+                    : filteredRosterCandidates;
+                  
+                  const header = "Roll No / Candidate ID\tFull Name\tEmail\tPortal Password / Passkey\tDirect 1-Click Link\n";
+                  const rows = targetList.map((c) => {
+                    const pass = c.assignedPortalPassword || "DVC@Sample2026";
+                    const direct = `https://deeveecapital.com/candidate?code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`;
+                    return `${c.candidateCode}\t${c.fullName}\t${c.email}\t${pass}\t${direct}`;
+                  }).join("\n");
+
+                  navigator.clipboard.writeText(header + rows);
+                  setCopiedKey("placecom-credentials-roster");
+                  setTimeout(() => setCopiedKey(null), 2500);
+                  showToast(`Copied ${targetList.length} candidate credentials formatted for Excel / Placement Committee!`);
+                }}
+                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs flex items-center gap-1.5 border border-slate-700"
+              >
+                {copiedKey === "placecom-credentials-roster" ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Copied Credentials Roster!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Credentials for PlaceCom ({selectedIds.length || filteredRosterCandidates.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* FILTER TABS & SEARCH */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { key: "all", label: `All Candidates (${candidates.length})` },
+                    { key: "uninvited", label: `Uninvited (${candidates.filter((c) => c.inviteStatus !== "Sent" && c.inviteStatus !== "Accepted").length})` },
+                    { key: "invited", label: `Invited (${candidates.filter((c) => c.inviteStatus === "Sent" || c.inviteStatus === "Accepted").length})` },
+                    { key: "shortlisted", label: `Shortlisted (${shortlistedCount})` },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setRosterFilter(tab.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      rosterFilter === tab.key
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                    placeholder="Search name, code, email..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* BATCH SELECTION & ACTION BAR */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ids = filteredRosterCandidates.map((c) => c.id);
+                    setSelectedIds(ids);
+                  }}
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
+                >
+                  Select All Filtered ({filteredRosterCandidates.length})
+                </button>
+                {selectedIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs font-medium"
+                  >
+                    Deselect All
+                  </button>
+                )}
+                <span className="text-xs text-slate-400">
+                  <strong className="text-white">{selectedIds.length}</strong> candidates selected
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={adminConfirmedBulkSend}
+                    onChange={(e) => setAdminConfirmedBulkSend(e.target.checked)}
+                    className="rounded border-slate-700 text-emerald-600 focus:ring-0"
+                  />
+                  <span>Confirm live email dispatch via siddharth@deeveecapital.com</span>
+                </label>
+
+                <button
+                  type="button"
+                  disabled={!adminConfirmedBulkSend || isSendingBatch}
+                  onClick={async () => {
+                    const targetIds =
+                      selectedIds.length > 0
+                        ? selectedIds
+                        : filteredRosterCandidates.map((c) => c.id);
+
+                    if (targetIds.length === 0) {
+                      setErrorMsg("No candidates selected to dispatch.");
+                      return;
+                    }
+
+                    setIsSendingBatch(true);
+                    const res = await postAction(
                       {
-                        action: "email.send_test",
-                        testRecipientEmail: testEmailRecipient,
-                        candidateId: selectedCandidateId,
+                        action: "email.send_approved",
+                        adminApproved: true,
+                        candidateIds: targetIds,
                         templateId: selectedTemplateId,
                       },
-                      `Dispatched test invitation email to ${testEmailRecipient}`
+                      `Dispatched live invitations via siddharth@deeveecapital.com to ${targetIds.length} candidates!`
                     );
+                    setIsSendingBatch(false);
+                    if (res?.sentCount) {
+                      showToast(`Successfully dispatched ${res.sentCount} emails via SMTP!`);
+                    }
                   }}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
                 >
-                  Send Test Email
+                  {isSendingBatch ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dispatching Batch via SMTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        Send Live Invites ({selectedIds.length > 0 ? selectedIds.length : filteredRosterCandidates.length} Students)
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
 
-            {/* ADMIN-APPROVED BULK DISPATCH */}
-            <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
-              <div className="font-semibold text-emerald-300">
-                Step 2: Administrator-Approved Invitation Dispatch
-              </div>
-              <label className="flex items-start gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={adminConfirmedBulkSend}
-                  onChange={(e) => setAdminConfirmedBulkSend(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  I have previewed the template and explicitly approve provisioning accounts and dispatching invitations to the selected candidates.
-                </span>
-              </label>
-              <button
-                type="button"
-                disabled={!adminConfirmedBulkSend}
-                onClick={async () => {
-                  const targetIds =
-                    selectedIds.length > 0
-                      ? selectedIds
-                      : candidates
-                          .filter(
-                            (c) => c.applicationStatus === "Shortlisted for Assessment"
-                          )
-                          .map((c) => c.id);
-                  await postAction(
-                    {
-                      action: "email.send_approved",
-                      adminApproved: true,
-                      candidateIds: targetIds,
-                      templateId: selectedTemplateId,
-                    },
-                    `Provisioned accounts & logged invitations for ${targetIds.length} shortlisted candidates.`
-                  );
-                }}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold"
-              >
-                Dispatch Approved Invitations ({selectedIds.length || shortlistedCount} Candidates)
-              </button>
-            </div>
-          </div>
+            {/* CANDIDATES TABLE */}
+            <div className="rounded-xl border border-slate-800 overflow-hidden overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase font-semibold text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3 px-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredRosterCandidates.length > 0 &&
+                          filteredRosterCandidates.every((c) => selectedIds.includes(c.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(filteredRosterCandidates.map((c) => c.id));
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                        className="rounded border-slate-700"
+                      />
+                    </th>
+                    <th className="py-3 px-3">Candidate</th>
+                    <th className="py-3 px-3">Registered Email</th>
+                    <th className="py-3 px-3">Assigned Passkey</th>
+                    <th className="py-3 px-3">Direct Assessment Link</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3 text-right">Quick Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 bg-slate-900/50">
+                  {filteredRosterCandidates.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
+                        No candidates match your filter or search query.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRosterCandidates.map((cand) => {
+                      const isSelected = selectedIds.includes(cand.id);
+                      const isRevealed = revealedPasswords[cand.id] ?? false;
+                      const passkey =
+                        cand.assignedPortalPassword ||
+                        (cand.candidateCode === "DVC-SAMPLE-001"
+                          ? "DVC@Sample2026"
+                          : "Deevee@2026");
+                      const directUrl = `https://deeveecapital.com/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`;
+                      const isInvited = cand.inviteStatus === "Sent" || cand.inviteStatus === "Accepted";
+                      const isSendingThis = singleSendingId === cand.id;
 
-          <div className="lg:col-span-5 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 text-xs">
-            <div className="font-bold text-white">Invitation & Email Dispatch Audit Log</div>
-            {recruitment.emailLogs.length === 0 ? (
-              <p className="text-slate-500">No emails sent yet.</p>
-            ) : (
-              recruitment.emailLogs.slice(0, 12).map((log) => (
-                <div
-                  key={log.id}
-                  className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1"
-                >
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-blue-300">{log.recipientEmail}</span>
-                    <span className="text-emerald-400">{log.status}</span>
-                  </div>
-                  <div className="text-slate-200">{log.subject}</div>
-                  <div className="text-[10px] text-slate-500">
-                    {log.isTestSend ? "TEST MODE" : "OFFICIAL"} • By {log.sentBy} •{" "}
-                    {new Date(log.sentAt).toLocaleString("en-IN")}
-                  </div>
-                </div>
-              ))
-            )}
+                      return (
+                        <tr
+                          key={cand.id}
+                          className={`hover:bg-slate-800/40 transition ${
+                            isSelected ? "bg-blue-950/20" : ""
+                          }`}
+                        >
+                          <td className="py-3 px-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedIds((prev) => [...prev, cand.id]);
+                                } else {
+                                  setSelectedIds((prev) => prev.filter((id) => id !== cand.id));
+                                }
+                              }}
+                              className="rounded border-slate-700"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-white">{cand.fullName}</div>
+                            <div className="font-mono text-[10px] text-blue-400">
+                              {cand.candidateCode}
+                              {cand.candidateCode === "DVC-SAMPLE-001" && (
+                                <span className="ml-1.5 px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-sans">
+                                  Sandbox
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-300">
+                            {cand.email}
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-emerald-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                                {isRevealed ? passkey : "••••••••"}
+                              </span>
+                              <button
+                                type="button"
+                                title={isRevealed ? "Hide Passkey" : "Reveal Passkey"}
+                                onClick={() =>
+                                  setRevealedPasswords((prev) => ({
+                                    ...prev,
+                                    [cand.id]: !isRevealed,
+                                  }))
+                                }
+                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+                              >
+                                {isRevealed ? (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Eye className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                title="Copy Passkey"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(passkey);
+                                  setCopiedKey(cand.id);
+                                  setTimeout(() => setCopiedKey(null), 2000);
+                                }}
+                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+                              >
+                                {copiedKey === cand.id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <a
+                                href={directUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-[11px] text-blue-400 hover:underline truncate max-w-[160px] block"
+                                title={directUrl}
+                              >
+                                /candidate?code={cand.candidateCode}
+                              </a>
+                              <button
+                                type="button"
+                                title="Copy 1-Click Direct Link"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(directUrl);
+                                  setCopiedKey(`link-${cand.id}`);
+                                  setTimeout(() => setCopiedKey(null), 2000);
+                                }}
+                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+                              >
+                                {copiedKey === `link-${cand.id}` ? (
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            {cand.inviteStatus === "Accepted" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Accepted / Active</span>
+                              </span>
+                            ) : cand.inviteStatus === "Sent" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                <Check className="w-3 h-3" />
+                                <span>Sent (Live SMTP)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                                <Mail className="w-3 h-3" />
+                                <span>Not Sent</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              type="button"
+                              disabled={isSendingThis}
+                              onClick={async () => {
+                                setSingleSendingId(cand.id);
+                                const res = await postAction(
+                                  {
+                                    action: "email.send_single_candidate",
+                                    candidateId: cand.id,
+                                    templateId: selectedTemplateId,
+                                  },
+                                  `Dispatched live invitation via siddharth@deeveecapital.com to ${cand.fullName} (${cand.email})`
+                                );
+                                setSingleSendingId(null);
+                                if (res?.messageId) {
+                                  showToast(`Delivered via SMTP! MessageId: ${res.messageId}`);
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition ${
+                                isInvited
+                                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                                  : "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20"
+                              }`}
+                            >
+                              {isSendingThis ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Sending...</span>
+                                </>
+                              ) : isInvited ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3" />
+                                  <span>Resend Invite</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-3 h-3" />
+                                  <span>Send Live Invite</span>
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

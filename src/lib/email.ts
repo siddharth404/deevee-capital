@@ -295,3 +295,236 @@ Deevee Capital (https://deeveecapital.com)
   console.log(`[Email] Recipients: ${recipients.join(", ")} | Attachments: ${data.attachments?.length || 0}`);
   return { success: true, mode: "logged_only" };
 }
+
+export interface RecruitmentAssessmentEmailData {
+  to: string;
+  subject: string;
+  candidateName: string;
+  candidateCode: string;
+  candidateEmail: string;
+  password?: string;
+  directLink: string;
+  sampleTestLink?: string;
+  portalInviteUrl?: string;
+  deadline?: string;
+  rawBodyText?: string;
+  isTestSend?: boolean;
+}
+
+export async function sendRecruitmentAssessmentEmail(data: RecruitmentAssessmentEmailData): Promise<{
+  success: boolean;
+  mode: "smtp" | "logged_only";
+  messageId?: string;
+  error?: string;
+}> {
+  const transporter = createSmtpTransporter();
+  const fromAddress =
+    process.env.SMTP_FROM ||
+    `"Siddharth Kaushik (Deevee Capital)" <siddharth@deeveecapital.com>`;
+
+  const directLink = data.directLink || "https://deeveecapital.com/candidate";
+  const sampleTestLink =
+    data.sampleTestLink ||
+    "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com";
+  const password = data.password || "Deevee@2026";
+  const deadline = data.deadline || "Within 48 hours of receipt";
+
+  const textContent =
+    data.rawBodyText ||
+    `
+Dear ${data.candidateName},
+
+Thank you for your interest in the Investment Research & Startup Sourcing Intern role at Deevee Capital.
+
+Your application (${data.candidateCode}) has been shortlisted to complete Stage 1B: The 45-Minute Proctored AI Interview & Virtual Startup Data Room Assessment.
+
+============================================================
+YOUR CANDIDATE ACCESS CREDENTIALS
+============================================================
+Candidate ID (Username): ${data.candidateCode}
+Registered Email:        ${data.candidateEmail}
+Portal Password/Passkey: ${password}
+Direct 1-Click Link:     ${directLink}
+
+============================================================
+PRACTICE / SAMPLE TEST SANDBOX (RECOMMENDED BEFORE STARTING)
+============================================================
+If you wish to test your camera, microphone, and screen share in advance, you may access the sandbox here:
+${sampleTestLink}
+(Sandbox Credentials: Username: DVC-SAMPLE-001 | Password: DVC@Sample2026)
+
+============================================================
+MANDATORY TECHNICAL & PROCTORING GUIDELINES
+============================================================
+1. LAPTOP OR DESKTOP COMPUTER ONLY: Mobile devices and tablets are strictly blocked by the portal.
+2. CONTINUOUS HARDWARE PROCTORING: Webcam video, microphone audio, and Entire Screen sharing are mandatory.
+3. SANCTUARY ANTI-CHEAT: Locked fullscreen mode; tab switching and external clipboard copy-paste (Ctrl+V) are disabled.
+4. ASSESSMENT DURATION: 45 Minutes timed.
+
+Access Your Assessment:
+${directLink}
+
+Deadline: ${deadline}
+
+Warm regards,
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+siddharth@deeveecapital.com
+https://deeveecapital.com
+`.trim();
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${data.subject}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#070B14; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#E2E8F0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#070B14; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width:620px; background-color:#0D1527; border:1px solid #1E293B; border-radius:16px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+          
+          <!-- HEADER -->
+          <tr>
+            <td style="padding:28px 32px 20px 32px; background:linear-gradient(180deg, #101B33 0%, #0D1527 100%); border-bottom:1px solid #1E293B;">
+              <table role="presentation" width="100%">
+                <tr>
+                  <td>
+                    <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#38BDF8;">
+                      Deevee Capital &bull; Investment OS
+                    </div>
+                    <h1 style="margin:6px 0 0 0; font-size:20px; font-weight:700; color:#FFFFFF;">
+                      Investment Research Internship Assessment
+                    </h1>
+                  </td>
+                  <td align="right" style="vertical-align:top;">
+                    <span style="display:inline-block; padding:4px 10px; background-color:#1E293B; border:1px solid #334155; border-radius:20px; font-size:11px; font-weight:600; color:#94A3B8;">
+                      45 Mins Timed
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:28px 32px; font-size:14px; line-height:1.6; color:#CBD5E1;">
+              <p style="margin-top:0;">Dear <strong style="color:#FFFFFF;">${data.candidateName}</strong>,</p>
+              
+              <p>
+                Thank you for applying for the <strong>Investment Research & Startup Sourcing Intern</strong> role at Deevee Capital.
+                Your profile has been shortlisted to complete Stage 1B: the <strong>45-Minute Proctored AI Interview & Virtual Startup Data Room Simulation</strong>.
+              </p>
+
+              <!-- CREDENTIALS BOX -->
+              <div style="margin:24px 0; padding:20px; background-color:#070B14; border:1px solid #2563EB; border-radius:12px;">
+                <div style="font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#60A5FA; margin-bottom:12px;">
+                  Your Secure Candidate Credentials
+                </div>
+                <table role="presentation" width="100%" style="font-size:13px; line-height:1.8;">
+                  <tr>
+                    <td style="color:#94A3B8; width:170px;">Candidate ID (Username):</td>
+                    <td style="color:#FFFFFF; font-family:monospace; font-weight:700; font-size:14px;">${data.candidateCode}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Registered Email:</td>
+                    <td style="color:#FFFFFF; font-family:monospace;">${data.candidateEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Portal Password / Passkey:</td>
+                    <td style="color:#FCD34D; font-family:monospace; font-weight:700; font-size:14px; letter-spacing:0.5px;">${password}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- MAIN CTA BUTTON -->
+              <div style="text-align:center; margin:28px 0;">
+                <a href="${directLink}" target="_blank" style="display:inline-block; padding:14px 32px; background-color:#2563EB; color:#FFFFFF; font-weight:700; font-size:14px; text-decoration:none; border-radius:10px; box-shadow:0 4px 14px rgba(37,99,235,0.4);">
+                  Launch 45-Minute Proctored Assessment &rarr;
+                </a>
+                <div style="font-size:11px; color:#64748B; margin-top:8px;">
+                  Direct 1-click auto-authentication link
+                </div>
+              </div>
+
+              <!-- SAMPLE TEST SANDBOX CALLOUT -->
+              <div style="margin:24px 0; padding:16px; background-color:#0A1224; border:1px solid #1E293B; border-radius:10px;">
+                <div style="font-size:12px; font-weight:600; color:#38BDF8; margin-bottom:6px;">
+                  🧪 Optional: Practice in Sample Sandbox Mode
+                </div>
+                <p style="margin:0 0 10px 0; font-size:12px; color:#94A3B8;">
+                  Test your camera, microphone, and screen share before starting your official timed evaluation:
+                </p>
+                <a href="${sampleTestLink}" target="_blank" style="display:inline-block; font-size:12px; color:#60A5FA; font-weight:600; text-decoration:none;">
+                  Open Sandbox Practice Mode &rarr;
+                </a>
+              </div>
+
+              <!-- GUIDELINES -->
+              <div style="margin-top:24px; padding-top:20px; border-top:1px solid #1E293B;">
+                <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:#94A3B8; letter-spacing:0.8px; margin-bottom:8px;">
+                  Mandatory Hardware & Proctoring Rules:
+                </div>
+                <ul style="margin:0; padding-left:18px; font-size:12px; color:#94A3B8; line-height:1.7;">
+                  <li><strong>Laptop or Desktop Computer Only:</strong> Mobile phones and tablets are blocked.</li>
+                  <li><strong>Active Camera, Microphone & Screen Share:</strong> Required throughout all 3 phases.</li>
+                  <li><strong>Sanctuary Anti-Cheat Mode:</strong> Locked fullscreen; external clipboard paste is blocked; tab switching will lower your integrity score.</li>
+                  <li><strong>Submission Window:</strong> ${deadline}.</li>
+                </ul>
+              </div>
+
+              <!-- SIGNATURE -->
+              <div style="margin-top:32px; padding-top:20px; border-top:1px solid #1E293B; font-size:13px; color:#94A3B8;">
+                <strong style="color:#FFFFFF;">Siddharth Kaushik</strong><br/>
+                Managing Partner &bull; Deevee Capital<br/>
+                <a href="mailto:siddharth@deeveecapital.com" style="color:#38BDF8; text-decoration:none;">siddharth@deeveecapital.com</a> &bull;
+                <a href="https://deeveecapital.com" style="color:#38BDF8; text-decoration:none;">deeveecapital.com</a>
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`.trim();
+
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: data.to,
+        replyTo: "siddharth@deeveecapital.com",
+        subject: data.subject,
+        text: textContent,
+        html: htmlContent,
+      });
+
+      console.log(`[Email] Recruitment assessment email sent via SMTP to ${data.to} (MessageId: ${info.messageId})`);
+      return {
+        success: true,
+        mode: "smtp",
+        messageId: info.messageId,
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[Email] SMTP delivery error to ${data.to}:`, errMsg);
+      return {
+        success: false,
+        mode: "smtp",
+        error: errMsg,
+      };
+    }
+  }
+
+  console.log(`[Email] SMTP transporter unavailable. Logged dispatch to ${data.to}.`);
+  return {
+    success: true,
+    mode: "logged_only",
+  };
+}
