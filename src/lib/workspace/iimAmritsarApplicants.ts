@@ -2465,6 +2465,168 @@ export function generateCandidateRandomPassword(candidateCode: string, email: st
   return `DVC@${u1}${l1}${d1}${u2}${l2}${d2}`;
 }
 
+/**
+ * Dedicated isolated sample candidate profile for sandbox preview, demonstration,
+ * and testing of the Proctored AI Interview & Virtual Data Room Simulation.
+ * COMPLETELY SEPARATED from all 79 real IIM Amritsar candidates (especially Shrey Mishra, DVC-IIMA-063).
+ */
+export function createDedicatedSampleCandidate(): CandidateRecord {
+  const now = "2026-11-06T00:00:00.000Z";
+  return {
+    id: "cand-sample-demo",
+    candidateCode: "DVC-SAMPLE-001",
+    serialNo: 999,
+    fullName: "Sample Candidate (Demo Sandbox)",
+    email: "sample.candidate@deeveecapital.com",
+    institution: "Deevee Capital Assessment Sandbox",
+    cohortProgram: "MBA (Sandbox Cohort)",
+    gender: "Unspecified",
+    classXPercentage: 88.5,
+    classXIIPercentage: 86.0,
+    ugDegree: "B.Com. Hons.",
+    ugSpecialisation: "Accounting & Finance",
+    ugPercentage: 78.5,
+    internships: [
+      { designation: "Strategy Intern", organization: "At Litti King" },
+      { designation: "Financial Analyst", organization: "Margin Sentiment Advisorys" },
+    ],
+    internshipSummary: "Strategy Intern @ At Litti King | Financial Analyst @ Margin Sentiment Advisorys",
+    totalWorkExMonths: 13,
+    workExperiences: [
+      { designation: "Tax Specialist", organization: "Vialto Partners", durationMonths: 6 },
+      { designation: "Associate Consultant", organization: "Nation With Namo", durationMonths: 7 },
+    ],
+    previousOrganisations: [
+      "At Litti King",
+      "Margin Sentiment Advisorys",
+      "Vialto Partners",
+      "Nation With Namo",
+    ],
+    certifications: "NISM (Research Analyst), Mckinsey Forward, PE & VC (Coursera), CA Foundation",
+    achievements: "2nd Place — Bankruptcy Revival Competition; 3rd Place — Bidding Wars Case Challenge",
+    otherQualifications: "Financial Modeling & Business Valuation",
+    technicalSkills: "Excel, Python, Financial Modeling, Market Sizing, Cohort Retention",
+    startupResearchExperience: "Experienced analyzing startup unit economics in Quick Commerce, EV fleets, and Fintech.",
+    marketResearchExperience: "Extensive primary customer interviews and secondary RoC financial analysis.",
+    hasSubstantiveResearchExperience: true,
+    originalRowPayload: {
+      Name: "Sample Candidate (Demo Sandbox)",
+      "Email address": "sample.candidate@deeveecapital.com",
+    },
+    currentStage: "Stage 1B: AI Interview & Startup Simulation",
+    applicationStatus: "Shortlisted for Assessment",
+    assessmentStatus: "Invited",
+    assignedReviewerId: "user-siddharth",
+    assignedReviewerName: "Siddharth Kaushik",
+    stage1ProfileBreakdown: {
+      researchExperienceScore: 26,
+      startupCommercialExposureScore: 18,
+      analyticalTechnicalToolkitScore: 18,
+      ownershipInitiativeScore: 16,
+      communicationAcademicContextScore: 9,
+      totalScore: 87,
+      rationale: [
+        "Dedicated Demo Candidate for sandbox evaluation",
+        "Strong startup exposure across EV fleets and fintech unit economics",
+      ],
+      hasSubstantiveResearch: true,
+      hasStartupOrFounderExposure: true,
+    },
+    profileScore: 87,
+    stage2AptitudeScore: null,
+    stage3SourcingScore: null,
+    stage4CaseMemoScore: null,
+    stage5InterviewScore: null,
+    competencyScores: {
+      researchAptitude: 85,
+      startupDiscoverySourcing: 80,
+      marketBusinessAnalysis: 85,
+      financialCommercialUnderstanding: 85,
+      criticalThinkingRisk: 80,
+      communicationDocumentation: 85,
+      interviewOwnership: 80,
+    },
+    finalWeightedScore: 83,
+    manualScoreOverride: null,
+    manualOverrideReason: null,
+    reviewerDisagreementFlag: false,
+    reviewerEvaluations: [],
+    reviewerComments: [],
+    accountProvisioned: true,
+    passwordConfigured: true,
+    assignedPortalPassword: "DVC@Sample2026",
+    inviteStatus: "Accepted",
+    inviteSentAt: now,
+    inviteAcceptedAt: now,
+    lastCommunicationAt: null,
+    assignedAssessmentIds: [],
+    assessmentDeadlineAt: null,
+    activityTimeline: [
+      {
+        id: "act-sample-ready",
+        action: "candidate.sample_initialized",
+        summary: "Dedicated sample assessment account provisioned for demonstration",
+        actorName: "Sandbox Manager",
+        timestamp: now,
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Ensures that real candidate records (especially Shrey Mishra, DVC-IIMA-063)
+ * are NEVER corrupted by demo test sessions, and guarantees the dedicated
+ * sample sandbox candidate (DVC-SAMPLE-001) exists.
+ */
+export function sanitizeRecruitmentStateIsolation(state: RecruitmentModuleState): void {
+  if (!state || !Array.isArray(state.candidates)) return;
+
+  // 1. Ensure dedicated sample candidate exists
+  const hasSample = state.candidates.some(
+    (c) => c.candidateCode === "DVC-SAMPLE-001" || c.id === "cand-sample-demo"
+  );
+  if (!hasSample) {
+    state.candidates.push(createDedicatedSampleCandidate());
+  }
+
+  // 2. Protect and sanitize real candidate Shrey Mishra (DVC-IIMA-063)
+  const realShrey = state.candidates.find((c) => c.candidateCode === "DVC-IIMA-063");
+  if (realShrey) {
+    // If real Shrey got tainted with demo stage/status while having 0 real non-demo sessions, reset him cleanly
+    const hasRealNonDemoSession =
+      Array.isArray(state.aiInterviewSessions) &&
+      state.aiInterviewSessions.some(
+        (s) => s.candidateId === realShrey.id && !s.id.startsWith("demo-")
+      );
+
+    if (!hasRealNonDemoSession && realShrey.currentStage === "Stage 1B: AI Interview & Startup Simulation") {
+      realShrey.currentStage = "Stage 1: Profile Screening";
+      realShrey.applicationStatus = "Shortlisted for Assessment";
+      realShrey.assessmentStatus = "Not Assigned";
+      realShrey.aiInterviewScore = null;
+      realShrey.proctoringIntegrityScore = null;
+      realShrey.proctoringIntegrityStatus = undefined;
+    }
+  }
+
+  // 3. Move any demo session erroneously attached to DVC-IIMA-063 to DVC-SAMPLE-001
+  if (Array.isArray(state.aiInterviewSessions)) {
+    const sampleCand =
+      state.candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
+      createDedicatedSampleCandidate();
+    state.aiInterviewSessions.forEach((s) => {
+      if (s.candidateCode === "DVC-IIMA-063" && s.id.startsWith("demo-")) {
+        s.candidateId = sampleCand.id;
+        s.candidateCode = sampleCand.candidateCode;
+        s.candidateName = sampleCand.fullName;
+        s.candidateEmail = sampleCand.email;
+      }
+    });
+  }
+}
+
 export function buildCandidatesFromWorkbookRows(
   rows: Array<Record<string, string>>,
   shortlistThreshold = 48
@@ -3309,7 +3471,10 @@ export function buildInitialRecruitmentState(): RecruitmentModuleState {
 
   return {
     settings,
-    candidates: buildCandidatesFromWorkbookRows(RAW_IIM_AMRITSAR_WORKBOOK_ROWS, 48),
+    candidates: [
+      ...buildCandidatesFromWorkbookRows(RAW_IIM_AMRITSAR_WORKBOOK_ROWS, 48),
+      createDedicatedSampleCandidate(),
+    ],
     questions: DEFAULT_ASSESSMENT_QUESTIONS,
     submissions: [],
     aiInterviewSessions: [],

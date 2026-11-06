@@ -438,14 +438,14 @@ export default function RecruitmentModuleViews({
 
             <div className="flex flex-wrap items-center gap-2.5">
               <a
-                href="/candidate?sample=1&code=DVC-IIMA-063&email=shreym.mba12@iimamritsar.ac.in"
+                href="/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"
                 target="_blank"
                 rel="noreferrer"
                 className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
-                title="Open candidate portal in always-ready sample mode"
+                title="Open candidate portal in sandbox sample mode (isolated from real applicants)"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Open Live AI Interview Portal (/candidate)</span>
+                <span>Open Sample AI Interview Portal (/candidate)</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
 
@@ -464,16 +464,14 @@ export default function RecruitmentModuleViews({
                 disabled={busyAction !== ""}
                 onClick={async () => {
                   const targetCand =
-                    candidates.find((c) => c.candidateCode === "DVC-IIMA-063") ||
-                    selectedCandidate ||
-                    candidates[0];
-                  if (!targetCand) return;
+                    candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
+                    candidates.find((c) => c.id === "cand-sample-demo");
                   const res = await postAction(
                     {
                       action: "ai_interview.simulate_demo_candidate",
-                      candidateId: targetCand.id,
+                      candidateId: targetCand?.id || "cand-sample-demo",
                     },
-                    `Simulated full Proctored AI Interview + Startup Data Room Task for ${targetCand.fullName} (${targetCand.candidateCode})`
+                    `Simulated full Proctored AI Interview + Startup Data Room Task for ${targetCand?.fullName || "Sample Candidate"} (${targetCand?.candidateCode || "DVC-SAMPLE-001"})`
                   );
                   if (res?.session) {
                     setSelectedSessionId(res.session.id);
@@ -1716,11 +1714,11 @@ export default function RecruitmentModuleViews({
 
               <div className="flex items-center gap-2">
                 <a
-                  href="/candidate?sample=1&code=DVC-IIMA-063&email=shreym.mba12@iimamritsar.ac.in"
+                  href="/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5"
-                  title="Open candidate portal in always-ready sample mode"
+                  title="Open candidate portal in sandbox sample mode (isolated from real applicants)"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   <span>Preview Candidate Experience (Sample Mode)</span>
@@ -1937,21 +1935,20 @@ export default function RecruitmentModuleViews({
                 No Completed AI Interview Sessions Yet
               </h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Click below to simulate a complete 45-minute AI Interview + Startup Virtual Data Room submission for Shrey Mishra (`DVC-IIMA-063`) or open `/candidate` to take one live.
+                Click below to simulate a complete 45-minute AI Interview + Startup Virtual Data Room submission for Sample Candidate (`DVC-SAMPLE-001`) or open `/candidate?sample=1` to take one live.
               </p>
               <button
                 type="button"
                 onClick={async () => {
                   const target =
-                    candidates.find((c) => c.candidateCode === "DVC-IIMA-063") ||
-                    candidates[0];
-                  if (!target) return;
+                    candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
+                    candidates.find((c) => c.id === "cand-sample-demo");
                   const res = await postAction(
                     {
                       action: "ai_interview.simulate_demo_candidate",
-                      candidateId: target.id,
+                      candidateId: target?.id || "cand-sample-demo",
                     },
-                    `Generated complete AI Interview & Startup Task dossier for ${target.fullName}`
+                    `Generated complete AI Interview & Startup Task dossier for Sample Candidate (DVC-SAMPLE-001)`
                   );
                   if (res?.session) setSelectedSessionId(res.session.id);
                 }}

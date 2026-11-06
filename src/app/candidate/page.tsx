@@ -150,24 +150,10 @@ interface CandidatePortalProfile {
 
 const SAMPLE_TEST_CANDIDATES = [
   {
-    code: "DVC-IIMA-063",
-    name: "Shrey Mishra (13m WorkEx • Strategy Intern @ Litti King • EV/Fintech Research)",
-    email: "shreym.mba12@iimamritsar.ac.in",
-  },
-  {
-    code: "DVC-IIMA-062",
-    name: "Shivam Rawat (B.Sc Math • 20 Consumer Interviews Nescafé vs Bru)",
-    email: "shivamr.mbahr06@iimamritsar.ac.in",
-  },
-  {
-    code: "DVC-IIMA-001",
-    name: "Aaditya Thakkar (B.Pharm • Lenovo & Medisha Intern • Equity Research)",
-    email: "aadityat.mba12@iimamritsar.ac.in",
-  },
-  {
-    code: "DVC-IIMA-061",
-    name: "Shashwati Mahant (BBA Finance • NISM Research Analyst • No Prior Startup Research)",
-    email: "shashwatim.mba12@iimamritsar.ac.in",
+    code: "DVC-SAMPLE-001",
+    name: "Sample Candidate (Demo Sandbox • 13m WorkEx • Strategy Intern @ Litti King • EV/Fintech)",
+    email: "sample.candidate@deeveecapital.com",
+    password: "DVC@Sample2026",
   },
 ];
 
@@ -1480,32 +1466,34 @@ function CandidatePortalInner() {
                 </div>
               </div>
 
-              {/* QUICK PROFILE SELECTOR FOR DEMO / TESTING */}
-              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    Quick-Load Applicant Profile (Sample Mode)
-                  </span>
+              {/* QUICK PROFILE SELECTOR FOR DEMO / TESTING (ONLY VISIBLE IN SAMPLE MODE) */}
+              {sampleParam && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Quick-Load Applicant Profile (Sandbox Sample Mode)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {SAMPLE_TEST_CANDIDATES.map((sc) => (
+                      <button
+                        key={sc.code}
+                        type="button"
+                        onClick={() => {
+                          setLoginEmail(sc.email);
+                          setLoginCode(sc.code);
+                          setLoginPassword(sc.password || "DVC@Sample2026");
+                        }}
+                        className="text-left p-2.5 rounded-lg bg-slate-950/80 hover:bg-blue-950/40 border border-slate-800 hover:border-blue-500/40 transition text-xs"
+                      >
+                        <div className="font-mono text-[11px] text-blue-400">{sc.code}</div>
+                        <div className="font-medium text-slate-200 truncate">{sc.name}</div>
+                        <div className="text-[11px] text-slate-400 truncate">{sc.email}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {SAMPLE_TEST_CANDIDATES.map((sc) => (
-                    <button
-                      key={sc.code}
-                      type="button"
-                      onClick={() => {
-                        setLoginEmail(sc.email);
-                        setLoginCode(sc.code);
-                        setLoginPassword("Deevee@2026");
-                      }}
-                      className="text-left p-2.5 rounded-lg bg-slate-950/80 hover:bg-blue-950/40 border border-slate-800 hover:border-blue-500/40 transition text-xs"
-                    >
-                      <div className="font-mono text-[11px] text-blue-400">{sc.code}</div>
-                      <div className="font-medium text-slate-200 truncate">{sc.name}</div>
-                      <div className="text-[11px] text-slate-400 truncate">{sc.email}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="lg:col-span-5">

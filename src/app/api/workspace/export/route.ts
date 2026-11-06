@@ -56,7 +56,9 @@ export async function GET(request: NextRequest) {
       await saveWorkspaceDb(db);
     }
 
-    const candidates = db.recruitment.candidates;
+    const candidates = db.recruitment.candidates.filter(
+      (c) => c.candidateCode !== "DVC-SAMPLE-001" && c.id !== "cand-sample-demo"
+    );
 
     const headers = [
       "S. No.",

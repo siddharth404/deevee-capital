@@ -20,7 +20,9 @@ import {
 import {
   buildInitialRecruitmentState,
   calculateWeightedCompetencyScore,
+  createDedicatedSampleCandidate,
   generateCandidateRandomPassword,
+  sanitizeRecruitmentStateIsolation,
 } from "@/lib/workspace/iimAmritsarApplicants";
 import {
   computeProctoringIntegrity,
@@ -204,6 +206,7 @@ export async function GET(request: NextRequest) {
     await saveWorkspaceDb(db);
   }
   const rec = db.recruitment;
+  sanitizeRecruitmentStateIsolation(rec);
 
   const { searchParams } = new URL(request.url);
   const inviteToken = searchParams.get("token");
@@ -240,10 +243,15 @@ export async function GET(request: NextRequest) {
       cand = rec.candidates.find((c) => c.inviteToken === inviteToken);
     }
   } else if (isSampleOrReset) {
-    // Default sample candidate when visiting /candidate?test=1 or /candidate?sample=1
+    // Dedicated isolated sample sandbox candidate (DVC-SAMPLE-001) for /candidate?sample=1 or /candidate?test=1
+    // COMPLETELY SEPARATE from all 79 real IIM Amritsar candidates (including Shrey Mishra DVC-IIMA-063)
     cand =
-      rec.candidates.find((c) => c.candidateCode === "DVC-IIMA-063") ||
-      rec.candidates[0];
+      rec.candidates.find(
+        (c) => c.candidateCode === "DVC-SAMPLE-001" || c.id === "cand-sample-demo"
+      ) || createDedicatedSampleCandidate();
+    if (!rec.candidates.some((c) => c.id === cand!.id)) {
+      rec.candidates.push(cand);
+    }
   } else if (sessionCandidateId) {
     cand = rec.candidates.find((c) => c.id === sessionCandidateId);
   }
@@ -262,8 +270,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // If ?sample=1 or ?test=1 or ?reset=1 is in the URL, always clear any completed session so it is 100% fresh and ready to take again!
-  if (isSampleOrReset && Array.isArray(rec.aiInterviewSessions)) {
+  // If ?sample=1 or ?test=1 or ?reset=1 is in the URL, ONLY clear session for the dedicated sample sandbox candidate!
+  // NEVER clear real applicant sessions (such as Shrey Mishra DVC-IIMA-063)!
+  if (
+    isSampleOrReset &&
+    cand &&
+    (cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo") &&
+    Array.isArray(rec.aiInterviewSessions)
+  ) {
     const hadSession = rec.aiInterviewSessions.some((s) => s.candidateId === cand!.id);
     if (hadSession) {
       rec.aiInterviewSessions = rec.aiInterviewSessions.filter(
@@ -339,6 +353,7 @@ export async function POST(request: NextRequest) {
     db.recruitment = buildInitialRecruitmentState();
   }
   const rec = db.recruitment;
+  sanitizeRecruitmentStateIsolation(rec);
 
   let body: Record<string, unknown> = {};
   try {
@@ -423,7 +438,18 @@ export async function POST(request: NextRequest) {
     const password = String(body.password || "");
     const candidateCode = String(body.candidateCode || "").trim().toUpperCase();
 
-    const cand = rec.candidates.find((c) => c.email.toLowerCase() === email);
+    let cand = rec.candidates.find(
+      (c) =>
+        c.email.toLowerCase() === email ||
+        (candidateCode && c.candidateCode.toUpperCase() === candidateCode)
+    );
+    if (
+      !cand &&
+      (email === "sample.candidate@deeveecapital.com" || candidateCode === "DVC-SAMPLE-001")
+    ) {
+      cand = createDedicatedSampleCandidate();
+      rec.candidates.push(cand);
+    }
     if (!cand) {
       return NextResponse.json(
         { error: "Applicant email not found in the cohort database." },
@@ -433,7 +459,9 @@ export async function POST(request: NextRequest) {
 
     const expectedRandomPassword =
       cand.assignedPortalPassword ||
-      generateCandidateRandomPassword(cand.candidateCode, cand.email);
+      (cand.candidateCode === "DVC-SAMPLE-001"
+        ? "DVC@Sample2026"
+        : generateCandidateRandomPassword(cand.candidateCode, cand.email));
 
     let isPasswordValid = false;
     // 1. Match unique assigned random password generated for this applicant

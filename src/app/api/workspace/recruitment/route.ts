@@ -29,9 +29,11 @@ import {
   buildInitialRecruitmentState,
   calculateWeightedCompetencyScore,
   computeStage1ProfileBreakdown,
+  createDedicatedSampleCandidate,
   generateCandidatesExcelXml,
   parseApplicantXlsxBuffer,
   RAW_IIM_AMRITSAR_WORKBOOK_ROWS,
+  sanitizeRecruitmentStateIsolation,
 } from "@/lib/workspace/iimAmritsarApplicants";
 import {
   createInitialProctoringTelemetry,
@@ -277,6 +279,7 @@ export async function POST(request: NextRequest) {
     db.recruitment = buildInitialRecruitmentState();
   }
   const rec = db.recruitment;
+  sanitizeRecruitmentStateIsolation(rec);
 
   let body: Record<string, unknown> = {};
   try {
@@ -784,10 +787,18 @@ export async function POST(request: NextRequest) {
     action === "ai_interview.simulate_demo_candidate" ||
     action === "ai_interview.simulate"
   ) {
-    const candidateId = String(body.candidateId || rec.candidates[0]?.id || "");
-    const cand = rec.candidates.find((c) => c.id === candidateId);
+    const candidateId = String(body.candidateId || "");
+    let cand = rec.candidates.find(
+      (c) => c.id === candidateId || c.candidateCode === candidateId
+    );
     if (!cand) {
-      return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
+      cand =
+        rec.candidates.find(
+          (c) => c.candidateCode === "DVC-SAMPLE-001" || c.id === "cand-sample-demo"
+        ) || createDedicatedSampleCandidate();
+      if (!rec.candidates.some((c) => c.id === cand!.id)) {
+        rec.candidates.push(cand);
+      }
     }
 
     const caseSets =
