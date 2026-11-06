@@ -558,6 +558,24 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "ai_interview.start") {
+    if (
+      cand.candidateCode !== "DVC-SAMPLE-001" &&
+      cand.assessmentDeadlineAt &&
+      new Date(cand.assessmentDeadlineAt).getTime() < Date.now()
+    ) {
+      return NextResponse.json(
+        {
+          error: `The assessment window for ${cand.fullName} expired on ${new Date(
+            cand.assessmentDeadlineAt
+          ).toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}. Please contact siddharth@deeveecapital.com to request an assessment deadline extension.`,
+        },
+        { status: 403 }
+      );
+    }
+
     if (!Array.isArray(rec.aiInterviewSessions)) {
       rec.aiInterviewSessions = [];
     }

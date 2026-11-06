@@ -311,6 +311,14 @@ export interface RecruitmentAssessmentEmailData {
   isTestSend?: boolean;
 }
 
+export function sanitizeOriginLink(url?: string, fallback: string = "https://deeveecapital.com"): string {
+  if (!url) return fallback;
+  return url
+    .replace(/https?:\/\/0\.0\.0\.0(?::\d+)?/gi, "https://deeveecapital.com")
+    .replace(/https?:\/\/127\.0\.0\.1(?::\d+)?/gi, "https://deeveecapital.com")
+    .replace(/https?:\/\/localhost(?::\d+)?/gi, "https://deeveecapital.com");
+}
+
 export async function sendRecruitmentAssessmentEmail(data: RecruitmentAssessmentEmailData): Promise<{
   success: boolean;
   mode: "smtp" | "logged_only";
@@ -322,15 +330,17 @@ export async function sendRecruitmentAssessmentEmail(data: RecruitmentAssessment
     process.env.SMTP_FROM ||
     `"Siddharth Kaushik (Deevee Capital)" <siddharth@deeveecapital.com>`;
 
-  const directLink = data.directLink || "https://deeveecapital.com/candidate";
-  const sampleTestLink =
-    data.sampleTestLink ||
-    "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com";
+  const directLink = sanitizeOriginLink(data.directLink, "https://deeveecapital.com/candidate");
+  const sampleTestLink = sanitizeOriginLink(
+    data.sampleTestLink,
+    "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"
+  );
   const password = data.password || "Deevee@2026";
   const deadline = data.deadline || "Within 48 hours of receipt";
 
+  const rawCleaned = data.rawBodyText ? sanitizeOriginLink(data.rawBodyText) : null;
   const textContent =
-    data.rawBodyText ||
+    rawCleaned ||
     `
 Dear ${data.candidateName},
 
@@ -523,6 +533,196 @@ https://deeveecapital.com
   }
 
   console.log(`[Email] SMTP transporter unavailable. Logged dispatch to ${data.to}.`);
+  return {
+    success: true,
+    mode: "logged_only",
+  };
+}
+
+export interface WorkspaceTeamInvitationEmailData {
+  to: string;
+  name: string;
+  role: string;
+  accessScope?: string;
+  inviteCode: string;
+  invitedByName?: string;
+  workspaceUrl?: string;
+  expiresAt?: string;
+}
+
+export async function sendWorkspaceTeamInvitationEmail(data: WorkspaceTeamInvitationEmailData): Promise<{
+  success: boolean;
+  mode: "smtp" | "logged_only";
+  messageId?: string;
+  error?: string;
+}> {
+  const transporter = createSmtpTransporter();
+  const fromAddress =
+    process.env.SMTP_FROM ||
+    `"Siddharth Kaushik (Deevee Capital)" <siddharth@deeveecapital.com>`;
+
+  const baseUrl = sanitizeOriginLink(data.workspaceUrl, "https://deeveecapital.com/workspace");
+  const workspaceInviteUrl = `${baseUrl.split("?")[0]}?invite=${encodeURIComponent(data.inviteCode)}`;
+  const expiresAtFormatted = data.expiresAt
+    ? new Date(data.expiresAt).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "7 days from issuance";
+
+  const textContent = `
+Dear ${data.name},
+
+${data.invitedByName || "Siddharth Kaushik"} has invited you to join the Deevee Capital Internal Investment Management Platform as ${data.role}.
+
+============================================================
+YOUR WORKSPACE ONBOARDING INVITATION
+============================================================
+• Invited Member:       ${data.name}
+• Assigned Role:        ${data.role}
+• Access Scope:         ${data.accessScope === "all" ? "All Startup Records" : "Assigned Records Only"}
+• One-Time Invite Code: ${data.inviteCode}
+• Invitation Expiration: ${expiresAtFormatted}
+
+============================================================
+HOW TO ACTIVATE YOUR ACCESS
+============================================================
+1. Open the secure registration link:
+   ${workspaceInviteUrl}
+2. Your Invite Code (${data.inviteCode}) and registered email (${data.to}) will be pre-filled.
+3. Set your private account password to activate your workspace access.
+
+Direct Onboarding Link:
+${workspaceInviteUrl}
+
+Warm regards,
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+siddharth@deeveecapital.com
+https://deeveecapital.com
+`.trim();
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Invitation to Deevee Capital Workspace</title>
+</head>
+<body style="margin:0; padding:0; background-color:#070B14; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#E2E8F0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#070B14; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width:600px; background-color:#0D1527; border:1px solid #1E293B; border-radius:16px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+          
+          <!-- HEADER -->
+          <tr>
+            <td style="padding:28px 32px 20px 32px; background:linear-gradient(180deg, #101B33 0%, #0D1527 100%); border-bottom:1px solid #1E293B;">
+              <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#38BDF8;">
+                Deevee Capital &bull; Investment OS
+              </div>
+              <h1 style="margin:6px 0 0 0; font-size:20px; font-weight:700; color:#FFFFFF;">
+                Team Member Workspace Invitation
+              </h1>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:28px 32px; font-size:14px; line-height:1.6; color:#CBD5E1;">
+              <p style="margin-top:0;">Dear <strong style="color:#FFFFFF;">${data.name}</strong>,</p>
+              
+              <p>
+                <strong>${data.invitedByName || "Siddharth Kaushik"}</strong> has invited you to join the internal Deevee Capital investment platform as <strong>${data.role}</strong>.
+              </p>
+
+              <!-- CREDENTIALS BOX -->
+              <div style="margin:24px 0; padding:20px; background-color:#070B14; border:1px solid #C6AD7A; border-radius:12px;">
+                <div style="font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#C6AD7A; margin-bottom:12px;">
+                  Your Secure Invitation Details
+                </div>
+                <table role="presentation" width="100%" style="font-size:13px; line-height:1.8;">
+                  <tr>
+                    <td style="color:#94A3B8; width:150px;">Invited Member:</td>
+                    <td style="color:#FFFFFF; font-weight:600;">${data.name}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Work Email:</td>
+                    <td style="color:#FFFFFF; font-family:monospace;">${data.to}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Role & Scope:</td>
+                    <td style="color:#38BDF8; font-weight:600;">${data.role} (${data.accessScope === "all" ? "All Records" : "Assigned Records"})</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Invite Code:</td>
+                    <td style="color:#FCD34D; font-family:monospace; font-weight:700; font-size:15px; letter-spacing:1px;">${data.inviteCode}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Validity:</td>
+                    <td style="color:#94A3B8;">Valid until ${expiresAtFormatted}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- MAIN CTA BUTTON -->
+              <div style="text-align:center; margin:28px 0;">
+                <a href="${workspaceInviteUrl}" target="_blank" style="display:inline-block; padding:14px 32px; background-color:#C6AD7A; color:#070B14; font-weight:700; font-size:14px; text-decoration:none; border-radius:10px; box-shadow:0 4px 14px rgba(198,173,122,0.4);">
+                  Accept Invitation & Set Up Account &rarr;
+                </a>
+                <div style="font-size:11px; color:#64748B; margin-top:8px;">
+                  Opens pre-filled registration screen on deeveecapital.com
+                </div>
+              </div>
+
+              <!-- SIGNATURE -->
+              <div style="margin-top:32px; padding-top:20px; border-top:1px solid #1E293B; font-size:13px; color:#94A3B8;">
+                <strong style="color:#FFFFFF;">Siddharth Kaushik</strong><br/>
+                Managing Partner &bull; Deevee Capital<br/>
+                <a href="mailto:siddharth@deeveecapital.com" style="color:#38BDF8; text-decoration:none;">siddharth@deeveecapital.com</a> &bull;
+                <a href="https://deeveecapital.com" style="color:#38BDF8; text-decoration:none;">deeveecapital.com</a>
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`.trim();
+
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: data.to,
+        replyTo: "siddharth@deeveecapital.com",
+        subject: `Invitation: Join Deevee Capital Workspace as ${data.role} (${data.inviteCode})`,
+        text: textContent,
+        html: htmlContent,
+      });
+
+      console.log(`[Email] Workspace team invitation sent via SMTP to ${data.to} (MessageId: ${info.messageId})`);
+      return {
+        success: true,
+        mode: "smtp",
+        messageId: info.messageId,
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[Email] Workspace invitation delivery error to ${data.to}:`, errMsg);
+      return {
+        success: false,
+        mode: "smtp",
+        error: errMsg,
+      };
+    }
+  }
+
+  console.log(`[Email] SMTP transporter unavailable. Logged workspace invite to ${data.to}.`);
   return {
     success: true,
     mode: "logged_only",

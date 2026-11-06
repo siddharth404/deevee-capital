@@ -1026,27 +1026,40 @@ export function TeamAndRolesView({
   const [selectedRoleForMatrix, setSelectedRoleForMatrix] =
     useState<UserRole>("RESEARCH_ANALYST");
 
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState("");
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
+
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "user.invite",
-        name: inviteName,
-        email: inviteEmail,
-        role: inviteRole,
-        accessScope: inviteScope,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok && data.invitation) {
-      setLastCreatedCode(data.invitation.inviteCode);
-      setInviteName("");
-      setInviteEmail("");
-      await onRefresh();
+    setIsSubmittingInvite(true);
+    setInviteSuccessMsg("");
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "user.invite",
+          name: inviteName,
+          email: inviteEmail,
+          role: inviteRole,
+          accessScope: inviteScope,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.invitation) {
+        setLastCreatedCode(data.invitation.inviteCode);
+        setInviteSuccessMsg(`Live invitation email dispatched via siddharth@deeveecapital.com to ${inviteEmail} (Code: ${data.invitation.inviteCode})!`);
+        setInviteName("");
+        setInviteEmail("");
+        await onRefresh();
+      } else {
+        alert(data.message || "Failed to create invitation.");
+      }
+    } finally {
+      setIsSubmittingInvite(false);
     }
   };
 
@@ -1069,15 +1082,19 @@ export function TeamAndRolesView({
           onSubmit={handleInvite}
           className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-xs"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-mono uppercase tracking-wider text-slate-500">
               + Invite New Team Member or Research Intern (Workflow E)
             </h3>
-            {lastCreatedCode && (
+            {inviteSuccessMsg ? (
               <span className="px-3 py-1 rounded bg-emerald-100 text-emerald-900 font-mono font-semibold">
-                Invitation Created! Code: {lastCreatedCode} (Use on Sign-In screen &rarr; Accept Invitation)
+                {inviteSuccessMsg}
               </span>
-            )}
+            ) : lastCreatedCode ? (
+              <span className="px-3 py-1 rounded bg-emerald-100 text-emerald-900 font-mono font-semibold">
+                Invitation Created &amp; Emailed! Code: {lastCreatedCode}
+              </span>
+            ) : null}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <input
@@ -1119,9 +1136,10 @@ export function TeamAndRolesView({
             </select>
             <button
               type="submit"
-              className="px-4 py-2 rounded bg-[#101A24] text-white font-semibold"
+              disabled={isSubmittingInvite}
+              className="px-4 py-2 rounded bg-[#101A24] hover:bg-[#1E2D3D] disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-1.5"
             >
-              Send Invitation
+              {isSubmittingInvite ? "Sending Email..." : "Send Invitation"}
             </button>
           </div>
         </form>
@@ -1130,26 +1148,59 @@ export function TeamAndRolesView({
       {/* Pending Invitations */}
       {dbData.invitations.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-2.5 text-xs">
-          <h3 className="font-mono uppercase tracking-wider text-slate-400 text-[10px]">
-            Pending &amp; Recent Invitations ({dbData.invitations.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-mono uppercase tracking-wider text-slate-400 text-[10px]">
+              Pending &amp; Recent Invitations ({dbData.invitations.length})
+            </h3>
+            <span className="text-[10px] text-slate-400">
+              Live email sender: siddharth@deeveecapital.com
+            </span>
+          </div>
           {dbData.invitations.map((inv) => (
             <div
               key={inv.id}
-              className="p-3 rounded border border-slate-200 bg-slate-50 flex items-center justify-between gap-3"
+              className="p-3 rounded border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3"
             >
               <div>
                 <strong className="text-slate-900">{inv.name}</strong> ({inv.email})
-                &bull; Role: <strong>{inv.role}</strong> &bull; Scope:{" "}
-                {inv.accessScope}
+                &bull; Role: <strong className="text-blue-900">{inv.role}</strong> &bull; Scope:{" "}
+                <span className="font-mono text-slate-600">{inv.accessScope}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded bg-[#101A24] text-[#C6AD7A] font-mono">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded bg-[#101A24] text-[#C6AD7A] font-mono font-semibold">
                   Code: {inv.inviteCode}
                 </span>
-                <span className="uppercase font-mono text-[10px] text-slate-500">
+                <span className="uppercase font-mono text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-700">
                   {inv.status}
                 </span>
+                {inv.status === "pending" && (
+                  <button
+                    type="button"
+                    disabled={resendingInviteId === inv.id}
+                    onClick={async () => {
+                      setResendingInviteId(inv.id);
+                      const res = await fetch("/api/workspace/state", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "user.resend_invite",
+                          invitationId: inv.id,
+                        }),
+                      });
+                      const data = await res.json();
+                      setResendingInviteId(null);
+                      if (res.ok) {
+                        setInviteSuccessMsg(`Resent live invitation email via siddharth@deeveecapital.com to ${inv.email}!`);
+                        setTimeout(() => setInviteSuccessMsg(""), 5000);
+                      } else {
+                        alert(data.message || "Failed to resend invitation email.");
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium text-[11px]"
+                  >
+                    {resendingInviteId === inv.id ? "Sending..." : "Resend Email"}
+                  </button>
+                )}
               </div>
             </div>
           ))}

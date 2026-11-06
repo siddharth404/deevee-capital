@@ -97,6 +97,26 @@ function verifyCandidateInviteToken(token: string): {
   }
 }
 
+function getCanonicalOrigin(request?: NextRequest): string {
+  const forwardedHost = request?.headers.get("x-forwarded-host") || "";
+  const host = request?.headers.get("host") || "";
+  const candidateHost = forwardedHost || host;
+
+  if (
+    candidateHost &&
+    !candidateHost.includes("0.0.0.0") &&
+    !candidateHost.includes("localhost") &&
+    !candidateHost.includes("127.0.0.1") &&
+    !candidateHost.startsWith("8080") &&
+    !candidateHost.endsWith(":8080")
+  ) {
+    const proto = request?.headers.get("x-forwarded-proto") || "https";
+    return `${proto}://${candidateHost}`.replace(/\/$/, "");
+  }
+
+  return (process.env.NEXT_PUBLIC_APP_URL || "https://deeveecapital.com").replace(/\/$/, "");
+}
+
 function renderEmailTemplate(
   rawText: string,
   candidate: CandidateRecord,
@@ -104,8 +124,15 @@ function renderEmailTemplate(
 ): string {
   const token =
     candidate.inviteToken || createCandidateInviteToken(candidate.id, candidate.email);
-  const directLink = `${originUrl}/candidate?code=${encodeURIComponent(candidate.candidateCode)}&email=${encodeURIComponent(candidate.email)}`;
-  const sampleTestLink = `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`;
+  const safeOrigin =
+    originUrl &&
+    !originUrl.includes("0.0.0.0") &&
+    !originUrl.includes("127.0.0.1") &&
+    !originUrl.includes(":8080")
+      ? originUrl.replace(/\/$/, "")
+      : "https://deeveecapital.com";
+  const directLink = `${safeOrigin}/candidate?code=${encodeURIComponent(candidate.candidateCode)}&email=${encodeURIComponent(candidate.email)}`;
+  const sampleTestLink = `${safeOrigin}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`;
   const password =
     candidate.assignedPortalPassword ||
     (candidate.candidateCode === "DVC-SAMPLE-001"
@@ -328,7 +355,7 @@ export async function POST(request: NextRequest) {
 
   const action = String(body.action || "");
   const now = new Date().toISOString();
-  const originUrl = new URL(request.url).origin;
+  const originUrl = getCanonicalOrigin(request);
 
   // ==========================================================================
   // 1. EXCEL WORKBOOK UPLOAD PREVIEW & IMPORT
@@ -648,6 +675,51 @@ export async function POST(request: NextRequest) {
   }
 
   // ==========================================================================
+  // CANDIDATE ASSESSMENT DEADLINE CONTROLLER (EXTENDABLE BY ADMIN)
+  // ==========================================================================
+  if (action === "candidate.update_deadline") {
+    const rawDeadline = String(body.deadlineAt || "").trim();
+    if (!rawDeadline) {
+      return NextResponse.json({ error: "Deadline timestamp is required." }, { status: 400 });
+    }
+    const deadlineDate = new Date(rawDeadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return NextResponse.json({ error: "Invalid date format for deadline." }, { status: 400 });
+    }
+    const deadlineIso = deadlineDate.toISOString();
+    const candidateIds = Array.isArray(body.candidateIds)
+      ? (body.candidateIds as string[])
+      : [];
+    const isCohortWide = body.allCandidates === true || candidateIds.length === 0;
+
+    let updatedCount = 0;
+    for (const cand of rec.candidates) {
+      if (!isCohortWide && !candidateIds.includes(cand.id) && !candidateIds.includes(cand.candidateCode)) {
+        continue;
+      }
+
+      const prevDeadline = cand.assessmentDeadlineAt;
+      cand.assessmentDeadlineAt = deadlineIso;
+      cand.updatedAt = now;
+
+      cand.activityTimeline.unshift({
+        id: `act-dl-${Date.now()}-${updatedCount}`,
+        action: "assessment.deadline_extended",
+        summary: `Assessment deadline updated to ${new Date(deadlineIso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by ${user.name}${prevDeadline ? ` (was: ${new Date(prevDeadline).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })})` : ""}`,
+        actorName: user.name,
+        timestamp: now,
+      });
+      updatedCount += 1;
+    }
+
+    // Save default in settings as well so subsequent candidate invitations inherit it
+    rec.settings.defaultAssessmentDeadlineAt = deadlineIso;
+
+    await saveWorkspaceDb(db);
+    return NextResponse.json({ ok: true, updatedCount, deadlineAt: deadlineIso, recruitment: rec });
+  }
+
+  // ==========================================================================
   // 4. SAFE EMAIL INVITATION PREVIEW, TEST SEND & ADMIN-APPROVED SEND
   // ==========================================================================
   if (action === "email.preview") {
@@ -825,9 +897,11 @@ export async function POST(request: NextRequest) {
     if (cand.currentStage === "Stage 1: Profile Screening") {
       cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
     }
-    cand.assessmentDeadlineAt = new Date(
-      Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000
-    ).toISOString();
+    if (!cand.assessmentDeadlineAt || new Date(cand.assessmentDeadlineAt).getTime() < Date.now()) {
+      cand.assessmentDeadlineAt =
+        rec.settings.defaultAssessmentDeadlineAt ||
+        new Date(Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000).toISOString();
+    }
 
     const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
     const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
@@ -932,9 +1006,11 @@ export async function POST(request: NextRequest) {
       if (cand.currentStage === "Stage 1: Profile Screening") {
         cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
       }
-      cand.assessmentDeadlineAt = new Date(
-        Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000
-      ).toISOString();
+      if (!cand.assessmentDeadlineAt || new Date(cand.assessmentDeadlineAt).getTime() < Date.now()) {
+        cand.assessmentDeadlineAt =
+          rec.settings.defaultAssessmentDeadlineAt ||
+          new Date(Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000).toISOString();
+      }
 
       const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
       const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);

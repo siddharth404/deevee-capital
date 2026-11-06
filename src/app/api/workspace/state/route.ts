@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { sendWorkspaceTeamInvitationEmail } from "@/lib/email";
 import { getFirebaseConfigurationStatus } from "@/lib/firebase/admin";
 import {
   requireAuthenticatedUser,
@@ -1816,6 +1817,18 @@ export async function POST(request: NextRequest) {
 
       db.invitations.unshift(invitation);
 
+      // Dispatch live email invitation from siddharth@deeveecapital.com
+      const emailResult = await sendWorkspaceTeamInvitationEmail({
+        to: email,
+        name,
+        role,
+        accessScope,
+        inviteCode,
+        invitedByName: user.name,
+        workspaceUrl: "https://deeveecapital.com/workspace",
+        expiresAt: invitation.expiresAt,
+      });
+
       await recordAuditAndActivity(db, {
         actorId: user.id,
         actorName: user.name,
@@ -1824,12 +1837,51 @@ export async function POST(request: NextRequest) {
         entityType: "user",
         entityId: invitation.id,
         entityName: `${name} (${email})`,
-        summary: `${user.name} invited ${name} (${email}) as ${role} with access scope '${accessScope}' [Code: ${inviteCode}]`,
+        summary: `${user.name} invited ${name} (${email}) as ${role} with access scope '${accessScope}' [Code: ${inviteCode}] (Email: ${emailResult.mode === "smtp" ? "Sent via Live SMTP" : "Logged"})`,
         newValue: `${role} (${accessScope})`,
       });
 
       await saveWorkspaceDb(db);
-      return NextResponse.json({ ok: true, invitation });
+      return NextResponse.json({ ok: true, invitation, emailResult });
+    }
+
+    if (action === "user.resend_invite") {
+      const invitationId = String(body.invitationId || "");
+      const inviteCode = String(body.inviteCode || "");
+      const inv = db.invitations.find(
+        (i) => i.id === invitationId || i.inviteCode === inviteCode
+      );
+
+      if (!inv) {
+        return NextResponse.json({ ok: false, message: "Invitation not found." }, { status: 404 });
+      }
+
+      // Dispatch real email via SMTP
+      const emailResult = await sendWorkspaceTeamInvitationEmail({
+        to: inv.email,
+        name: inv.name,
+        role: inv.role,
+        accessScope: inv.accessScope,
+        inviteCode: inv.inviteCode,
+        invitedByName: user.name,
+        workspaceUrl: "https://deeveecapital.com/workspace",
+        expiresAt: inv.expiresAt,
+      });
+
+      await recordAuditAndActivity(db, {
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "user.invite_resent",
+        entityType: "user",
+        entityId: inv.id,
+        entityName: `${inv.name} (${inv.email})`,
+        summary: `${user.name} resent workspace invitation to ${inv.name} (${inv.email}) [Code: ${inv.inviteCode}] (Email: ${emailResult.mode === "smtp" ? "Sent via Live SMTP" : "Logged"})`,
+        newValue: inv.inviteCode,
+      });
+
+      await saveWorkspaceDb(db);
+      return NextResponse.json({ ok: true, invitation: inv, emailResult });
     }
 
     if (action === "user.update_role_or_status") {

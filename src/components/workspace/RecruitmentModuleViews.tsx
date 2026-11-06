@@ -7,6 +7,7 @@ import {
   BarChart3,
   BookOpen,
   Briefcase,
+  Calendar,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -177,6 +178,18 @@ export default function RecruitmentModuleViews({
   const [rosterSearch, setRosterSearch] = useState<string>("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  const [customDeadlineInput, setCustomDeadlineInput] = useState<string>("");
+  const [isUpdatingDeadline, setIsUpdatingDeadline] = useState<boolean>(false);
+  const [individualDeadlineModalCand, setIndividualDeadlineModalCand] = useState<CandidateRecord | null>(null);
+  const [individualDeadlineInput, setIndividualDeadlineInput] = useState<string>("");
+
+  const cleanCandidateUrl = (url?: string) => {
+    if (!url) return "https://deeveecapital.com/candidate";
+    return url
+      .replace(/https?:\/\/0\.0\.0\.0(?::\d+)?/gi, "https://deeveecapital.com")
+      .replace(/https?:\/\/127\.0\.0\.1(?::\d+)?/gi, "https://deeveecapital.com")
+      .replace(/https?:\/\/localhost(?::\d+)?/gi, "https://deeveecapital.com");
+  };
 
   // Stage 5 Interview State
   const [intMeetingLink, setIntMeetingLink] = useState<string>(
@@ -2882,23 +2895,23 @@ export default function RecruitmentModuleViews({
                       <div className="sm:col-span-2">
                         <span className="text-slate-400">Direct 1-Click Link: </span>
                         <a
-                          href={emailPreviewData.directLink || emailPreviewData.setupLink}
+                          href={cleanCandidateUrl(emailPreviewData.directLink || emailPreviewData.setupLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-400 hover:underline font-mono break-all"
                         >
-                          {emailPreviewData.directLink || emailPreviewData.setupLink}
+                          {cleanCandidateUrl(emailPreviewData.directLink || emailPreviewData.setupLink)}
                         </a>
                       </div>
                       <div className="sm:col-span-2">
                         <span className="text-slate-400">Sample Sandbox Mode: </span>
                         <a
-                          href={emailPreviewData.sampleTestLink || "/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"}
+                          href={cleanCandidateUrl(emailPreviewData.sampleTestLink || "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com")}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-cyan-400 hover:underline font-mono break-all"
                         >
-                          {emailPreviewData.sampleTestLink || "/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"}
+                          {cleanCandidateUrl(emailPreviewData.sampleTestLink || "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com")}
                         </a>
                       </div>
                     </div>
@@ -3024,6 +3037,132 @@ export default function RecruitmentModuleViews({
                   })}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ASSESSMENT DEADLINE & WINDOW EXTENSION CONTROLLER */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                    <span>Assessment Window & Deadline Manager</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                      Cohort Control
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Set a cohort-wide completion deadline or extend deadlines for individual candidates. Preserved automatically across invitations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400">Active Cohort Deadline:</span>
+                <span className="px-3 py-1 rounded-lg bg-slate-950 text-indigo-300 border border-indigo-500/30 font-mono font-semibold">
+                  {recruitment.settings?.defaultAssessmentDeadlineAt
+                    ? new Date(recruitment.settings.defaultAssessmentDeadlineAt).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Rolling 48 Hours"}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+              <div className="md:col-span-5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1">
+                  Quick Presets:
+                </span>
+                {[
+                  { label: "+24 Hours", hours: 24 },
+                  { label: "+48 Hours", hours: 48 },
+                  { label: "+72 Hours", hours: 72 },
+                  { label: "+7 Days", hours: 168 },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(Date.now() + preset.hours * 3600 * 1000);
+                      const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                      setCustomDeadlineInput(localIso);
+                    }}
+                    className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="md:col-span-7 flex flex-wrap sm:flex-nowrap items-center gap-2 justify-end">
+                <div className="relative flex-1 sm:w-60">
+                  <input
+                    type="datetime-local"
+                    value={customDeadlineInput}
+                    onChange={(e) => setCustomDeadlineInput(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-indigo-500 outline-none"
+                    placeholder="YYYY-MM-DDTHH:mm"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!customDeadlineInput || isUpdatingDeadline || selectedIds.length === 0}
+                  onClick={async () => {
+                    if (!customDeadlineInput) return;
+                    setIsUpdatingDeadline(true);
+                    const deadlineIso = new Date(customDeadlineInput).toISOString();
+                    await postAction(
+                      {
+                        action: "candidate.update_deadline",
+                        candidateIds: selectedIds,
+                        deadlineAt: deadlineIso,
+                      },
+                      `Extended assessment deadline for ${selectedIds.length} selected candidates to ${new Date(deadlineIso).toLocaleString("en-IN")}`
+                    );
+                    setIsUpdatingDeadline(false);
+                    showToast(`Updated deadline for ${selectedIds.length} selected candidates!`);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 whitespace-nowrap transition"
+                >
+                  {isUpdatingDeadline ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Clock className="w-3 h-3" />
+                  )}
+                  <span>Apply to Selected ({selectedIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!customDeadlineInput || isUpdatingDeadline}
+                  onClick={async () => {
+                    if (!customDeadlineInput) return;
+                    setIsUpdatingDeadline(true);
+                    const deadlineIso = new Date(customDeadlineInput).toISOString();
+                    await postAction(
+                      {
+                        action: "candidate.update_deadline",
+                        deadlineAt: deadlineIso,
+                      },
+                      `Extended cohort assessment deadline to ${new Date(deadlineIso).toLocaleString("en-IN")}`
+                    );
+                    setIsUpdatingDeadline(false);
+                    showToast(`Updated cohort-wide deadline to ${new Date(deadlineIso).toLocaleString("en-IN")}!`);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-semibold text-xs flex items-center gap-1.5 border border-slate-700 whitespace-nowrap transition"
+                >
+                  <Calendar className="w-3 h-3 text-indigo-400" />
+                  <span>Apply Cohort-Wide ({candidates.length})</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3230,6 +3369,7 @@ export default function RecruitmentModuleViews({
                     <th className="py-3 px-3">Registered Email</th>
                     <th className="py-3 px-3">Assigned Passkey</th>
                     <th className="py-3 px-3">Direct Assessment Link</th>
+                    <th className="py-3 px-3">Assessment Deadline</th>
                     <th className="py-3 px-3">Status</th>
                     <th className="py-3 px-3 text-right">Quick Action</th>
                   </tr>
@@ -3237,7 +3377,7 @@ export default function RecruitmentModuleViews({
                 <tbody className="divide-y divide-slate-800/60 bg-slate-900/50">
                   {filteredRosterCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-500">
+                      <td colSpan={8} className="py-8 text-center text-slate-500">
                         No candidates match your filter or search query.
                       </td>
                     </tr>
@@ -3359,6 +3499,65 @@ export default function RecruitmentModuleViews({
                             </div>
                           </td>
                           <td className="py-3 px-3">
+                            {cand.assessmentDeadlineAt ? (
+                              <div className="space-y-0.5">
+                                <div className="text-[11px] font-mono text-slate-200">
+                                  {new Date(cand.assessmentDeadlineAt).toLocaleString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {new Date(cand.assessmentDeadlineAt).getTime() < Date.now() ? (
+                                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300 text-[9px] font-semibold border border-rose-500/30">
+                                      Expired
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 text-[9px] font-semibold border border-emerald-500/30">
+                                      Active
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIndividualDeadlineModalCand(cand);
+                                      const baseDate = new Date(cand.assessmentDeadlineAt!);
+                                      const localIso = new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000)
+                                        .toISOString()
+                                        .slice(0, 16);
+                                      setIndividualDeadlineInput(localIso);
+                                    }}
+                                    className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium"
+                                  >
+                                    Extend 📅
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <span className="text-slate-400 text-[11px]">Rolling 48h</span>
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIndividualDeadlineModalCand(cand);
+                                      const baseDate = new Date(Date.now() + 48 * 3600 * 1000);
+                                      const localIso = new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000)
+                                        .toISOString()
+                                        .slice(0, 16);
+                                      setIndividualDeadlineInput(localIso);
+                                    }}
+                                    className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-medium"
+                                  >
+                                    Set Deadline 📅
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
                             {cand.inviteStatus === "Accepted" ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                                 <CheckCircle2 className="w-3 h-3" />
@@ -3427,6 +3626,143 @@ export default function RecruitmentModuleViews({
               </table>
             </div>
           </div>
+
+          {/* INDIVIDUAL CANDIDATE DEADLINE EXTENSION MODAL */}
+          {individualDeadlineModalCand && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        Extend Assessment Deadline
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        {individualDeadlineModalCand.fullName} ({individualDeadlineModalCand.candidateCode})
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIndividualDeadlineModalCand(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Candidate Email:</span>
+                    <span className="font-mono text-slate-200">{individualDeadlineModalCand.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Current Window Deadline:</span>
+                    <span className="font-mono text-indigo-300">
+                      {individualDeadlineModalCand.assessmentDeadlineAt
+                        ? new Date(individualDeadlineModalCand.assessmentDeadlineAt).toLocaleString("en-IN", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
+                        : "Rolling 48 Hours"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Assessment Status:</span>
+                    <span className="font-medium text-slate-200">{individualDeadlineModalCand.assessmentStatus}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Quick Extension Presets:
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: "+24 Hours", hours: 24 },
+                      { label: "+48 Hours", hours: 48 },
+                      { label: "+72 Hours", hours: 72 },
+                      { label: "+7 Days", hours: 168 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          const base =
+                            individualDeadlineModalCand.assessmentDeadlineAt &&
+                            new Date(individualDeadlineModalCand.assessmentDeadlineAt).getTime() > Date.now()
+                              ? new Date(individualDeadlineModalCand.assessmentDeadlineAt)
+                              : new Date();
+                          const d = new Date(base.getTime() + preset.hours * 3600 * 1000);
+                          const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                            .toISOString()
+                            .slice(0, 16);
+                          setIndividualDeadlineInput(localIso);
+                        }}
+                        className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition text-center"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    New Assessment Deadline (Date & Time):
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={individualDeadlineInput}
+                    onChange={(e) => setIndividualDeadlineInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-blue-500 outline-none"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Candidate will be permitted to access and submit their proctored assessment until this timestamp.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIndividualDeadlineModalCand(null)}
+                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!individualDeadlineInput || isUpdatingDeadline}
+                    onClick={async () => {
+                      if (!individualDeadlineInput) return;
+                      setIsUpdatingDeadline(true);
+                      const deadlineIso = new Date(individualDeadlineInput).toISOString();
+                      await postAction(
+                        {
+                          action: "candidate.update_deadline",
+                          candidateIds: [individualDeadlineModalCand.id],
+                          deadlineAt: deadlineIso,
+                        },
+                        `Extended assessment deadline for ${individualDeadlineModalCand.fullName} to ${new Date(deadlineIso).toLocaleString("en-IN")}`
+                      );
+                      setIsUpdatingDeadline(false);
+                      setIndividualDeadlineModalCand(null);
+                      showToast(`Extended deadline for ${individualDeadlineModalCand.fullName}!`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  >
+                    {isUpdatingDeadline ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Save & Extend Deadline</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

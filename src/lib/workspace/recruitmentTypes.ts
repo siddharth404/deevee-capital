@@ -562,6 +562,7 @@ export interface RecruitmentSettings {
   proctoringStrictMode?: boolean; // default true
   stage2TimeLimitMinutes: number; // default 35
   stage3WindowHours: number; // default 48
+  defaultAssessmentDeadlineAt?: string; // Global assessment deadline (extendable by admin)
   stage1ShortlistThreshold: number; // default 48
   overallShortlistThreshold: number; // default 70
   weights: RecruitmentScoringWeights;

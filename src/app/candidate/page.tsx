@@ -223,6 +223,13 @@ function CandidatePortalInner() {
   const screenShareStreamRef = useRef<MediaStream | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const isAssessmentDeadlinePassed = Boolean(
+    candidate &&
+      candidate.candidateCode !== "DVC-SAMPLE-001" &&
+      candidate.assessmentDeadlineAt &&
+      new Date(candidate.assessmentDeadlineAt).getTime() < Date.now()
+  );
+
   // Ensure dark background on body for proctoring immersion
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -1256,6 +1263,12 @@ function CandidatePortalInner() {
               <div className="text-[10px] text-blue-300 uppercase font-semibold">Applicant:</div>
               <div className="font-semibold text-white">{candidate.fullName} ({candidate.candidateCode})</div>
               <div className="text-slate-400 truncate text-[11px]">{candidate.email}</div>
+              {candidate.assessmentDeadlineAt && (
+                <div className={`pt-1 text-[11px] font-mono ${isAssessmentDeadlinePassed ? "text-rose-400 font-semibold" : "text-indigo-300"}`}>
+                  Deadline: {new Date(candidate.assessmentDeadlineAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                  {isAssessmentDeadlinePassed ? " (Expired)" : ""}
+                </div>
+              )}
             </div>
           )}
 
@@ -1666,6 +1679,20 @@ function CandidatePortalInner() {
                 <div className="text-right text-xs">
                   <div className="text-slate-400">Total Allotted Duration</div>
                   <div className="text-base font-bold text-white">45 Minutes (Proctored)</div>
+                  {candidate.assessmentDeadlineAt && (
+                    <div
+                      className={`text-[11px] font-mono mt-0.5 ${
+                        isAssessmentDeadlinePassed ? "text-rose-400 font-bold" : "text-indigo-300"
+                      }`}
+                    >
+                      Deadline:{" "}
+                      {new Date(candidate.assessmentDeadlineAt).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                      {isAssessmentDeadlinePassed && " (Expired)"}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1881,7 +1908,18 @@ function CandidatePortalInner() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-slate-800">
-                {!webcamActive || !micActive ? (
+                {isAssessmentDeadlinePassed ? (
+                  <div className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/80 border border-rose-700/80 px-3.5 py-2.5 rounded-xl">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>
+                      <strong>Assessment Window Expired:</strong> Your time window closed on{" "}
+                      {new Date(candidate.assessmentDeadlineAt!).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}. Please contact <strong className="text-white">siddharth@deeveecapital.com</strong> to request an assessment deadline extension.
+                    </span>
+                  </div>
+                ) : !webcamActive || !micActive ? (
                   <div className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/60 border border-rose-700/60 px-3.5 py-2 rounded-xl">
                     <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
                     <span>
@@ -1909,11 +1947,13 @@ function CandidatePortalInner() {
 
                 <button
                   type="button"
-                  disabled={!pledgeAccepted || !webcamActive || !micActive || !screenShareActive}
+                  disabled={isAssessmentDeadlinePassed || !pledgeAccepted || !webcamActive || !micActive || !screenShareActive}
                   onClick={handleStartProctoredSession}
                   className="py-3 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm shadow-lg transition flex items-center gap-2 shrink-0"
                   title={
-                    !webcamActive || !micActive
+                    isAssessmentDeadlinePassed
+                      ? "Assessment deadline has passed. Contact siddharth@deeveecapital.com for an extension."
+                      : !webcamActive || !micActive
                       ? "Camera and microphone must be enabled before you can start"
                       : !screenShareActive
                       ? "Screen share must be enabled before you can start"
@@ -1923,7 +1963,11 @@ function CandidatePortalInner() {
                   }
                 >
                   <Play className="w-4 h-4 fill-current" />
-                  <span>Enter Fullscreen & Start 45-Min AI Interview</span>
+                  <span>
+                    {isAssessmentDeadlinePassed
+                      ? "Assessment Window Expired"
+                      : "Enter Fullscreen & Start 45-Min AI Interview"}
+                  </span>
                 </button>
               </div>
             </div>
