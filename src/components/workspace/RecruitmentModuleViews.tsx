@@ -172,6 +172,7 @@ export default function RecruitmentModuleViews({
     currentUserEmail || "siddharth@deeveecapital.com"
   );
   const [adminConfirmedBulkSend, setAdminConfirmedBulkSend] = useState<boolean>(false);
+  const [skipAlreadyDelivered, setSkipAlreadyDelivered] = useState<boolean>(true);
   const [singleSendingId, setSingleSendingId] = useState<string | null>(null);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState<boolean>(false);
   const [isSendingBatch, setIsSendingBatch] = useState<boolean>(false);
@@ -4552,6 +4553,64 @@ export default function RecruitmentModuleViews({
                   <span>Confirm live email dispatch via siddharth@deeveecapital.com</span>
                 </label>
 
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={skipAlreadyDelivered}
+                    onChange={(e) => setSkipAlreadyDelivered(e.target.checked)}
+                    className="rounded border-slate-700 text-indigo-500 focus:ring-0"
+                  />
+                  <span>Skip already delivered candidates (no duplicates)</span>
+                </label>
+
+                {/* 1-CLICK DISPATCH LATEST INVITATIONS TO PENDING / FAILED CANDIDATES */}
+                <button
+                  type="button"
+                  disabled={!adminConfirmedBulkSend || isSendingBatch}
+                  onClick={async () => {
+                    const pendingCandidates = candidates.filter(
+                      (c) => c.inviteStatus !== "Sent"
+                    );
+                    const pendingIds = pendingCandidates.map((c) => c.id);
+
+                    if (pendingIds.length === 0) {
+                      showToast("All candidates have already received invitations successfully!");
+                      return;
+                    }
+
+                    setIsSendingBatch(true);
+                    const res = await postAction(
+                      {
+                        action: "email.send_approved",
+                        adminApproved: true,
+                        candidateIds: pendingIds,
+                        templateId: selectedTemplateId,
+                        skipAlreadySent: true,
+                      },
+                      `Dispatched latest invitations via siddharth@deeveecapital.com to ${pendingIds.length} pending/failed candidates!`
+                    );
+                    setIsSendingBatch(false);
+                    if (res?.sentCount) {
+                      showToast(`Successfully dispatched ${res.sentCount} latest invitations via SMTP!`);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  {isSendingBatch ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dispatching via SMTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        Send Latest Invites to Pending / Failed ({candidates.filter((c) => c.inviteStatus !== "Sent").length})
+                      </span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   disabled={!adminConfirmedBulkSend || isSendingBatch}
@@ -4573,6 +4632,7 @@ export default function RecruitmentModuleViews({
                         adminApproved: true,
                         candidateIds: targetIds,
                         templateId: selectedTemplateId,
+                        skipAlreadySent: skipAlreadyDelivered,
                       },
                       `Dispatched live invitations via siddharth@deeveecapital.com to ${targetIds.length} candidates!`
                     );
@@ -4592,7 +4652,7 @@ export default function RecruitmentModuleViews({
                     <>
                       <Send className="w-3.5 h-3.5" />
                       <span>
-                        Send Live Invites ({selectedIds.length > 0 ? selectedIds.length : filteredRosterCandidates.length} Students)
+                        Send Selected / Filtered ({selectedIds.length > 0 ? selectedIds.length : filteredRosterCandidates.length} Students)
                       </span>
                     </>
                   )}

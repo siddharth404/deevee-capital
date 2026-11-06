@@ -933,9 +933,6 @@ export async function POST(request: NextRequest) {
     if (!cand.inviteToken) {
       cand.inviteToken = createCandidateInviteToken(cand.id, cand.email);
     }
-    cand.inviteStatus = "Sent";
-    cand.inviteSentAt = now;
-    cand.lastCommunicationAt = now;
     if (cand.assessmentStatus === "Not Assigned") {
       cand.assessmentStatus = "Invited";
     }
@@ -973,6 +970,14 @@ export async function POST(request: NextRequest) {
           ? "Sent (SMTP)"
           : "Sent (Logged Sandbox)"
         : "Failed";
+
+    if (sendResult.success) {
+      cand.inviteStatus = "Sent";
+      cand.inviteSentAt = now;
+      cand.lastCommunicationAt = now;
+    } else {
+      cand.inviteStatus = "Failed";
+    }
 
     const logEntry: RecruitmentEmailLog = {
       id: `emlog-${Date.now()}`,
@@ -1030,8 +1035,15 @@ export async function POST(request: NextRequest) {
     let failedCount = 0;
     const errors: string[] = [];
 
+    const skipAlreadySent = body.skipAlreadySent !== false;
+    const forceResend = body.forceResend === true;
+
     for (const cand of rec.candidates) {
       if (!candidateIds.includes(cand.id)) continue;
+      if (skipAlreadySent && !forceResend && cand.inviteStatus === "Sent") {
+        // Skip candidates who have already successfully received their invitations
+        continue;
+      }
 
       cand.accountProvisioned = true;
       if (!cand.assignedPortalPassword) {
@@ -1044,9 +1056,6 @@ export async function POST(request: NextRequest) {
       if (!cand.inviteToken) {
         cand.inviteToken = createCandidateInviteToken(cand.id, cand.email);
       }
-      cand.inviteStatus = "Sent";
-      cand.inviteSentAt = now;
-      cand.lastCommunicationAt = now;
       if (cand.assessmentStatus === "Not Assigned") {
         cand.assessmentStatus = "Invited";
       }
@@ -1063,7 +1072,7 @@ export async function POST(request: NextRequest) {
       const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl, cand.assessmentDeadlineAt);
       const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl, cand.assessmentDeadlineAt);
 
-      // LIVE DISPATCH VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
+      // LIVE DISPATCH VIA POOLED SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
       const sendResult = await sendRecruitmentAssessmentEmail({
         to: cand.email,
         subject: renderedSubject,
@@ -1086,8 +1095,12 @@ export async function POST(request: NextRequest) {
           : "Failed";
 
       if (sendResult.success) {
+        cand.inviteStatus = "Sent";
+        cand.inviteSentAt = now;
+        cand.lastCommunicationAt = now;
         sentCount += 1;
       } else {
+        cand.inviteStatus = "Failed";
         failedCount += 1;
         errors.push(`${cand.email}: ${sendResult.error}`);
       }
@@ -1114,8 +1127,8 @@ export async function POST(request: NextRequest) {
         timestamp: now,
       });
 
-      // 200ms throttle between dispatches
-      await new Promise((r) => setTimeout(r, 200));
+      // 1200ms throttle between dispatches to maintain healthy SMTP connection pacing
+      await new Promise((r) => setTimeout(r, 1200));
     }
 
     await saveWorkspaceDb(db);

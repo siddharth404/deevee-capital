@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { Transporter } from "nodemailer";
 
 export interface PitchEmailAttachment {
   filename: string;
@@ -30,7 +30,9 @@ export const NOTIFICATION_RECIPIENTS = [
   "ravi@deeveecapital.com",
 ];
 
-function createSmtpTransporter() {
+let pooledTransporter: Transporter | null = null;
+
+export function getSmtpTransporter(forceRecreate = false): Transporter | null {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT) || 465;
   const user = process.env.SMTP_USER || process.env.EMAIL_USER;
@@ -40,15 +42,39 @@ function createSmtpTransporter() {
     return null;
   }
 
-  return nodemailer.createTransport({
+  if (pooledTransporter && !forceRecreate) {
+    return pooledTransporter;
+  }
+
+  if (forceRecreate && pooledTransporter) {
+    try {
+      pooledTransporter.close();
+    } catch {
+      // ignore
+    }
+    pooledTransporter = null;
+  }
+
+  pooledTransporter = nodemailer.createTransport({
+    pool: true,
     host,
     port,
     secure: port === 465, // true for 465, false for 587
+    maxConnections: 1,    // Single persistent TLS connection to eliminate repeated login attempts
+    maxMessages: 100,     // Stream up to 100 emails over one connection session
+    rateDelta: 1000,      // Socket-level throttle (1 message/sec)
+    rateLimit: 1,
     auth: {
       user,
       pass,
     },
   });
+
+  return pooledTransporter;
+}
+
+function createSmtpTransporter() {
+  return getSmtpTransporter();
 }
 
 export async function sendPitchNotificationEmail(data: PitchEmailData): Promise<{
@@ -460,6 +486,10 @@ https://deeveecapital.com
                     <td style="color:#94A3B8;">Portal Password / Passkey:</td>
                     <td style="color:#FCD34D; font-family:monospace; font-weight:700; font-size:14px; letter-spacing:0.5px;">${password}</td>
                   </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Submission Deadline:</td>
+                    <td style="color:#38BDF8; font-weight:700; font-size:13px;">${deadline}</td>
+                  </tr>
                 </table>
               </div>
 
@@ -495,7 +525,7 @@ https://deeveecapital.com
                   <li><strong>Laptop or Desktop Computer Only:</strong> Mobile phones and tablets are blocked.</li>
                   <li><strong>Active Camera, Microphone & Screen Share:</strong> Required throughout all 3 phases.</li>
                   <li><strong>Sanctuary Anti-Cheat Mode:</strong> Locked fullscreen; external clipboard paste is blocked; tab switching will lower your integrity score.</li>
-                  <li><strong>Submission Window:</strong> ${deadline}.</li>
+                  <li><strong>Submission Window / Deadline:</strong> ${deadline}.</li>
                 </ul>
               </div>
 
@@ -517,32 +547,46 @@ https://deeveecapital.com
 </html>
 `.trim();
 
-  if (transporter) {
-    try {
-      const info = await transporter.sendMail({
-        from: fromAddress,
-        to: data.to,
-        replyTo: "siddharth@deeveecapital.com",
-        subject: data.subject,
-        text: textContent,
-        html: htmlContent,
-      });
+  let activeTransporter = transporter;
+  if (activeTransporter) {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const info = await activeTransporter.sendMail({
+          from: fromAddress,
+          to: data.to,
+          replyTo: "siddharth@deeveecapital.com",
+          subject: data.subject,
+          text: textContent,
+          html: htmlContent,
+        });
 
-      console.log(`[Email] Recruitment assessment email sent via SMTP to ${data.to} (MessageId: ${info.messageId})`);
-      return {
-        success: true,
-        mode: "smtp",
-        messageId: info.messageId,
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[Email] SMTP delivery error to ${data.to}:`, errMsg);
-      return {
-        success: false,
-        mode: "smtp",
-        error: errMsg,
-      };
+        console.log(`[Email] Recruitment assessment email sent via SMTP to ${data.to} (MessageId: ${info.messageId}) [attempt ${attempt}]`);
+        return {
+          success: true,
+          mode: "smtp",
+          messageId: info.messageId,
+        };
+      } catch (err: unknown) {
+        lastErr = err;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Email] SMTP delivery attempt ${attempt} to ${data.to} failed: ${errMsg}`);
+        if (attempt < 2) {
+          // Pause and refresh pooled transporter on failure
+          await new Promise((r) => setTimeout(r, 3000));
+          activeTransporter = getSmtpTransporter(true);
+          if (!activeTransporter) break;
+        }
+      }
     }
+
+    const errMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    console.error(`[Email] SMTP delivery error to ${data.to}:`, errMsg);
+    return {
+      success: false,
+      mode: "smtp",
+      error: errMsg,
+    };
   }
 
   console.log(`[Email] SMTP transporter unavailable. Logged dispatch to ${data.to}.`);
