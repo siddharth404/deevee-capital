@@ -449,6 +449,16 @@ export default function RecruitmentModuleViews({
                 <ExternalLink className="w-3 h-3" />
               </a>
 
+              <a
+                href="/api/workspace/export?type=placement_credentials"
+                download="Deevee_Capital_Candidate_Credentials_Placement_List.csv"
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                title="Download complete Excel / CSV spreadsheet with all 79 candidate IDs, passwords, and links for Placement Committee"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Placement Credentials (.CSV)</span>
+              </a>
+
               <button
                 type="button"
                 disabled={busyAction !== ""}

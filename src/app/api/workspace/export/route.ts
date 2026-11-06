@@ -8,6 +8,7 @@ import {
   saveWorkspaceDb,
 } from "@/lib/workspace/db";
 import { canViewStartup, hasPermission } from "@/lib/workspace/permissions";
+import { buildInitialRecruitmentState } from "@/lib/workspace/iimAmritsarApplicants";
 import {
   ConfidentialityLevel,
   DocumentCategory,
@@ -33,7 +34,91 @@ export async function GET(request: NextRequest) {
   const exportType = searchParams.get("type") || "csv";
   const db = await getWorkspaceDb();
 
-  // 1. Permission-Gated CSV Export of Startups
+  // 1A. Permission-Gated CSV Export of Placement Committee Candidate Credentials
+  if (exportType === "placement_credentials" || exportType === "candidates_csv") {
+    if (!hasPermission(user, "data.export")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "forbidden",
+          message:
+            "Export Restricted: Your role does not have 'data.export' permission to export candidate credentials.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!db.recruitment || !db.recruitment.candidates?.length) {
+      db.recruitment = buildInitialRecruitmentState();
+      await saveWorkspaceDb(db);
+    }
+
+    const candidates = db.recruitment.candidates;
+
+    const headers = [
+      "S. No.",
+      "Candidate ID (Username)",
+      "Candidate Name",
+      "Email Address",
+      "Default Portal Password",
+      "Direct Assessment Link (Auto-Sign In)",
+      "Assessment Duration",
+      "UG Degree & Specialization",
+      "Work Experience (Months)",
+      "Prior Internship Summary",
+      "Allowed Device",
+      "Proctoring Requirements",
+      "Sanctuary Anti-Cheat Rules",
+    ];
+
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://deeveecapital.com";
+
+    const rows = candidates.map((c) => [
+      c.serialNo,
+      c.candidateCode,
+      c.fullName,
+      c.email,
+      "Deevee@2026",
+      `${baseUrl}/candidate?code=${c.candidateCode}&email=${encodeURIComponent(c.email)}`,
+      "45 Minutes",
+      c.ugSpecialisation ? `${c.ugDegree} (${c.ugSpecialisation})` : c.ugDegree,
+      c.totalWorkExMonths,
+      c.internshipSummary || "Fresher / Academic Projects",
+      "Laptop or Desktop Only (Mobile & Tablets Blocked)",
+      "Camera, Microphone, and Screen Sharing Mandatory",
+      "Fullscreen Lock; Tab Switching Logged; Clipboard Paste Blocked",
+    ]);
+
+    const csvContent =
+      "\uFEFF" +
+      [
+        headers.map(escapeCsvCell).join(","),
+        ...rows.map((r) => r.map(escapeCsvCell).join(",")),
+      ].join("\n");
+
+    await recordAuditAndActivity(db, {
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: "data.exported_csv",
+      entityType: "submission",
+      entityId: "placement-credentials-export",
+      entityName: `${candidates.length} candidates credentials`,
+      summary: `${user.name} exported ${candidates.length} candidate credentials for Placement Committee`,
+    });
+    await saveWorkspaceDb(db);
+
+    return new NextResponse(csvContent, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="Deevee_Capital_Candidate_Credentials_Placement_List_${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
+    });
+  }
+
+  // 1B. Permission-Gated CSV Export of Startups
   if (exportType === "csv") {
     if (!hasPermission(user, "data.export")) {
       return NextResponse.json(
