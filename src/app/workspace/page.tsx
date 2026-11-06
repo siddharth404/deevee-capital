@@ -39,6 +39,8 @@ import {
   ArrowUpRight,
   Lock,
   GraduationCap,
+  Menu,
+  X,
 } from "lucide-react";
 import { AuthScreen } from "@/components/workspace/AuthScreen";
 import {
@@ -90,6 +92,7 @@ function WorkspaceInner() {
 
   // Navigation & UI state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<string>(initialNav);
   const [selectedStartupId, setSelectedStartupId] = useState<string | null>(
     initialStartupId
@@ -434,13 +437,23 @@ function WorkspaceInner() {
 
   return (
     <div className="min-h-screen bg-[#F4F3EF] text-slate-900 flex">
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileDrawerOpen && (
+        <div
+          onClick={() => setMobileDrawerOpen(false)}
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm transition-opacity"
+        />
+      )}
+
       {/* ================================================================== */}
       {/* PERSISTENT COLLAPSIBLE LEFT SIDEBAR (Part 3.1)                     */}
       {/* ================================================================== */}
       <aside
-        className={`${
+        className={`fixed inset-y-0 left-0 z-50 md:static ${
+          mobileDrawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        } ${
           sidebarCollapsed ? "w-16" : "w-64"
-        } bg-[#101A24] text-[#F7F5F0] shrink-0 flex flex-col justify-between transition-all duration-200 border-r border-white/10`}
+        } bg-[#101A24] text-[#F7F5F0] shrink-0 flex flex-col justify-between transition-transform duration-200 border-r border-white/10 shadow-2xl md:shadow-none`}
       >
         <div>
           {/* Brand Header */}
@@ -460,18 +473,28 @@ function WorkspaceInner() {
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="text-slate-400 hover:text-white p-1"
-              title="Toggle Sidebar"
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden md:block text-slate-400 hover:text-white p-1"
+                title="Toggle Sidebar"
+              >
+                {sidebarCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="md:hidden text-slate-400 hover:text-white p-1"
+                title="Close Drawer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Groups */}
@@ -498,6 +521,7 @@ function WorkspaceInner() {
                           onClick={() => {
                             setSelectedStartupId(null);
                             setActiveNav(item.id);
+                            setMobileDrawerOpen(false);
                           }}
                           title={item.label}
                           className={`w-full px-2.5 py-2 rounded text-xs font-medium flex items-center gap-2.5 transition-colors ${
@@ -557,17 +581,25 @@ function WorkspaceInner() {
       {/* ================================================================== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <header className="h-14 bg-white border-b border-slate-200 px-5 flex items-center justify-between gap-4 sticky top-0 z-30">
-          {/* Breadcrumbs */}
+        <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30">
+          {/* Mobile Menu Button & Breadcrumbs */}
           <div className="flex items-center gap-2 text-xs text-slate-500 truncate">
-            <span className="font-mono uppercase text-[10px] text-slate-400">
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="md:hidden p-1.5 -ml-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 shrink-0"
+              title="Open Navigation Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="font-mono uppercase text-[10px] text-slate-400 hidden sm:inline">
               Workspace
             </span>
-            <span>/</span>
+            <span className="hidden sm:inline">/</span>
             <button
               type="button"
               onClick={() => setSelectedStartupId(null)}
-              className="font-medium text-slate-800 hover:underline capitalize"
+              className="font-medium text-slate-800 hover:underline capitalize truncate"
             >
               {activeNav.replace("-", " ")}
             </button>

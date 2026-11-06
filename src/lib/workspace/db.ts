@@ -36,7 +36,11 @@ import {
   WorkspaceUser,
 } from "./types";
 import { buildInitialRecruitmentState } from "./iimAmritsarApplicants";
-import type { ApplicantCandidateRecord, RecruitmentModuleState } from "./recruitmentTypes";
+import type {
+  AIInterviewSessionRecord,
+  ApplicantCandidateRecord,
+  RecruitmentModuleState,
+} from "./recruitmentTypes";
 
 const DB_DIR = path.join(process.cwd(), "data", "workspace");
 const DB_FILE = path.join(DB_DIR, "db.json");
@@ -488,7 +492,7 @@ const DEFAULT_SAVED_VIEWS: SavedViewConfig[] = [
 ];
 
 function createInitialUsers(): WorkspaceUser[] {
-  const defaultAdminPass = process.env.WORKSPACE_DEFAULT_PASSWORD || "Deevee@2026";
+  const defaultAdminPass = process.env.WORKSPACE_DEFAULT_PASSWORD || "Deevee@202";
   const hash = hashPasswordScrypt(defaultAdminPass);
 
   return [
@@ -1122,11 +1126,16 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
       const candidates = db.recruitment.candidates || [];
       const chunkSize = 40;
       const chunkCount = Math.ceil(candidates.length / chunkSize);
+      const sessions = db.recruitment.aiInterviewSessions || [];
+      const sessionChunkSize = 20;
+      const sessionChunkCount = Math.ceil(sessions.length / sessionChunkSize);
+
       const recruitmentMeta = {
         settings: db.recruitment.settings,
         questions: db.recruitment.questions || [],
         submissions: db.recruitment.submissions || [],
-        aiInterviewSessions: db.recruitment.aiInterviewSessions || [],
+        aiInterviewSessions: sessions.slice(0, 5),
+        sessionChunkCount,
         startupCaseSets: db.recruitment.startupCaseSets || [],
         interviews: db.recruitment.interviews || [],
         emailTemplates: db.recruitment.emailTemplates || [],
@@ -1144,6 +1153,18 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
         const chunkRef = firestore
           .collection("workspace_settings")
           .doc(`recruitment_candidates_${i}`);
+        batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
+        opCount += 1;
+        if (opCount >= 400) {
+          await commitAndReset();
+        }
+      }
+
+      for (let i = 0; i < sessionChunkCount; i++) {
+        const chunk = sessions.slice(i * sessionChunkSize, (i + 1) * sessionChunkSize);
+        const chunkRef = firestore
+          .collection("workspace_settings")
+          .doc(`recruitment_sessions_${i}`);
         batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
         opCount += 1;
         if (opCount >= 400) {
@@ -1196,6 +1217,7 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
     if (recMetaDoc.exists) {
       const meta = recMetaDoc.data() as Partial<RecruitmentModuleState> & {
         candidateChunkCount?: number;
+        sessionChunkCount?: number;
       };
       const chunkCount = Number(meta.candidateChunkCount || 0);
       const loadedCandidates: ApplicantCandidateRecord[] = [];
@@ -1211,6 +1233,25 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
           }
         }
       }
+      const sessionChunkCount = Number(meta.sessionChunkCount || 0);
+      const loadedSessions: AIInterviewSessionRecord[] = [];
+      if (sessionChunkCount > 0) {
+        for (let i = 0; i < sessionChunkCount; i++) {
+          const chunkDoc = await firestore
+            .collection("workspace_settings")
+            .doc(`recruitment_sessions_${i}`)
+            .get();
+          if (chunkDoc.exists) {
+            const data = chunkDoc.data() as { items?: AIInterviewSessionRecord[] };
+            if (Array.isArray(data?.items)) {
+              loadedSessions.push(...data.items);
+            }
+          }
+        }
+      } else if (Array.isArray(meta.aiInterviewSessions)) {
+        loadedSessions.push(...meta.aiInterviewSessions);
+      }
+
       const fallbackRecruitment = buildInitialRecruitmentState();
       base.recruitment = {
         settings: meta.settings || fallbackRecruitment.settings,
@@ -1221,9 +1262,7 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
             ? meta.questions
             : fallbackRecruitment.questions,
         submissions: Array.isArray(meta.submissions) ? meta.submissions : [],
-        aiInterviewSessions: Array.isArray(meta.aiInterviewSessions)
-          ? meta.aiInterviewSessions
-          : [],
+        aiInterviewSessions: loadedSessions,
         startupCaseSets:
           Array.isArray(meta.startupCaseSets) && meta.startupCaseSets.length > 0
             ? meta.startupCaseSets

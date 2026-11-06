@@ -512,16 +512,28 @@ export async function POST(request: NextRequest) {
     const assignedCaseSet = selectCaseSetForCandidate(cand);
 
     if (!session || body.forceRestart === true || session.status === "Completed") {
+      if (body.webcamEnabled !== true || body.micEnabled !== true) {
+        return NextResponse.json(
+          {
+            error:
+              "Camera and microphone must be active to initiate the proctored assessment. Please grant permissions and retry.",
+          },
+          { status: 403 }
+        );
+      }
+
       const turns = generatePersonalizedInterviewTurns(cand);
       const proctoring = createInitialProctoringTelemetry();
-      proctoring.webcamEnabled = Boolean(body.webcamEnabled ?? true);
-      proctoring.micEnabled = Boolean(body.micEnabled ?? true);
+      proctoring.webcamEnabled = true;
+      proctoring.micEnabled = true;
       proctoring.fullscreenEntered = Boolean(body.fullscreenEntered ?? true);
       proctoring.events.push({
         id: `pev-start-${Date.now()}`,
         type: "HEARTBEAT_SNAPSHOT",
         severity: "info",
-        description: `Session started. Webcam: ${proctoring.webcamEnabled ? "Active" : "Off"}, Mic: ${proctoring.micEnabled ? "Active" : "Off"}, Fullscreen: ${proctoring.fullscreenEntered ? "Locked" : "Windowed"}`,
+        description: `Session started. Webcam: Active, Mic: Active, Fullscreen: ${
+          proctoring.fullscreenEntered ? "Locked" : "Windowed"
+        }`,
         timestamp: now,
       });
 

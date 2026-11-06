@@ -629,31 +629,52 @@ export function generatePersonalizedInterviewTurns(
   // TURN 2 (RESUME PROBE 2): Prior Startup / Market Research Response Probe
   // --------------------------------------------------------------------------
   const rawResearchText = (candidate.startupResearchExperience || "").trim();
-  const hasResearchClaim =
-    candidate.hasSubstantiveResearchExperience &&
-    rawResearchText.length > 15 &&
-    !/^(no|na|n\/a|nil|none|nope\.?)$/i.test(rawResearchText);
+  const isBriefAffirmative = /^(yes|yep|yeah|done|some|briefly|worked on it|yes i have|yes,?\s*i\s*do|yes\.?)$/i.test(
+    rawResearchText
+  );
+  const isExplicitNegative =
+    !rawResearchText ||
+    /^(no|na|n\.?a\.?|n\/a|nil|none|nope|not yet|no prior|not applicable|no,?\s*none\.?)$/i.test(
+      rawResearchText
+    );
+  const isHonestReflection =
+    !isBriefAffirmative &&
+    !isExplicitNegative &&
+    /^(i\s+(do\s+not|don['’]t|dont|haven['’]t|havent)|no\b.*experience|i\s+haven['’]t\s+worked|i\s+do\s+not\s+have\s+any\s+formal)/i.test(
+      rawResearchText
+    );
+  const hasSubstantiveResearchClaim =
+    !isBriefAffirmative && !isExplicitNegative && !isHonestReflection && rawResearchText.length > 15;
 
   let q2Context = "";
   let q2Prompt = "";
 
-  if (hasResearchClaim) {
+  if (hasSubstantiveResearchClaim) {
     const snippet =
       rawResearchText.length > 140 ? `${rawResearchText.slice(0, 137)}...` : rawResearchText;
     q2Context = `Google Form Research Claim: "${snippet}"`;
     q2Prompt = `In your application form, when asked about prior startup or market research experience, you wrote: "${snippet}". Let's pressure-test that work like an Investment Committee would: what was the single weakest assumption or unverified data point in that research, how did you cross-check the claims beyond secondary blogs, and if Deevee Capital had ₹1 Crore to invest in that space today, where in the value chain would you deploy it—or why would you stay away?`;
+  } else if (isHonestReflection) {
+    const snippet =
+      rawResearchText.length > 130 ? `${rawResearchText.slice(0, 127)}...` : rawResearchText;
+    q2Context = `Application Form Reflection: Honest declaration & interest in research ("${snippet}")`;
+    q2Prompt = `In your application form, you noted candidly: "${snippet}". We appreciate candidates who are transparent about their starting point rather than inflating claims. You expressed a strong interest in understanding business models, market opportunities, and startup analysis. Suppose tomorrow morning Deevee Capital assigns you an early-stage Indian startup in a sector you know nothing about. Walk me through your exact first 3 hours of desk research: how do you go from zero knowledge to understanding how the company makes money and whether they have a real competitive advantage?`;
+  } else if (isBriefAffirmative) {
+    q2Context = `Application Form Response: "${rawResearchText}" (Affirmative declaration)`;
+    q2Prompt = `In your application form, you answered "${rawResearchText}" when asked if you had prior experience in startup or market research. Since your form response was brief, let's explore it now: walk me through the specific startup, product, or market you analyzed. What primary data or customer signals did you uncover that weren't obvious at first, and what commercial recommendation did your research lead to?`;
   } else {
     const certOrAchievement =
       candidate.certifications.trim() ||
       candidate.achievements.trim() ||
       candidate.technicalSkills.trim() ||
-      candidate.ugSpecialisation;
+      candidate.ugSpecialisation ||
+      candidate.ugDegree;
     const shortRef =
       certOrAchievement.length > 110
         ? `${certOrAchievement.slice(0, 107)}...`
-        : certOrAchievement || "your analytical coursework";
-    q2Context = `Honest 'No Prior Startup Research' Declaration + Profile Signal: ${shortRef}`;
-    q2Prompt = `You noted on your application form that you haven't done formal startup research yet—which we appreciate, because we value honesty over inflated CV claims. However, your profile highlights "${shortRef}". Suppose tomorrow morning we assign you to evaluate an early-stage Indian startup in a sector you have never studied before. Walk me through your exact first 3 hours of desk research: how do you go from zero knowledge to knowing how the industry makes money and whether the startup has a real edge?`;
+        : certOrAchievement || "analytical and business fundamentals";
+    q2Context = `Profile Research Signal: Direct Desk Research Simulation (${shortRef})`;
+    q2Prompt = `You declared on your application form that you haven't conducted formal startup research yet—which we appreciate, because we value intellectual honesty over inflated CV claims. However, your profile demonstrates strong foundation in "${shortRef}". Suppose tomorrow morning Deevee Capital assigns you to evaluate an early-stage Indian startup in a space you have never studied before. Walk me through your exact first 3 hours of desk research: how do you go from zero knowledge to understanding how the industry makes money and whether the startup has a real moat?`;
   }
 
   turns.push({
@@ -681,10 +702,15 @@ export function generatePersonalizedInterviewTurns(
   // --------------------------------------------------------------------------
   // TURN 3 (RESUME PROBE 3): Technical Toolkit & Analytical Edge
   // --------------------------------------------------------------------------
+  const specClause =
+    candidate.ugSpecialisation && candidate.ugSpecialisation.toLowerCase() !== "general"
+      ? ` (${candidate.ugSpecialisation})`
+      : "";
   const skillsRef =
     candidate.technicalSkills.trim() ||
     candidate.certifications.trim() ||
-    `${candidate.ugDegree} (${candidate.ugSpecialisation})`;
+    `${candidate.ugDegree}${specClause}`.trim() ||
+    "Financial & Commercial Analysis";
   const shortSkills = skillsRef.length > 110 ? `${skillsRef.slice(0, 107)}...` : skillsRef;
 
   turns.push({
@@ -692,8 +718,8 @@ export function generatePersonalizedInterviewTurns(
     questionIndex: 3,
     phase: "RESUME_PROBE",
     phaseLabel: "Phase 1 • Analytical Toolkit & Financial Rigour",
-    resumeContextCited: `Technical Skills & Certifications: ${shortSkills}`,
-    questionPrompt: `Your profile lists "${shortSkills}" under your technical toolkit and credentials. At Deevee Capital, interns frequently receive messy founder spreadsheets where headline revenue looks great but unit economics are broken. Using your analytical toolkit, what are the top 3 financial or cohort ratios you would calculate first to check if a startup's growth is healthy or artificially bought through discounting?`,
+    resumeContextCited: `Technical Skills & Credentials: ${shortSkills}`,
+    questionPrompt: `Your profile highlights "${shortSkills}" under your technical toolkit and analytical credentials. At Deevee Capital, interns frequently receive messy founder spreadsheets where headline revenue looks impressive but unit economics are broken. Using your analytical toolkit, what are the top 3 financial or cohort ratios you would calculate first to check if a startup's growth is healthy or artificially bought through discounting?`,
     expectedSignals: [
       "Mentions concrete unit-economics metrics (Contribution Margin CM1/CM2, CAC vs LTV, payback period, cohort retention, working capital / debtor days)",
       "Distinguishes GMV/Gross Billing from Net Realized Revenue",

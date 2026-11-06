@@ -780,7 +780,10 @@ export async function POST(request: NextRequest) {
   // ==========================================================================
   // 5. AI INTERVIEW REVIEW & DEMO SIMULATION (FOR ADMIN TESTING)
   // ==========================================================================
-  if (action === "ai_interview.simulate_demo_candidate") {
+  if (
+    action === "ai_interview.simulate_demo_candidate" ||
+    action === "ai_interview.simulate"
+  ) {
     const candidateId = String(body.candidateId || rec.candidates[0]?.id || "");
     const cand = rec.candidates.find((c) => c.id === candidateId);
     if (!cand) {
@@ -923,6 +926,7 @@ export async function POST(request: NextRequest) {
     await saveWorkspaceDb(db);
     return NextResponse.json({
       session: sessionRecord,
+      assignedCaseSet,
       candidate: cand,
       recruitment: rec,
     });

@@ -543,21 +543,111 @@ function CandidatePortalInner() {
 
   // Request Webcam & Mic Permissions
   const handleEnableHardware = async () => {
+    setErrorMsg("");
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera and microphone access is not supported by your browser.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: true,
       });
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+      if (!videoTracks.length || !audioTracks.length) {
+        throw new Error("Both camera video and microphone audio tracks must be present and active.");
+      }
       mediaStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
       setWebcamActive(true);
       setMicActive(true);
-    } catch {
-      // Allow graceful fallback if testing on a desktop/server without camera hardware
+
+      videoTracks[0].onended = () => {
+        setWebcamActive(false);
+        setProctoringWarningBanner("ALERT: Camera stream disconnected! Camera is required to continue proctored assessment.");
+      };
+      audioTracks[0].onended = () => {
+        setMicActive(false);
+        setProctoringWarningBanner("ALERT: Microphone stream disconnected! Microphone is required to continue proctored assessment.");
+      };
+    } catch (err) {
+      console.warn("Hardware access error:", err);
       setWebcamActive(false);
+      setMicActive(false);
+      const msg = (err as Error).message || "";
+      if (msg.includes("denied") || msg.includes("Permission") || msg.includes("NotAllowedError")) {
+        setErrorMsg("Camera & microphone permission denied. Please click the lock or camera icon in your browser address bar, set Camera & Microphone to 'Allow', and refresh or try again.");
+      } else {
+        setErrorMsg(`Camera / microphone could not be accessed: ${msg}. A functional camera and microphone are required to complete this assessment.`);
+      }
+    }
+  };
+
+  // For sample / test mode only: allow generating a canvas test stream if physical webcam is absent on the testing device
+  const handleEnableVirtualHardwareTestMode = () => {
+    if (typeof window === "undefined") return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      let tick = 0;
+      const renderTestFrame = () => {
+        tick++;
+        ctx.fillStyle = "#0B132B";
+        ctx.fillRect(0, 0, 640, 480);
+
+        ctx.fillStyle = "#1E293B";
+        ctx.beginPath();
+        ctx.arc(320, 200, 80, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#38BDF8";
+        ctx.font = "bold 20px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("PROCTORED WEBCAM SIMULATOR", 320, 190);
+
+        ctx.fillStyle = "#A7F3D0";
+        ctx.font = "14px monospace";
+        ctx.fillText(`Frame ${tick} | Camera & Mic ACTIVE`, 320, 220);
+
+        ctx.fillStyle = "#94A3B8";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Sample Test Mode • Telemetry Active", 320, 310);
+
+        requestAnimationFrame(renderTestFrame);
+      };
+      renderTestFrame();
+
+      const canvasStream = canvas.captureStream(30);
+
+      // Add dummy audio track using AudioContext oscillator
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const audioCtx = new AudioCtx();
+        const osc = audioCtx.createOscillator();
+        const dst = audioCtx.createMediaStreamDestination();
+        osc.connect(dst);
+        osc.start();
+        dst.stream.getAudioTracks().forEach((t) => canvasStream.addTrack(t));
+      }
+
+      mediaStreamRef.current = canvasStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = canvasStream;
+        videoRef.current.play().catch(() => {});
+      }
+      setWebcamActive(true);
       setMicActive(true);
+      setErrorMsg("");
+    } catch (e) {
+      console.warn("Virtual stream error:", e);
     }
   };
 
@@ -599,6 +689,12 @@ function CandidatePortalInner() {
   const handleStartProctoredSession = async () => {
     if (!candidate) return;
     setErrorMsg("");
+
+    if (!webcamActive || !micActive) {
+      setErrorMsg("Camera and microphone must be enabled and active before you can start the proctored interview.");
+      return;
+    }
+
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen().catch(() => {});
@@ -607,7 +703,6 @@ function CandidatePortalInner() {
       // Ignore fullscreen error in restricted iframes
     }
 
-    setPreCheckDone(true);
     const res = await fetch("/api/workspace/candidate", {
       method: "POST",
       headers: {
@@ -624,6 +719,12 @@ function CandidatePortalInner() {
       }),
     });
     const data = await res.json();
+    if (!res.ok) {
+      setErrorMsg(data.error || "Failed to start proctored interview.");
+      return;
+    }
+
+    setPreCheckDone(true);
     if (data.session) {
       setAiSession(data.session);
       setSessionRemainingSec((data.session.timeLimitMinutes || 25) * 60);
@@ -842,65 +943,63 @@ function CandidatePortalInner() {
   return (
     <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* TOP PROCTORING & BRAND BAR */}
-      <header className="border-b border-slate-800/80 bg-[#0B1120]/95 backdrop-blur sticky top-0 z-40 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white shadow-sm">
+      <header className="border-b border-slate-800/80 bg-[#0B1120]/95 backdrop-blur sticky top-0 z-40 px-3.5 sm:px-6 py-2.5 sm:py-3.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-xs sm:text-sm text-white shadow-sm shrink-0">
             DV
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm tracking-tight text-white">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-semibold text-xs sm:text-sm tracking-tight text-white">
                 DEEVEE CAPITAL
               </span>
-              <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium">
-                IIM Amritsar Recruitment Portal
+              <span className="text-[10px] sm:text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium">
+                IIM Amritsar
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-[11px] text-slate-400 hidden sm:block">
               Investment Research & Startup Sourcing Intern • Proctored AI Interview & Deal Desk
             </p>
           </div>
         </div>
 
         {candidate && (
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {aiSession && aiSession.status !== "Not Started" && aiSession.status !== "Completed" && (
               <>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-xs">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-xs">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-slate-400">Session Timer:</span>
+                  <span className="text-slate-400 hidden sm:inline">Timer:</span>
                   <span className="font-mono font-bold text-amber-300">
                     {formatTimer(sessionRemainingSec)}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/40 text-xs">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/40 text-xs">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-slate-300">Proctoring Integrity:</span>
+                  <span className="text-slate-300">Proctoring:</span>
                   <span className="font-bold text-emerald-300">
                     {aiSession.proctoring.integrityScore}%
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    (Tab Switches: {aiSession.proctoring.tabSwitchCount})
                   </span>
                 </div>
               </>
             )}
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
-              <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span className="font-medium text-white">{candidate.fullName}</span>
-              <span className="text-slate-400 font-mono">({candidate.candidateCode})</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <UserCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="font-medium text-white max-w-[110px] sm:max-w-none truncate">{candidate.fullName}</span>
+              <span className="text-slate-400 font-mono text-[10px] sm:text-xs">({candidate.candidateCode})</span>
               {aiSession && (
                 <button
                   type="button"
                   onClick={handleResetSampleSession}
                   disabled={resettingSample}
-                  className="ml-2 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium text-[11px] transition flex items-center gap-1"
+                  className="ml-1 sm:ml-2 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium text-[10px] sm:text-[11px] transition flex items-center gap-1 shrink-0"
                   title="Reset this candidate's session to take the interview again from the start"
                 >
                   <RefreshCw className={`w-3 h-3 ${resettingSample ? "animate-spin" : ""}`} />
-                  <span>Reset & Retake</span>
+                  <span className="hidden sm:inline">Reset & Retake</span>
+                  <span className="sm:hidden">Reset</span>
                 </button>
               )}
               <button
@@ -912,7 +1011,7 @@ function CandidatePortalInner() {
                   setAiSession(null);
                   setPreCheckDone(false);
                 }}
-                className="ml-1 text-slate-400 hover:text-rose-400 underline text-[11px]"
+                className="ml-1 text-slate-400 hover:text-rose-400 underline text-[10px] sm:text-[11px]"
               >
                 Switch
               </button>
@@ -950,67 +1049,67 @@ function CandidatePortalInner() {
         </div>
       )}
 
-      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-8">
         {/* ===================================================================
             STEP 1: CANDIDATE SIGN-IN / ACCOUNT ACTIVATION
            =================================================================== */}
         {!candidate ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-7 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
+            <div className="lg:col-span-7 space-y-4 sm:space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-medium">
-                <Sparkles className="w-3.5 h-3.5" />
-                IIM Amritsar First-Year MBA Cohort • 25-Minute Proctored Assessment
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>IIM Amritsar MBA • 25-Min Assessment</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white leading-tight">
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white leading-tight">
                 Investment Research & Startup Sourcing Intern Assessment
               </h1>
-              <p className="text-slate-300 text-sm leading-relaxed">
+              <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
                 Welcome to Deevee Capital’s candidate evaluation portal. Unlike generic multiple-choice tests, this session evaluates how you defend your past work, how you verify founder claims, and how you allocate capital across real startup dossiers.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <div className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-1 sm:pt-2">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <div className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-1">
                     Phase 1 (7 Mins)
                   </div>
-                  <div className="font-semibold text-sm text-white mb-1">
+                  <div className="font-semibold text-xs sm:text-sm text-white mb-1">
                     AI Resume & Research Probe
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
                     3 personalized questions generated directly from your IIM Amritsar profile, internships, and research claims.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <div className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <div className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">
                     Phase 2 (8 Mins)
                   </div>
-                  <div className="font-semibold text-sm text-white mb-1">
+                  <div className="font-semibold text-xs sm:text-sm text-white mb-1">
                     Startup & VC Judgement
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
                     3 adaptive questions testing non-obvious Indian startup sourcing, bottom-up TAM verification, and cash traps.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                  <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <div className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider mb-1">
                     Phase 3 (10 Mins)
                   </div>
-                  <div className="font-semibold text-sm text-white mb-1">
+                  <div className="font-semibold text-xs sm:text-sm text-white mb-1">
                     Startup Virtual Data Room
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
                     Audit 3 Indian startups seeking ₹1 Crore, expose hidden financial red flags, and defend your top pick.
                   </p>
                 </div>
               </div>
 
               {/* QUICK PROFILE SELECTOR FOR DEMO / TESTING */}
-              <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Quick-Load Applicant Profile (For Testing Any IIM Amritsar Profile)
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Quick-Load Applicant Profile (Sample Mode)
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1037,22 +1136,22 @@ function CandidatePortalInner() {
             <div className="lg:col-span-5">
               <form
                 onSubmit={handleCandidateAuth}
-                className="p-6 rounded-2xl bg-[#0D1527] border border-slate-800 shadow-2xl space-y-4"
+                className="p-4 sm:p-6 rounded-2xl bg-[#0D1527] border border-slate-800 shadow-2xl space-y-4"
               >
-                <div className="flex items-center gap-2.5 border-b border-slate-800 pb-4">
-                  <Lock className="w-5 h-5 text-blue-400" />
+                <div className="flex items-center gap-2.5 border-b border-slate-800 pb-3 sm:pb-4">
+                  <Lock className="w-5 h-5 text-blue-400 shrink-0" />
                   <div>
-                    <h2 className="text-base font-semibold text-white">
-                      Candidate Portal Sign-In & Activation
+                    <h2 className="text-sm sm:text-base font-semibold text-white">
+                      Candidate Sign-In & Activation
                     </h2>
                     <p className="text-xs text-slate-400">
-                      Use your institutional `@iimamritsar.ac.in` email address
+                      Use your institutional `@iimamritsar.ac.in` email
                     </p>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
                     Institutional Email Address *
                   </label>
                   <input
@@ -1061,12 +1160,12 @@ function CandidatePortalInner() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="name.mba12@iimamritsar.ac.in"
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-3 sm:py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
                     Candidate ID (Optional — e.g. DVC-IIMA-063)
                   </label>
                   <input
@@ -1074,12 +1173,12 @@ function CandidatePortalInner() {
                     value={loginCode}
                     onChange={(e) => setLoginCode(e.target.value)}
                     placeholder="DVC-IIMA-001"
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-3 sm:py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
                     Set / Enter Portal Password (min 6 chars) *
                   </label>
                   <input
@@ -1088,14 +1187,14 @@ function CandidatePortalInner() {
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="Create or enter your password"
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3.5 py-3 sm:py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={authSubmitting}
-                  className="w-full py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition flex items-center justify-center gap-2"
+                  className="w-full py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition flex items-center justify-center gap-2 min-h-[46px]"
                 >
                   {authSubmitting ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1243,15 +1342,26 @@ function CandidatePortalInner() {
                       <Camera className="w-4 h-4 text-blue-400" />
                       <span>Webcam & Microphone Feed</span>
                     </span>
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full ${
-                        webcamActive
-                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      }`}
-                    >
-                      {webcamActive ? "Camera & Mic Active" : "Ready to Connect"}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                          webcamActive
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        }`}
+                      >
+                        {webcamActive ? "● Camera Active" : "○ Camera Offline"}
+                      </span>
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                          micActive
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        }`}
+                      >
+                        {micActive ? "● Mic Active" : "○ Mic Offline"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="aspect-video rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center relative">
@@ -1264,22 +1374,39 @@ function CandidatePortalInner() {
                     />
                     {!webcamActive && (
                       <div className="text-center p-4 space-y-2">
-                        <Camera className="w-8 h-8 text-slate-600 mx-auto" />
-                        <p className="text-xs text-slate-400">
-                          Click below to enable your camera and microphone for voice transcription & proctoring.
+                        <Camera className="w-8 h-8 text-rose-400/80 mx-auto" />
+                        <p className="text-xs text-slate-300 font-medium">
+                          Camera & Microphone Required for Proctored Assessment
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Click below to allow camera & mic. Without an active video and audio feed, the assessment will remain locked.
                         </p>
                       </div>
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleEnableHardware}
-                    className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white transition flex items-center justify-center gap-2"
-                  >
-                    <Camera className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{webcamActive ? "Reconnect Camera & Mic" : "Enable Camera & Microphone"}</span>
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleEnableHardware}
+                      className="w-full py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-white" />
+                      <span>{webcamActive && micActive ? "Hardware Connected (Click to Re-test)" : "Enable Camera & Microphone (Required)"}</span>
+                    </button>
+
+                    {(sampleParam || (typeof window !== "undefined" && (window.location.search.includes("sample=1") || window.location.search.includes("test=1")))) && (
+                      <button
+                        type="button"
+                        onClick={handleEnableVirtualHardwareTestMode}
+                        className="w-full py-1.5 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-medium transition flex items-center justify-center gap-1.5"
+                        title="Simulates virtual camera & mic stream for testing without a physical webcam"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>Simulate Virtual Camera & Mic (Test Mode Only)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between space-y-4">
@@ -1292,19 +1419,25 @@ function CandidatePortalInner() {
                       <li className="flex items-start gap-2">
                         <span className="text-blue-400 font-bold">1.</span>
                         <span>
-                          <strong>Fullscreen Lock:</strong> The session runs in Fullscreen Sanctuary mode. Exiting fullscreen logs a proctoring alert.
+                          <strong>Camera & Mic Mandatory:</strong> Live video and audio feed must stay active throughout all 3 phases.
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-blue-400 font-bold">2.</span>
                         <span>
-                          <strong>No Tab Switching:</strong> Switching tabs or windows (`Alt+Tab`) is automatically counted and deducted from your Integrity Score.
+                          <strong>Fullscreen Lock:</strong> The session runs in Fullscreen Sanctuary mode. Exiting fullscreen logs a proctoring violation.
                         </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-blue-400 font-bold">3.</span>
                         <span>
-                          <strong>Clipboard Locked:</strong> Pasting external text (`Ctrl+V` / `Cmd+V`) is blocked. Speak naturally using the microphone or type your own analysis.
+                          <strong>No Tab Switching:</strong> Switching tabs or windows (`Alt+Tab`) deducts points from your Integrity Score.
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-400 font-bold">4.</span>
+                        <span>
+                          <strong>Clipboard Locked:</strong> Pasting external text (`Ctrl+V` / `Cmd+V`) is blocked. Speak answers or type original analysis.
                         </span>
                       </li>
                     </ul>
@@ -1324,12 +1457,38 @@ function CandidatePortalInner() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-slate-800">
+                {!webcamActive || !micActive ? (
+                  <div className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/60 border border-rose-700/60 px-3.5 py-2 rounded-xl">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>
+                      <strong>Camera & Microphone Required:</strong> Please click &ldquo;Enable Camera & Microphone&rdquo; above. You cannot start without active audio/video.
+                    </span>
+                  </div>
+                ) : !pledgeAccepted ? (
+                  <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-950/40 border border-amber-700/50 px-3.5 py-2 rounded-xl">
+                    <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Camera & Mic Verified. Please check the proctoring pledge to proceed.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-700/50 px-3.5 py-2 rounded-xl">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Sanctuary Ready: Camera, Microphone, and Pledge Verified.</span>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  disabled={!pledgeAccepted}
+                  disabled={!pledgeAccepted || !webcamActive || !micActive}
                   onClick={handleStartProctoredSession}
-                  className="py-3 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white font-semibold text-sm shadow-lg transition flex items-center gap-2"
+                  className="py-3 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-sm shadow-lg transition flex items-center gap-2 shrink-0"
+                  title={
+                    !webcamActive || !micActive
+                      ? "Camera and microphone must be enabled before you can start"
+                      : !pledgeAccepted
+                      ? "Please check the anti-cheat pledge to start"
+                      : "Start the 25-minute assessment"
+                  }
                 >
                   <Play className="w-4 h-4 fill-current" />
                   <span>Enter Fullscreen & Start 25-Min AI Interview</span>
@@ -1348,7 +1507,7 @@ function CandidatePortalInner() {
             {/* LEFT COLUMN: AI INTERVIEWER & QUESTION STAGE */}
             <div className="lg:col-span-8 space-y-5">
               {/* PROGRESS STEPPER */}
-              <div className="p-4 rounded-xl bg-[#0D1527] border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div className="p-3 sm:p-4 rounded-xl bg-[#0D1527] border border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-md bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-semibold">
                     Question {activeTurn.questionIndex} of {aiSession.turns.length}
@@ -1357,7 +1516,7 @@ function CandidatePortalInner() {
                     {activeTurn.phaseLabel}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   <button
                     type="button"
                     onClick={handleSkipToStartupTask}
@@ -1365,7 +1524,7 @@ function CandidatePortalInner() {
                     className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold transition flex items-center gap-1"
                     title="Fast-forward directly to Phase 3: Startup Virtual Data Room Task"
                   >
-                    <span>Skip to Phase 3: Startup Data Room Task</span>
+                    <span>Skip to Phase 3</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                   <div className="flex items-center gap-1.5">
@@ -1374,24 +1533,35 @@ function CandidatePortalInner() {
                         key={t.id}
                         className={`h-2 rounded-full transition-all ${
                           idx < aiSession.currentTurnIndex
-                            ? "w-6 bg-emerald-500"
+                            ? "w-4 sm:w-6 bg-emerald-500"
                             : idx === aiSession.currentTurnIndex
-                            ? "w-8 bg-blue-500"
-                            : "w-4 bg-slate-800"
+                            ? "w-6 sm:w-8 bg-blue-500"
+                            : "w-3 sm:w-4 bg-slate-800"
                         }`}
                       />
                     ))}
-                    <div className="h-2 w-8 rounded-full bg-slate-800 ml-1" title="Phase 3: Startup Task" />
+                    <div className="h-2 w-5 sm:w-8 rounded-full bg-slate-800 ml-0.5 sm:ml-1" title="Phase 3: Startup Task" />
                   </div>
                 </div>
               </div>
 
+              {/* MOBILE PROCTORING PILL (< lg) */}
+              <div className="lg:hidden p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-slate-300 font-medium">Camera & Mic Streaming</span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[11px] font-semibold">
+                  {aiSession.proctoring.integrityScore}% Integrity
+                </span>
+              </div>
+
               {/* AI INTERVIEWER PROMPT CARD */}
-              <div className="p-6 rounded-2xl bg-gradient-to-b from-[#0F1A30] to-[#0B1222] border border-blue-500/30 shadow-xl space-y-4">
+              <div className="p-4 sm:p-6 rounded-2xl bg-gradient-to-b from-[#0F1A30] to-[#0B1222] border border-blue-500/30 shadow-xl space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-medium">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Resume / Mandate Context: {activeTurn.resumeContextCited}</span>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[11px] sm:text-xs font-medium max-w-[80%] truncate">
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Context: {activeTurn.resumeContextCited}</span>
                   </div>
 
                   <button
@@ -1404,17 +1574,17 @@ function CandidatePortalInner() {
                         window.speechSynthesis.cancel();
                       }
                     }}
-                    className="p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white text-xs flex items-center gap-1.5"
+                    className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white text-xs flex items-center gap-1 shrink-0"
                   >
                     {ttsEnabled ? (
                       <>
                         <Volume2 className="w-3.5 h-3.5 text-blue-400" />
-                        <span>AI Voice On</span>
+                        <span className="hidden sm:inline">AI Voice On</span>
                       </>
                     ) : (
                       <>
                         <VolumeX className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Muted</span>
+                        <span className="hidden sm:inline">Muted</span>
                       </>
                     )}
                   </button>
@@ -1426,13 +1596,13 @@ function CandidatePortalInner() {
               </div>
 
               {/* CANDIDATE VOICE + LIVE TRANSCRIPT RESPONSE BOX */}
-              <div className="p-6 rounded-2xl bg-[#0D1527] border border-slate-800 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+              <div className="p-4 sm:p-6 rounded-2xl bg-[#0D1527] border border-slate-800 space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                     <button
                       type="button"
                       onClick={toggleVoiceRecognition}
-                      className={`px-4 py-2 rounded-xl font-semibold text-xs flex items-center gap-2 transition ${
+                      className={`w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition min-h-[44px] sm:min-h-0 ${
                         isListeningMic
                           ? "bg-rose-600 hover:bg-rose-500 text-white animate-pulse"
                           : "bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40"
@@ -1441,28 +1611,28 @@ function CandidatePortalInner() {
                       {isListeningMic ? (
                         <>
                           <MicOff className="w-4 h-4" />
-                          <span>Listening... Click to Pause Mic</span>
+                          <span>Listening... Tap to Pause</span>
                         </>
                       ) : (
                         <>
                           <Mic className="w-4 h-4" />
-                          <span>Speak Answer (Voice-to-Transcript)</span>
+                          <span>Speak Answer (Voice-to-Text)</span>
                         </>
                       )}
                     </button>
-                    <span className="text-xs text-slate-400">
-                      Speak naturally or type/refine your transcript below (Paste is locked)
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">
+                      Speak naturally or type/refine below (Paste locked)
                     </span>
                   </div>
 
-                  <div className="text-xs font-mono text-slate-400">
+                  <div className="text-[11px] sm:text-xs font-mono text-slate-400 text-right">
                     Words: {currentAnswer.trim().split(/\s+/).filter(Boolean).length} | Elapsed:{" "}
                     {formatTimer(turnElapsedSec)}
                   </div>
                 </div>
 
                 <textarea
-                  rows={7}
+                  rows={6}
                   value={currentAnswer}
                   onChange={(e) => setCurrentAnswer(e.target.value)}
                   onPaste={(e) => {
@@ -1473,11 +1643,11 @@ function CandidatePortalInner() {
                     );
                   }}
                   placeholder="Speak using your microphone or type your structured response here... Cite concrete numbers, methodology, and how you verified your conclusions."
-                  className="w-full p-4 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 leading-relaxed focus:outline-none focus:border-blue-500"
+                  className="w-full p-3.5 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 text-base sm:text-sm text-slate-100 leading-relaxed focus:outline-none focus:border-blue-500"
                 />
 
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs text-slate-400">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+                  <span className="text-[11px] text-slate-400">
                     Tip: Be specific—mention exact metrics, ratios, and verification sources.
                   </span>
 
@@ -1485,7 +1655,7 @@ function CandidatePortalInner() {
                     type="button"
                     disabled={submittingTurn}
                     onClick={handleSubmitTurnAnswer}
-                    className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition flex items-center gap-2"
+                    className="w-full sm:w-auto py-3 sm:py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition flex items-center justify-center gap-2 min-h-[44px]"
                   >
                     {submittingTurn ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1493,8 +1663,8 @@ function CandidatePortalInner() {
                       <>
                         <span>
                           {aiSession.currentTurnIndex + 1 < aiSession.turns.length
-                            ? "Submit Answer & Next Question"
-                            : "Submit & Proceed to Phase 3: Startup Data Room Task"}
+                            ? "Submit & Next Question"
+                            : "Submit & Proceed to Phase 3"}
                         </span>
                         <ChevronRight className="w-4 h-4" />
                       </>
@@ -1606,14 +1776,14 @@ function CandidatePortalInner() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setActiveStartupTab("COMPARE_ALL")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
                     activeStartupTab === "COMPARE_ALL"
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-900 text-slate-300 border border-slate-700"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-slate-900 text-slate-300 border border-slate-700 hover:text-white"
                   }`}
                 >
                   View All 3 Startups
@@ -1623,16 +1793,27 @@ function CandidatePortalInner() {
                     key={st.id}
                     type="button"
                     onClick={() => setActiveStartupTab(st.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition shrink-0 ${
                       activeStartupTab === st.id
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-900 text-slate-300 border border-slate-700"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-slate-900 text-slate-300 border border-slate-700 hover:text-white"
                     }`}
                   >
                     {st.code.replace("_", " ")}: {st.name.split(" ")[0]}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* MOBILE QUICK JUMP PILL (< xl) */}
+            <div className="xl:hidden p-3 rounded-xl bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border border-blue-800/50 flex items-center justify-between text-xs gap-3">
+              <span className="text-blue-200">Inspect startup ledgers below, then record your deal triage:</span>
+              <a
+                href="#deal-triage-form"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition flex items-center gap-1 shadow-sm shrink-0"
+              >
+                <span>Jump to Worksheet ↓</span>
+              </a>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -1645,7 +1826,7 @@ function CandidatePortalInner() {
                   .map((st) => (
                     <div
                       key={st.id}
-                      className="p-5 rounded-2xl bg-[#0D1527] border border-slate-800 space-y-4"
+                      className="p-4 sm:p-5 rounded-2xl bg-[#0D1527] border border-slate-800 space-y-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
                         <div>
@@ -1696,35 +1877,40 @@ function CandidatePortalInner() {
                       </div>
 
                       {/* DATA ROOM VERIFIED LEDGER TABLE */}
-                      <div className="overflow-x-auto rounded-xl border border-slate-800">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="bg-slate-900/90 text-slate-300 border-b border-slate-800">
-                              <th className="p-2.5 font-semibold">Metric</th>
-                              <th className="p-2.5 font-semibold">Founder Deck Claim</th>
-                              <th className="p-2.5 font-semibold text-blue-300">
-                                Verified Data Room Reality
-                              </th>
-                              <th className="p-2.5 font-semibold text-amber-300">
-                                Audit Footnote & Clue
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800/70 bg-slate-950/60">
-                            {st.financialMetricsTable.map((row, rIdx) => (
-                              <tr key={rIdx} className="hover:bg-slate-900/40">
-                                <td className="p-2.5 font-medium text-white">{row.metric}</td>
-                                <td className="p-2.5 text-slate-400">{row.founderDeckValue}</td>
-                                <td className="p-2.5 font-semibold text-blue-200">
-                                  {row.dataRoomVerifiedValue}
-                                </td>
-                                <td className="p-2.5 text-slate-300 leading-relaxed">
-                                  {row.auditFootnote}
-                                </td>
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] text-slate-400 sm:hidden flex items-center gap-1">
+                          <span>← Swipe table horizontally to inspect Audit Footnotes →</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-slate-800">
+                          <table className="min-w-[620px] w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-slate-900/90 text-slate-300 border-b border-slate-800">
+                                <th className="p-2.5 font-semibold">Metric</th>
+                                <th className="p-2.5 font-semibold">Founder Deck Claim</th>
+                                <th className="p-2.5 font-semibold text-blue-300">
+                                  Verified Data Room Reality
+                                </th>
+                                <th className="p-2.5 font-semibold text-amber-300">
+                                  Audit Footnote & Clue
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/70 bg-slate-950/60">
+                              {st.financialMetricsTable.map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-slate-900/40">
+                                  <td className="p-2.5 font-medium text-white">{row.metric}</td>
+                                  <td className="p-2.5 text-slate-400">{row.founderDeckValue}</td>
+                                  <td className="p-2.5 font-semibold text-blue-200">
+                                    {row.dataRoomVerifiedValue}
+                                  </td>
+                                  <td className="p-2.5 text-slate-300 leading-relaxed">
+                                    {row.auditFootnote}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
 
                       <div className="text-xs text-slate-400 space-y-1">
@@ -1744,8 +1930,9 @@ function CandidatePortalInner() {
               {/* RIGHT 5 COLS: ANALYST DEAL TRIAGE SUBMISSION FORM */}
               <div className="xl:col-span-5">
                 <form
+                  id="deal-triage-form"
                   onSubmit={handleCompleteStartupSimulation}
-                  className="p-6 rounded-2xl bg-[#0D1527] border border-blue-500/40 shadow-2xl space-y-5 sticky top-20"
+                  className="p-4 sm:p-6 rounded-2xl bg-[#0D1527] border border-blue-500/40 shadow-2xl space-y-5 xl:sticky xl:top-20"
                 >
                   <div className="border-b border-slate-800 pb-3">
                     <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
@@ -1775,7 +1962,7 @@ function CandidatePortalInner() {
                         value={startupBAnalysis}
                         onChange={(e) => setStartupBAnalysis(e.target.value)}
                         placeholder="State the true paying ARR/cash vs founder claim and explain the free-trial/LOI/ISA & churn trap..."
-                        className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
 
@@ -1789,7 +1976,7 @@ function CandidatePortalInner() {
                         value={startupCAnalysis}
                         onChange={(e) => setStartupCAnalysis(e.target.value)}
                         placeholder="Calculate the true net contribution margin after RTO/CAC/EMI/defaults and explain why scaling burns cash..."
-                        className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1808,7 +1995,7 @@ function CandidatePortalInner() {
                         <select
                           value={selected1CrStartupId}
                           onChange={(e) => setSelected1CrStartupId(e.target.value)}
-                          className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                          className="w-full p-3 sm:p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-base sm:text-xs min-h-[44px]"
                         >
                           {caseSet.startups.map((st) => (
                             <option key={st.id} value={st.id}>
@@ -1825,7 +2012,7 @@ function CandidatePortalInner() {
                         <select
                           value={watchlistedStartupId}
                           onChange={(e) => setWatchlistedStartupId(e.target.value)}
-                          className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                          className="w-full p-3 sm:p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-base sm:text-xs min-h-[44px]"
                         >
                           {caseSet.startups.map((st) => (
                             <option key={st.id} value={st.id}>
@@ -1842,7 +2029,7 @@ function CandidatePortalInner() {
                         <select
                           value={passedStartupId}
                           onChange={(e) => setPassedStartupId(e.target.value)}
-                          className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                          className="w-full p-3 sm:p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-base sm:text-xs min-h-[44px]"
                         >
                           {caseSet.startups.map((st) => (
                             <option key={st.id} value={st.id}>
@@ -1863,7 +2050,7 @@ function CandidatePortalInner() {
                         value={investmentThesis}
                         onChange={(e) => setInvestmentThesis(e.target.value)}
                         placeholder="Why does your selected startup deserve Deevee Capital's ₹1 Cr check? Cite verified quarterly revenue, QoQ growth, gross/EBITDA margin, and payback..."
-                        className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1884,7 +2071,7 @@ function CandidatePortalInner() {
                         value={winningStartupRisk}
                         onChange={(e) => setWinningStartupRisk(e.target.value)}
                         placeholder="Identify the exact customer/supplier concentration % and receivable debtor-day working capital risk from the table..."
-                        className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
 
@@ -1898,7 +2085,7 @@ function CandidatePortalInner() {
                         value={threeFounderQuestions}
                         onChange={(e) => setThreeFounderQuestions(e.target.value)}
                         placeholder={`1. Question on customer/contract concentration...\n2. Question on working capital / debtor days...\n3. Question on unit economics / expansion moat...`}
-                        className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                   </div>
