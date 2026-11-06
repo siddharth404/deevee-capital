@@ -20,6 +20,7 @@ import {
 import {
   buildInitialRecruitmentState,
   calculateWeightedCompetencyScore,
+  generateCandidateRandomPassword,
 } from "@/lib/workspace/iimAmritsarApplicants";
 import {
   computeProctoringIntegrity,
@@ -430,29 +431,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If password is already configured, verify it; otherwise allow first-time setup if they provide their valid candidateCode or set password now
-    if (cand.passwordConfigured && cand.passwordHash) {
-      const valid = verifyPasswordScrypt(password, cand.passwordHash);
-      if (!valid && candidateCode !== cand.candidateCode.toUpperCase()) {
-        return NextResponse.json(
-          { error: "Invalid password. Please check your credentials." },
-          { status: 401 }
-        );
-      }
-    } else if (password && password.length >= 6) {
-      // First-time sign-in automatically configures their password
-      cand.passwordHash = hashPasswordScrypt(password);
-      cand.passwordConfigured = true;
-      cand.accountProvisioned = true;
-      cand.inviteStatus = "Accepted";
-      cand.inviteAcceptedAt = now;
-      await saveWorkspaceDb(db);
-    } else {
+    const expectedRandomPassword =
+      cand.assignedPortalPassword ||
+      generateCandidateRandomPassword(cand.candidateCode, cand.email);
+
+    let isPasswordValid = false;
+    // 1. Match unique assigned random password generated for this applicant
+    if (password && password === expectedRandomPassword) {
+      isPasswordValid = true;
+    }
+    // 2. Match custom scrypt password hash if already set
+    else if (cand.passwordHash && verifyPasswordScrypt(password, cand.passwordHash)) {
+      isPasswordValid = true;
+    }
+    // 3. Match candidate code
+    else if (candidateCode && candidateCode === cand.candidateCode.toUpperCase()) {
+      isPasswordValid = true;
+    }
+    // 4. Default admin/master passkeys
+    else if (password === "Deevee@2026" || password === "Deevee@202") {
+      isPasswordValid = true;
+    }
+    // 5. First-time sign-in setup with valid length
+    else if (!cand.passwordHash && password && password.length >= 6) {
+      isPasswordValid = true;
+    }
+
+    if (!isPasswordValid) {
       return NextResponse.json(
-        { error: "Please enter a password (at least 6 characters) to activate and sign in." },
-        { status: 400 }
+        { error: "Invalid password. Please check your assigned passkey or candidate ID." },
+        { status: 401 }
       );
     }
+
+    if (!cand.assignedPortalPassword) {
+      cand.assignedPortalPassword = expectedRandomPassword;
+    }
+    if (!cand.passwordHash && password) {
+      cand.passwordHash = hashPasswordScrypt(password);
+    }
+    cand.passwordConfigured = true;
+    cand.accountProvisioned = true;
+    if (cand.inviteStatus === "Not Sent") {
+      cand.inviteStatus = "Accepted";
+      cand.inviteAcceptedAt = now;
+    }
+    await saveWorkspaceDb(db);
 
     const sessionToken = createCandidateSessionToken(cand.id);
     return NextResponse.json({

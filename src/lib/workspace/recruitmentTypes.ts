@@ -354,6 +354,7 @@ export interface CandidateRecord {
   accountProvisioned: boolean;
   passwordConfigured: boolean;
   passwordHash?: string;
+  assignedPortalPassword?: string;
   inviteToken?: string;
   inviteStatus: "Not Sent" | "Previewed" | "Sent" | "Accepted" | "Failed";
   inviteSentAt: string | null;

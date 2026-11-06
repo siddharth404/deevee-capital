@@ -8,7 +8,10 @@ import {
   saveWorkspaceDb,
 } from "@/lib/workspace/db";
 import { canViewStartup, hasPermission } from "@/lib/workspace/permissions";
-import { buildInitialRecruitmentState } from "@/lib/workspace/iimAmritsarApplicants";
+import {
+  buildInitialRecruitmentState,
+  generateCandidateRandomPassword,
+} from "@/lib/workspace/iimAmritsarApplicants";
 import {
   ConfidentialityLevel,
   DocumentCategory,
@@ -60,7 +63,7 @@ export async function GET(request: NextRequest) {
       "Candidate ID (Username)",
       "Candidate Name",
       "Email Address",
-      "Default Portal Password",
+      "Candidate Portal Password (Unique Passkey)",
       "Direct Assessment Link (Auto-Sign In)",
       "Assessment Duration",
       "UG Degree & Specialization",
@@ -74,21 +77,26 @@ export async function GET(request: NextRequest) {
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL || "https://deeveecapital.com";
 
-    const rows = candidates.map((c) => [
-      c.serialNo,
-      c.candidateCode,
-      c.fullName,
-      c.email,
-      "Deevee@2026",
-      `${baseUrl}/candidate?code=${c.candidateCode}&email=${encodeURIComponent(c.email)}`,
-      "45 Minutes",
-      c.ugSpecialisation ? `${c.ugDegree} (${c.ugSpecialisation})` : c.ugDegree,
-      c.totalWorkExMonths,
-      c.internshipSummary || "Fresher / Academic Projects",
-      "Laptop or Desktop Only (Mobile & Tablets Blocked)",
-      "Camera, Microphone, and Screen Sharing Mandatory",
-      "Fullscreen Lock; Tab Switching Logged; Clipboard Paste Blocked",
-    ]);
+    const rows = candidates.map((c) => {
+      const passkey =
+        c.assignedPortalPassword ||
+        generateCandidateRandomPassword(c.candidateCode, c.email);
+      return [
+        c.serialNo,
+        c.candidateCode,
+        c.fullName,
+        c.email,
+        passkey,
+        `${baseUrl}/candidate?code=${c.candidateCode}&email=${encodeURIComponent(c.email)}`,
+        "45 Minutes",
+        c.ugSpecialisation ? `${c.ugDegree} (${c.ugSpecialisation})` : c.ugDegree,
+        c.totalWorkExMonths,
+        c.internshipSummary || "Fresher / Academic Projects",
+        "Laptop or Desktop Only (Mobile & Tablets Blocked)",
+        "Camera, Microphone, and Screen Sharing Mandatory",
+        "Fullscreen Lock; Tab Switching Logged; Clipboard Paste Blocked",
+      ];
+    });
 
     const csvContent =
       "\uFEFF" +

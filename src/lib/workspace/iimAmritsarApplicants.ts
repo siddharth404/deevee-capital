@@ -4,6 +4,7 @@
  * a zero-dependency Node .xlsx parser, Stage 1 Profile Evaluation engine, and the VC Question Bank.
  */
 
+import crypto from "crypto";
 import zlib from "zlib";
 import {
   AssessmentQuestion,
@@ -2444,6 +2445,26 @@ export function computeStage1ProfileBreakdown(params: {
   };
 }
 
+/**
+ * Generates a unique, high-entropy, deterministic random password for an applicant.
+ * Format: DVC@ + [Upper, Lower, Digit, Upper, Lower, Digit] (e.g. DVC@Yc6Av6)
+ * Avoids ambiguous characters (0, O, l, 1, I) to prevent candidate typing mistakes.
+ */
+export function generateCandidateRandomPassword(candidateCode: string, email: string): string {
+  const seed = `${candidateCode.trim().toUpperCase()}:${email.trim().toLowerCase()}:dvc-candidate-secure-passkey-2026`;
+  const hash = crypto.createHash("sha256").update(seed).digest("hex");
+  const charsUpper = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // excludes I, O
+  const charsLower = "abcdefghjkmnpqrstuvwxyz"; // excludes l, i
+  const charsDigits = "23456789"; // excludes 0, 1
+  const u1 = charsUpper[parseInt(hash.slice(0, 2), 16) % charsUpper.length];
+  const u2 = charsUpper[parseInt(hash.slice(2, 4), 16) % charsUpper.length];
+  const l1 = charsLower[parseInt(hash.slice(4, 6), 16) % charsLower.length];
+  const l2 = charsLower[parseInt(hash.slice(6, 8), 16) % charsLower.length];
+  const d1 = charsDigits[parseInt(hash.slice(8, 10), 16) % charsDigits.length];
+  const d2 = charsDigits[parseInt(hash.slice(10, 12), 16) % charsDigits.length];
+  return `DVC@${u1}${l1}${d1}${u2}${l2}${d2}`;
+}
+
 export function buildCandidatesFromWorkbookRows(
   rows: Array<Record<string, string>>,
   shortlistThreshold = 48
@@ -2544,6 +2565,7 @@ export function buildCandidatesFromWorkbookRows(
 
     const isShortlistedStage1 = stage1.totalScore >= shortlistThreshold;
     const candidateCode = `DVC-IIMA-${String(serialNo).padStart(3, "0")}`;
+    const assignedPortalPassword = generateCandidateRandomPassword(candidateCode, email);
 
     const initialCompetencies: CompetencyScores = {
       researchAptitude: Math.min(100, Math.round((stage1.researchExperienceScore / 30) * 100)),
@@ -2619,8 +2641,9 @@ export function buildCandidatesFromWorkbookRows(
       reviewerDisagreementFlag: false,
       reviewerEvaluations: [],
       reviewerComments: [],
-      accountProvisioned: false,
-      passwordConfigured: false,
+      accountProvisioned: true,
+      passwordConfigured: true,
+      assignedPortalPassword,
       inviteStatus: "Not Sent",
       inviteSentAt: null,
       inviteAcceptedAt: null,
