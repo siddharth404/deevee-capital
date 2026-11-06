@@ -38,6 +38,7 @@ import {
   Clock,
   ArrowUpRight,
   Lock,
+  GraduationCap,
 } from "lucide-react";
 import { AuthScreen } from "@/components/workspace/AuthScreen";
 import {
@@ -50,6 +51,10 @@ import {
   TasksAndCalendarView,
   TeamAndRolesView,
 } from "@/components/workspace/IntelligenceAndManagementViews";
+import RecruitmentModuleViews, {
+  RECRUITMENT_SUBMODULE_NAV,
+  RecruitmentSubTab,
+} from "@/components/workspace/RecruitmentModuleViews";
 import {
   AssignResearchModal,
   CommandPaletteModal,
@@ -72,6 +77,7 @@ function WorkspaceInner() {
   const searchParams = useSearchParams();
   const initialStartupId = searchParams.get("startupId");
   const initialStartupTab = searchParams.get("tab") || "overview";
+  const initialNav = searchParams.get("nav") || "overview";
 
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
@@ -84,7 +90,7 @@ function WorkspaceInner() {
 
   // Navigation & UI state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeNav, setActiveNav] = useState<string>("overview");
+  const [activeNav, setActiveNav] = useState<string>(initialNav);
   const [selectedStartupId, setSelectedStartupId] = useState<string | null>(
     initialStartupId
   );
@@ -366,6 +372,15 @@ function WorkspaceInner() {
           show: true,
         },
       ],
+    },
+    {
+      group: "RECRUITMENT & TALENT",
+      items: RECRUITMENT_SUBMODULE_NAV.map((sub) => ({
+        id: sub.id,
+        label: sub.label,
+        icon: GraduationCap,
+        show: true,
+      })),
     },
     {
       group: "MANAGEMENT",
@@ -757,7 +772,15 @@ function WorkspaceInner() {
                         (Access Scope: {currentUser.accessScope}). Here is what needs your attention today.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveNav("rec-dashboard")}
+                        className="px-4 py-2 rounded bg-[#2238C4] hover:bg-[#1b2da1] text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                      >
+                        <GraduationCap className="w-4 h-4" />
+                        <span>IIM Amritsar Recruitment & AI Interviews (79)</span>
+                      </button>
                       {hasPermission(
                         currentUser as WorkspaceUser,
                         "startup.create"
@@ -1747,6 +1770,16 @@ function WorkspaceInner() {
                   onSelectStartup={handleOpenStartup}
                   onOpenAssignResearch={() => setAssignResearchOpen(true)}
                   mode="settings"
+                />
+              )}
+
+              {/* 11. RECRUITMENT & TALENT ASSESSMENT SYSTEM (IIM AMRITSAR) */}
+              {activeNav.startsWith("rec-") && (
+                <RecruitmentModuleViews
+                  activeSubTab={activeNav as RecruitmentSubTab}
+                  onChangeSubTab={(tab) => setActiveNav(tab)}
+                  currentUserEmail={currentUser.email}
+                  currentUserName={currentUser.name}
                 />
               )}
             </>

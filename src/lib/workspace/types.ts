@@ -842,4 +842,5 @@ export interface WorkspaceDatabaseSchema {
   activity_logs: AuditLogEntry[];
   audit_logs: AuditLogEntry[];
   workspace_settings: WorkspaceSettings;
+  recruitment?: import("./recruitmentTypes").RecruitmentModuleState;
 }
