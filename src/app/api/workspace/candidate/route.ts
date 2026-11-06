@@ -894,6 +894,7 @@ export async function POST(request: NextRequest) {
     cand.proctoringIntegrityScore = integrity.score;
     cand.proctoringIntegrityStatus = integrity.status;
     cand.assessmentStatus = "Submitted";
+    cand.applicationStatus = "Assessment Submitted";
     cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
 
     cand.competencyScores = {

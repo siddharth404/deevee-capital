@@ -18,7 +18,10 @@ import {
   RecruitmentSettings,
   Stage1ProfileBreakdown,
 } from "./recruitmentTypes";
-import { DEFAULT_STARTUP_CASE_SETS } from "./aiInterviewEngine";
+import {
+  createDedicatedSampleCompletedSession,
+  DEFAULT_STARTUP_CASE_SETS,
+} from "./aiInterviewEngine";
 
 export const RAW_IIM_AMRITSAR_WORKBOOK_ROWS: Array<Record<string, string>> = [
   {
@@ -2584,47 +2587,107 @@ export function sanitizeRecruitmentStateIsolation(state: RecruitmentModuleState)
   if (!state || !Array.isArray(state.candidates)) return;
 
   // 1. Ensure dedicated sample candidate exists
-  const hasSample = state.candidates.some(
+  let sampleCand = state.candidates.find(
     (c) => c.candidateCode === "DVC-SAMPLE-001" || c.id === "cand-sample-demo"
   );
-  if (!hasSample) {
-    state.candidates.push(createDedicatedSampleCandidate());
+  if (!sampleCand) {
+    sampleCand = createDedicatedSampleCandidate();
+    state.candidates.push(sampleCand);
   }
 
-  // 2. Protect and sanitize real candidate Shrey Mishra (DVC-IIMA-063)
+  if (!Array.isArray(state.aiInterviewSessions)) {
+    state.aiInterviewSessions = [];
+  }
+
+  // Ensure dedicated sample session exists for DVC-SAMPLE-001 so admins can always inspect sample test responses
+  let sampleSession = state.aiInterviewSessions.find(
+    (s) => s.candidateCode === "DVC-SAMPLE-001" || s.candidateId === sampleCand!.id
+  );
+  if (!sampleSession) {
+    sampleSession = createDedicatedSampleCompletedSession(sampleCand);
+    state.aiInterviewSessions.push(sampleSession);
+  }
+
+  // Update sample candidate's score and status from the sample session
+  if (sampleSession?.scoringBreakdown) {
+    sampleCand.aiInterviewScore = sampleSession.scoringBreakdown.overallAiInterviewScore;
+    sampleCand.proctoringIntegrityScore = sampleSession.proctoring.integrityScore;
+    sampleCand.proctoringIntegrityStatus = sampleSession.proctoring.integrityStatus;
+    sampleCand.assessmentStatus = "Evaluated";
+    sampleCand.applicationStatus = "Assessment Submitted";
+    sampleCand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+  }
+
+  // 2. Normalize real candidates: everyone is invited for assessment!
+  // Candidates who haven't taken the assessment yet should not be prematurely marked as "Shortlisted for Assessment" or "Recommended".
+  for (const cand of state.candidates) {
+    if (cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo") continue;
+
+    const candSession = state.aiInterviewSessions.find((s) => s.candidateId === cand.id);
+    const hasCompletedSession = candSession && candSession.status === "Completed";
+
+    if (hasCompletedSession) {
+      if (
+        cand.applicationStatus !== "Selected" &&
+        cand.applicationStatus !== "Waitlisted" &&
+        cand.applicationStatus !== "Rejected" &&
+        cand.applicationStatus !== "Shortlisted for Final Interview"
+      ) {
+        cand.applicationStatus = "Assessment Submitted";
+      }
+      cand.assessmentStatus = "Evaluated";
+      if (candSession.scoringBreakdown?.overallAiInterviewScore) {
+        cand.aiInterviewScore = candSession.scoringBreakdown.overallAiInterviewScore;
+      }
+    } else {
+      // Still awaiting assessment submission
+      if (
+        cand.applicationStatus === "Shortlisted for Assessment" ||
+        cand.applicationStatus === "Pending Screening" ||
+        cand.applicationStatus === "Recommended"
+      ) {
+        cand.applicationStatus = "In Assessment Funnel";
+      }
+      if (cand.assessmentStatus === "Not Assigned") {
+        cand.assessmentStatus = "Invited";
+      }
+      cand.aiInterviewScore = null;
+      cand.proctoringIntegrityScore = null;
+      cand.proctoringIntegrityStatus = undefined;
+    }
+  }
+
+  // 3. Protect and sanitize real candidate Shrey Mishra (DVC-IIMA-063)
   const realShrey = state.candidates.find((c) => c.candidateCode === "DVC-IIMA-063");
   if (realShrey) {
-    // If real Shrey got tainted with demo stage/status while having 0 real non-demo sessions, reset him cleanly
     const hasRealNonDemoSession =
       Array.isArray(state.aiInterviewSessions) &&
       state.aiInterviewSessions.some(
-        (s) => s.candidateId === realShrey.id && !s.id.startsWith("demo-")
+        (s) =>
+          s.candidateId === realShrey.id &&
+          !s.id.startsWith("demo-") &&
+          s.candidateCode !== "DVC-SAMPLE-001"
       );
 
-    if (!hasRealNonDemoSession && realShrey.currentStage === "Stage 1B: AI Interview & Startup Simulation") {
+    if (!hasRealNonDemoSession) {
       realShrey.currentStage = "Stage 1: Profile Screening";
-      realShrey.applicationStatus = "Shortlisted for Assessment";
-      realShrey.assessmentStatus = "Not Assigned";
+      realShrey.applicationStatus = "In Assessment Funnel";
+      realShrey.assessmentStatus = "Invited";
       realShrey.aiInterviewScore = null;
       realShrey.proctoringIntegrityScore = null;
       realShrey.proctoringIntegrityStatus = undefined;
     }
   }
 
-  // 3. Move any demo session erroneously attached to DVC-IIMA-063 to DVC-SAMPLE-001
-  if (Array.isArray(state.aiInterviewSessions)) {
-    const sampleCand =
-      state.candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
-      createDedicatedSampleCandidate();
-    state.aiInterviewSessions.forEach((s) => {
-      if (s.candidateCode === "DVC-IIMA-063" && s.id.startsWith("demo-")) {
-        s.candidateId = sampleCand.id;
-        s.candidateCode = sampleCand.candidateCode;
-        s.candidateName = sampleCand.fullName;
-        s.candidateEmail = sampleCand.email;
-      }
-    });
-  }
+  // 4. Move any demo session erroneously attached to DVC-IIMA-063 to DVC-SAMPLE-001
+  state.aiInterviewSessions.forEach((s) => {
+    if (s.candidateCode === "DVC-IIMA-063" && s.id.startsWith("demo-")) {
+      s.candidateId = sampleCand!.id;
+      s.candidateCode = sampleCand!.candidateCode;
+      s.candidateName = sampleCand!.fullName;
+      s.candidateEmail = sampleCand!.email;
+    }
+  });
 }
 
 export function buildCandidatesFromWorkbookRows(
@@ -2784,10 +2847,8 @@ export function buildCandidatesFromWorkbookRows(
       hasSubstantiveResearchExperience: stage1.hasSubstantiveResearch,
       originalRowPayload: row,
       currentStage: "Stage 1: Profile Screening",
-      applicationStatus: isShortlistedStage1
-        ? "Shortlisted for Assessment"
-        : "Pending Screening",
-      assessmentStatus: "Not Assigned",
+      applicationStatus: "In Assessment Funnel",
+      assessmentStatus: "Invited",
       assignedReviewerId: "user-siddharth",
       assignedReviewerName: "Siddharth Kaushik",
       stage1ProfileBreakdown: stage1,
@@ -3483,15 +3544,26 @@ export function buildInitialRecruitmentState(): RecruitmentModuleState {
     updatedAt: now,
   };
 
+  const sampleCand = createDedicatedSampleCandidate();
+  const sampleSession = createDedicatedSampleCompletedSession(sampleCand);
+  if (sampleSession.scoringBreakdown) {
+    sampleCand.aiInterviewScore = sampleSession.scoringBreakdown.overallAiInterviewScore;
+    sampleCand.proctoringIntegrityScore = sampleSession.proctoring.integrityScore;
+    sampleCand.proctoringIntegrityStatus = sampleSession.proctoring.integrityStatus;
+    sampleCand.assessmentStatus = "Evaluated";
+    sampleCand.applicationStatus = "Assessment Submitted";
+    sampleCand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+  }
+
   return {
     settings,
     candidates: [
       ...buildCandidatesFromWorkbookRows(RAW_IIM_AMRITSAR_WORKBOOK_ROWS, 48),
-      createDedicatedSampleCandidate(),
+      sampleCand,
     ],
     questions: DEFAULT_ASSESSMENT_QUESTIONS,
     submissions: [],
-    aiInterviewSessions: [],
+    aiInterviewSessions: [sampleSession],
     startupCaseSets: DEFAULT_STARTUP_CASE_SETS,
     interviews: [],
     emailTemplates: DEFAULT_RECRUITMENT_EMAIL_TEMPLATES,

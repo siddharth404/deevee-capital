@@ -1214,3 +1214,111 @@ export function createInitialProctoringTelemetry(): ProctoringTelemetry {
     snapshots: [],
   };
 }
+
+export function createDedicatedSampleCompletedSession(
+  sampleCand: CandidateRecord,
+  caseSet?: StartupCaseSet
+): AIInterviewSessionRecord {
+  const assignedCaseSet = caseSet || selectCaseSetForCandidate(sampleCand);
+  const turns = generatePersonalizedInterviewTurns(sampleCand);
+  const now = new Date().toISOString();
+
+  turns[0]!.candidateAnswer =
+    "During my strategy internship at At Litti King, I audited the unit economics across 4 cloud kitchens in Delhi-NCR. Initially, the management thought top-line GMV was growing healthily at ₹18 Lakhs/month, but when I segmented gross margins net of Swiggy/Zomato commissions (28%), delivery discounts, and packaging, I found two locations had negative contribution margins (-₹18/order). We discontinued discount campaigns in those pin codes and rationalized the menu to high-margin SKUs, recovering a +12% store-level EBITDA within 45 days.";
+  turns[0]!.wordCount = turns[0]!.candidateAnswer.split(/\s+/).length;
+  turns[0]!.timeTakenSeconds = 118;
+  turns[0]!.answeredAt = now;
+
+  turns[1]!.candidateAnswer =
+    "To verify a founder's market claim independently without relying on optimistic pitch decks, I rely on three triangulated checks: (1) MCA RoC filings via probe42/Tofler to verify audited revenue and GSTIN turnover against claimed ARR; (2) bottom-up cohort sizing calculating reachable active businesses/consumers multiplied by realistic ACV; and (3) 8–10 independent channel customer interviews to check true willingness to pay and renewal churn.";
+  turns[1]!.wordCount = turns[1]!.candidateAnswer.split(/\s+/).length;
+  turns[1]!.timeTakenSeconds = 125;
+  turns[1]!.answeredAt = now;
+
+  turns[2]!.candidateAnswer =
+    "In Excel, the top 3 metrics I scrutinize first are: (1) Net Realized Contribution Margin (CM2) after factoring in customer acquisition cost, gateway fees, and returns; (2) Blended vs Paid CAC Payback period across month-3 and month-6 cohorts; and (3) Cash Conversion Cycle (Debtor Days + Inventory Days - Payable Days) to diagnose if revenue growth is creating a liquidity trap.";
+  turns[2]!.wordCount = turns[2]!.candidateAnswer.split(/\s+/).length;
+  turns[2]!.timeTakenSeconds = 108;
+  turns[2]!.answeredAt = now;
+
+  turns[3]!.candidateAnswer =
+    "To discover stealth or early-stage Indian startups before institutional seed rounds, I monitor: (1) DPIIT Startup India sector registries and state incubation grants; (2) Tier-2 incubation cohorts across SINE IIT Bombay, CIIE IIM Ahmedabad, and T-Hub; (3) Trademark and MCA incorporation filings under priority NIC codes; and (4) industry-specific WhatsApp trade communities and IndiaMART manufacturer listings in manufacturing clusters like Coimbatore and Surat.";
+  turns[3]!.wordCount = turns[3]!.candidateAnswer.split(/\s+/).length;
+  turns[3]!.timeTakenSeconds = 112;
+  turns[3]!.answeredAt = now;
+
+  turns[4]!.candidateAnswer =
+    "I first deconstruct top-down TAMs by counting actual addressable buyers in India (e.g. tier-1 vs tier-2/3) multiplied by realistic annual spend, which usually shows the true market is 10–15% of the deck figure. For traction, I cross-reference GST filing consistency, Google Play Store download velocity, SimilarWeb engagement, and employee headcount changes on LinkedIn. If a founder claims 'no competitors', I map substitute behaviors and unorganized sector alternatives.";
+  turns[4]!.wordCount = turns[4]!.candidateAnswer.split(/\s+/).length;
+  turns[4]!.timeTakenSeconds = 115;
+  turns[4]!.answeredAt = now;
+
+  turns[5]!.candidateAnswer =
+    "I would avoid funding undifferentiated D2C beauty/nutraceutical brands or asset-heavy EV delivery fleets. In D2C, high customer acquisition costs (₹900–₹1,200) coupled with 25–30% Cash-on-Delivery Return-to-Origin (RTO) rates and low month-3 repeat rates mean unit economics deteriorate at scale. In fleet operations, rapid battery degradation and low commercial lease realization erode returns.";
+  turns[5]!.wordCount = turns[5]!.candidateAnswer.split(/\s+/).length;
+  turns[5]!.timeTakenSeconds = 105;
+  turns[5]!.answeredAt = now;
+
+  const winningStartup = assignedCaseSet.startups[0]!;
+  const trapB = assignedCaseSet.startups[1]!;
+  const trapC = assignedCaseSet.startups[2]!;
+
+  const proctoring = createInitialProctoringTelemetry();
+  proctoring.webcamEnabled = true;
+  proctoring.micEnabled = true;
+  proctoring.screenShareActive = true;
+  proctoring.fullscreenEntered = true;
+  proctoring.webcamSnapshotsCount = 6;
+  proctoring.screenShareSnapshotsCount = 6;
+  proctoring.integrityScore = 96;
+  proctoring.integrityStatus = "High Integrity";
+  proctoring.events = [
+    {
+      id: "pev-sample-1",
+      type: "HEARTBEAT_SNAPSHOT",
+      severity: "info",
+      description: "Dual proctoring verified: Webcam active, screen sharing active, fullscreen sanctuary locked.",
+      timestamp: now,
+    },
+  ];
+
+  const sessionRecord: AIInterviewSessionRecord = {
+    id: `ai-sess-${sampleCand.id}`,
+    candidateId: sampleCand.id,
+    candidateCode: sampleCand.candidateCode,
+    candidateName: sampleCand.fullName,
+    candidateEmail: sampleCand.email,
+    status: "Completed",
+    assignedCaseSetId: assignedCaseSet.id,
+    startedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    completedAt: now,
+    totalDurationSeconds: 24 * 60,
+    timeLimitMinutes: 45,
+    turns,
+    currentTurnIndex: turns.length,
+    startupTaskSubmission: {
+      caseSetId: assignedCaseSet.id,
+      caseSetTitle: assignedCaseSet.title,
+      startupBTrueMetricAnalysis: `${trapB.name} headline ARR of ₹1.8 Cr is misleading: the Virtual Data Room proves ₹1.4 Cr consists of non-binding pilot LOIs and free trials. Only 45 paying SMEs generate ₹3.2 Lakhs/month with a 9.4% monthly logo churn, meaning true annualized cash revenue is under ₹40 Lakhs.`,
+      startupCTrueMetricAnalysis: `${trapC.name} demonstrates structurally negative unit economics: with a 29% COD Return-to-Origin (RTO) rate and ₹1,180 blended CAC against ₹1,400 AOV, each delivered order produces a negative contribution margin of -₹320. Month-3 repeat purchase retention is only 12%.`,
+      spottedRedFlagsSummary: `1. ${trapB.name}: Massive revenue inflation via non-paying free trial conversion and unsustainable churn. 2. ${trapC.name}: Cash burn engine where CAC and 29% RTO rates destroy order-level profitability.`,
+      selectedStartupFor1CrId: winningStartup.id,
+      watchlistedStartupId: trapB.id,
+      passedStartupId: trapC.id,
+      investmentThesisAndNumbers: `I recommend allocating the full ₹1 Crore seed capital to ${winningStartup.name}. Unlike the other two deals, its quarterly revenue (₹48 Lakhs, growing 16% QoQ) is verified by GST filings and institutional B2B contracts. It operates at 52% gross margin, positive operating cash flow, and a verified 18-month payback period.`,
+      winningStartupPrimaryRisk: `The primary vulnerability is high customer concentration, with the top 4 enterprise accounts generating 72% of total revenue alongside a 68-day receivable cycle that ties up working capital.`,
+      threeFounderDiligenceQuestions: `1. What specific milestones will diversify revenue so that no single client accounts for more than 25% within 12 months?\n2. Can we institute milestone advance billing or supply chain financing to compress the 68-day receivable cycle down to under 40 days?\n3. What long-term supplier agreements protect your 52% gross margin against raw material commodity inflation?`,
+      submittedAt: now,
+      timeSpentSeconds: 620,
+    },
+    proctoring,
+    scoringBreakdown: null,
+  };
+
+  sessionRecord.scoringBreakdown = evaluateCompleteAIInterviewSession(
+    sessionRecord,
+    assignedCaseSet
+  );
+
+  return sessionRecord;
+}

@@ -205,6 +205,17 @@ export default function RecruitmentModuleViews({
   const [promptInspectorCandidateId, setPromptInspectorCandidateId] = useState<string>("");
   const [copiedPromptId, setCopiedPromptId] = useState<string>("");
 
+  // Submissions & Test Sessions Filter State
+  const [submissionFilter, setSubmissionFilter] = useState<"ALL" | "REAL" | "SAMPLE">("ALL");
+  const [submissionSearch, setSubmissionSearch] = useState<string>("");
+
+  // Shortlisting Leaderboard Filter State
+  const [shortlistingFilter, setShortlistingFilter] = useState<
+    "SUBMITTED" | "PENDING" | "FINALISTS" | "ALL"
+  >("SUBMITTED");
+  const [includeSampleInLeaderboard, setIncludeSampleInLeaderboard] = useState<boolean>(true);
+  const [shortlistingSearch, setShortlistingSearch] = useState<string>("");
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 5000);
@@ -296,6 +307,59 @@ export default function RecruitmentModuleViews({
     if (!promptInspectorCandidate) return null;
     return selectCaseSetForCandidate(promptInspectorCandidate);
   }, [promptInspectorCandidate]);
+
+  const filteredSessions = useMemo(() => {
+    return aiSessions.filter((s) => {
+      const isSample =
+        s.candidateCode === "DVC-SAMPLE-001" ||
+        s.id.includes("sample") ||
+        s.candidateEmail.includes("sample");
+      if (submissionFilter === "SAMPLE" && !isSample) return false;
+      if (submissionFilter === "REAL" && isSample) return false;
+      if (submissionSearch.trim()) {
+        const q = submissionSearch.trim().toLowerCase();
+        const hay = `${s.candidateCode} ${s.candidateName} ${s.candidateEmail} ${s.assignedCaseSetId}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [aiSessions, submissionFilter, submissionSearch]);
+
+  const submittedCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      if (c.candidateCode === "DVC-SAMPLE-001" && !includeSampleInLeaderboard) return false;
+      return (
+        c.assessmentStatus === "Submitted" ||
+        c.assessmentStatus === "Evaluated" ||
+        c.applicationStatus === "Assessment Submitted" ||
+        c.applicationStatus === "Shortlisted for Final Interview" ||
+        (c.aiInterviewScore !== null && c.aiInterviewScore !== undefined) ||
+        aiSessions.some((s) => s.candidateId === c.id && s.status === "Completed")
+      );
+    });
+  }, [candidates, aiSessions, includeSampleInLeaderboard]);
+
+  const pendingCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      if (c.candidateCode === "DVC-SAMPLE-001") return false;
+      return !(
+        c.assessmentStatus === "Submitted" ||
+        c.assessmentStatus === "Evaluated" ||
+        c.applicationStatus === "Assessment Submitted" ||
+        c.applicationStatus === "Shortlisted for Final Interview" ||
+        (c.aiInterviewScore !== null && c.aiInterviewScore !== undefined) ||
+        aiSessions.some((s) => s.candidateId === c.id && s.status === "Completed")
+      );
+    });
+  }, [candidates, aiSessions]);
+
+  const shortlistedFinalCandidates = useMemo(() => {
+    return candidates.filter(
+      (c) =>
+        c.applicationStatus === "Shortlisted for Final Interview" ||
+        c.applicationStatus === "Selected"
+    );
+  }, [candidates]);
 
   // Sync edit inputs when selectedCandidate changes
   useEffect(() => {
@@ -1016,6 +1080,25 @@ export default function RecruitmentModuleViews({
                               <span className="text-slate-500">/100</span>
                             </td>
                             <td className="py-2.5 pl-2 text-right space-x-2">
+                              {recruitment.aiInterviewSessions?.some(
+                                (s) => s.candidateId === c.id || s.candidateCode === c.candidateCode
+                              ) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const sess = recruitment.aiInterviewSessions?.find(
+                                      (s) => s.candidateId === c.id || s.candidateCode === c.candidateCode
+                                    );
+                                    if (sess) setSelectedSessionId(sess.id);
+                                    setSelectedCandidateId(c.id);
+                                    onChangeSubTab("rec-submissions");
+                                  }}
+                                  className="text-emerald-400 hover:underline font-semibold"
+                                  title="View submitted interview responses & audit"
+                                >
+                                  Responses 📝
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1030,7 +1113,7 @@ export default function RecruitmentModuleViews({
                                 href={`/candidate?sample=1&code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-emerald-400 hover:underline font-medium"
+                                className="text-cyan-400 hover:underline font-medium"
                                 title="Open in Sample Test Mode (always ready to take again)"
                               >
                                 AI Interview ↗
@@ -1311,6 +1394,25 @@ export default function RecruitmentModuleViews({
                         </span>
                       </td>
                       <td className="py-2.5 pl-2 text-right whitespace-nowrap space-x-2">
+                        {recruitment.aiInterviewSessions?.some(
+                          (s) => s.candidateId === c.id || s.candidateCode === c.candidateCode
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const sess = recruitment.aiInterviewSessions?.find(
+                                (s) => s.candidateId === c.id || s.candidateCode === c.candidateCode
+                              );
+                              if (sess) setSelectedSessionId(sess.id);
+                              setSelectedCandidateId(c.id);
+                              onChangeSubTab("rec-submissions");
+                            }}
+                            className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold text-[11px] inline-flex items-center gap-1 border border-emerald-500/30"
+                            title="View submitted interview responses & audit"
+                          >
+                            <span>Responses 📝</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1325,7 +1427,7 @@ export default function RecruitmentModuleViews({
                           href={`/candidate?sample=1&code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-emerald-400 hover:underline font-medium"
+                          className="text-cyan-400 hover:underline font-medium"
                           title="Open candidate portal in always-ready sample mode"
                         >
                           Portal ↗
@@ -1422,15 +1524,39 @@ export default function RecruitmentModuleViews({
                     }}
                     className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-white"
                   >
-                    <option value="Pending Screening">Pending Screening</option>
-                    <option value="Shortlisted for Assessment">Shortlisted for Assessment</option>
                     <option value="In Assessment Funnel">In Assessment Funnel</option>
+                    <option value="Assessment Submitted">Assessment Submitted</option>
+                    <option value="Shortlisted for Final Interview">Shortlisted for Final Interview</option>
+                    <option value="Pending Screening">Pending Screening</option>
                     <option value="Interview Stage">Interview Stage</option>
                     <option value="Recommended">Recommended</option>
                     <option value="Selected">Selected</option>
                     <option value="Waitlisted">Waitlisted</option>
                     <option value="Rejected">Rejected</option>
                   </select>
+
+                  {recruitment.aiInterviewSessions?.some(
+                    (s) =>
+                      s.candidateId === selectedCandidate.id ||
+                      s.candidateCode === selectedCandidate.candidateCode
+                  ) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sess = recruitment.aiInterviewSessions?.find(
+                          (s) =>
+                            s.candidateId === selectedCandidate.id ||
+                            s.candidateCode === selectedCandidate.candidateCode
+                        );
+                        if (sess) setSelectedSessionId(sess.id);
+                        onChangeSubTab("rec-submissions");
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/35 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Submitted Responses 📝</span>
+                    </button>
+                  )}
 
                   <a
                     href={`/candidate?sample=1&code=${encodeURIComponent(selectedCandidate.candidateCode)}&email=${encodeURIComponent(selectedCandidate.email)}`}
@@ -1970,84 +2096,209 @@ export default function RecruitmentModuleViews({
          ===================================================================== */}
       {activeSubTab === "rec-submissions" && (
         <div className="space-y-5">
-          {aiSessions.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-slate-900/90 border border-slate-800 text-center space-y-3">
-              <Video className="w-8 h-8 text-blue-400 mx-auto" />
-              <h3 className="text-base font-bold text-white">
-                No Completed AI Interview Sessions Yet
-              </h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Click below to simulate a complete 45-minute AI Interview + Startup Virtual Data Room submission for Sample Candidate (`DVC-SAMPLE-001`) or open `/candidate?sample=1` to take one live.
-              </p>
+          {/* SUBMISSIONS TOP BAR & SAMPLE TEST INSPECTION */}
+          <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
+                  Dossier & Response Audits
+                </span>
+                <h3 className="text-lg font-bold text-white mt-0.5">
+                  AI Interview Transcripts & Virtual Data Room Submissions
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Inspect completed candidate responses across Phase 1 (Resume Probe), Phase 2 (Startup Judgement), Phase 3 (₹1 Cr Deal Triage), and proctoring integrity snapshots.
+                </p>
+              </div>
+
+              {/* QUICK ACTION: INSPECT SAMPLE TEST SUBMISSION */}
               <button
                 type="button"
                 onClick={async () => {
-                  const target =
-                    candidates.find((c) => c.candidateCode === "DVC-SAMPLE-001") ||
-                    candidates.find((c) => c.id === "cand-sample-demo");
-                  const res = await postAction(
-                    {
-                      action: "ai_interview.simulate_demo_candidate",
-                      candidateId: target?.id || "cand-sample-demo",
-                    },
-                    `Generated complete AI Interview & Startup Task dossier for Sample Candidate (DVC-SAMPLE-001)`
+                  const sampleSess = aiSessions.find(
+                    (s) =>
+                      s.candidateCode === "DVC-SAMPLE-001" ||
+                      s.id.includes("sample") ||
+                      s.candidateEmail.includes("sample")
                   );
-                  if (res?.session) setSelectedSessionId(res.session.id);
+                  if (sampleSess) {
+                    setSelectedSessionId(sampleSess.id);
+                    setSubmissionFilter("ALL");
+                    showToast("Inspecting Sample Candidate (DVC-SAMPLE-001) test responses!");
+                  } else {
+                    const sampleCand = candidates.find(
+                      (c) => c.candidateCode === "DVC-SAMPLE-001"
+                    );
+                    const res = await postAction(
+                      {
+                        action: "ai_interview.simulate_demo_candidate",
+                        candidateId: sampleCand?.id || "cand-sample-demo",
+                      },
+                      "Loaded complete Sample Test submission for DVC-SAMPLE-001!"
+                    );
+                    if (res?.session) {
+                      setSelectedSessionId(res.session.id);
+                    }
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-200 text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-950/40 transition"
+              >
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span>Inspect Sample Test Submission (DVC-SAMPLE-001)</span>
+              </button>
+            </div>
+
+            {/* FILTER PILLS & SEARCH */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { key: "ALL", label: `All Submissions (${aiSessions.length})` },
+                  {
+                    key: "REAL",
+                    label: `Real Candidates (${aiSessions.filter((s) => s.candidateCode !== "DVC-SAMPLE-001" && !s.id.includes("sample")).length})`,
+                  },
+                  {
+                    key: "SAMPLE",
+                    label: `Sample & Test Sessions (${aiSessions.filter((s) => s.candidateCode === "DVC-SAMPLE-001" || s.id.includes("sample")).length})`,
+                  },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setSubmissionFilter(f.key as "ALL" | "REAL" | "SAMPLE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      submissionFilter === f.key
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={submissionSearch}
+                  onChange={(e) => setSubmissionSearch(e.target.value)}
+                  placeholder="Search name, code, case set..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {filteredSessions.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-slate-900/90 border border-slate-800 text-center space-y-3">
+              <Video className="w-8 h-8 text-blue-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">
+                No Submissions Match Current Filter
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No completed interview sessions match your search or filter. You can switch to All Submissions or inspect the Sample Test Submission.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmissionFilter("ALL");
+                  setSubmissionSearch("");
                 }}
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold"
               >
-                Simulate Completed AI Interview & Startup Task Now
+                Reset Filters
               </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* LEFT 4 COLS: SESSION LIST */}
               <div className="lg:col-span-4 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  AI Interview & Task Submissions ({aiSessions.length})
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <span>Submissions ({filteredSessions.length})</span>
+                  <span className="text-[11px] text-slate-500 font-normal">Select to inspect</span>
                 </div>
-                {aiSessions.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelectedSessionId(s.id)}
-                    className={`w-full text-left p-3 rounded-xl border text-xs transition ${
-                      s.id === (selectedSessionId || aiSessions[0]?.id)
-                        ? "bg-blue-950/60 border-blue-500/50 text-white"
-                        : "bg-slate-950 border-slate-800 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[11px] text-blue-400">
-                        {s.candidateCode}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
-                        Score: {s.scoringBreakdown?.overallAiInterviewScore ?? "In Progress"}/100
-                      </span>
-                    </div>
-                    <div className="font-bold text-sm mt-0.5">{s.candidateName}</div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                      <span>{s.status}</span>
-                      <span>Proctoring: {s.proctoring.integrityScore}%</span>
-                    </div>
-                  </button>
-                ))}
+                {filteredSessions.map((s) => {
+                  const isSample =
+                    s.candidateCode === "DVC-SAMPLE-001" ||
+                    s.id.includes("sample") ||
+                    s.candidateEmail.includes("sample");
+                  const isSelected = s.id === (selectedSessionId || filteredSessions[0]?.id);
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedSessionId(s.id)}
+                      className={`w-full text-left p-3 rounded-xl border text-xs transition space-y-1.5 ${
+                        isSelected
+                          ? isSample
+                            ? "bg-cyan-950/40 border-cyan-500/60 text-white"
+                            : "bg-blue-950/60 border-blue-500/60 text-white"
+                          : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[11px] text-blue-400 font-bold">
+                            {s.candidateCode}
+                          </span>
+                          {isSample && (
+                            <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-sans font-semibold border border-cyan-500/30">
+                              Sandbox
+                            </span>
+                          )}
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
+                          Score: {s.scoringBreakdown?.overallAiInterviewScore ?? "In Progress"}/100
+                        </span>
+                      </div>
+                      <div className="font-bold text-sm text-white truncate">{s.candidateName}</div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                        <span className="truncate max-w-[130px]">{s.assignedCaseSetId}</span>
+                        <span className="font-mono text-emerald-400">
+                          🛡️ {s.proctoring.integrityScore}%
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* RIGHT 8 COLS: FULL TRANSCRIPT, STARTUP TASK SCORECARD & PROCTORING LOG */}
               {(() => {
                 const sess =
-                  aiSessions.find((s) => s.id === selectedSessionId) || aiSessions[0];
+                  aiSessions.find((s) => s.id === selectedSessionId) || filteredSessions[0] || aiSessions[0];
                 if (!sess) return null;
                 const sb = sess.scoringBreakdown;
+                const isSampleSess =
+                  sess.candidateCode === "DVC-SAMPLE-001" ||
+                  sess.id.includes("sample") ||
+                  sess.candidateEmail.includes("sample");
+                const targetCand = candidates.find(
+                  (c) => c.id === sess.candidateId || c.candidateCode === sess.candidateCode
+                );
+
                 return (
                   <div className="lg:col-span-8 space-y-5">
                     <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-5">
                       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 pb-4">
                         <div>
-                          <span className="text-xs font-mono text-blue-400">
-                            {sess.candidateCode} • {sess.assignedCaseSetId}
-                          </span>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono text-blue-400 font-bold">
+                              {sess.candidateCode}
+                            </span>
+                            {isSampleSess ? (
+                              <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-sans font-semibold border border-cyan-500/30">
+                                Sandbox Test Mode
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-sans font-semibold border border-blue-500/30">
+                                Real Candidate Submission
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-500">• {sess.assignedCaseSetId}</span>
+                          </div>
                           <h3 className="text-xl font-bold text-white">{sess.candidateName}</h3>
                           <p className="text-xs text-slate-400">{sess.candidateEmail}</p>
                         </div>
@@ -2061,12 +2312,32 @@ export default function RecruitmentModuleViews({
                                 {sess.reviewerOverrideScore ?? sb.overallAiInterviewScore}/100
                               </div>
                               <div className="text-[11px] text-blue-300 font-medium">
-                                {sb.recommendedNextStep}
+                                {targetCand?.applicationStatus || sb.recommendedNextStep}
                               </div>
                             </div>
                           </div>
                         )}
                       </div>
+
+                      {/* SAMPLE SANDBOX BANNER */}
+                      {isSampleSess && (
+                        <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-3 text-xs text-cyan-200">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+                            <span>
+                              <strong>Sample Sandbox Assessment Dossier:</strong> Complete responses, Deal Triage audits, and proctoring telemetry for DVC-SAMPLE-001. Use this to verify evaluation rubrics before shortlisting live applicants.
+                            </span>
+                          </div>
+                          <a
+                            href="/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 text-xs font-semibold whitespace-nowrap border border-cyan-500/30"
+                          >
+                            Retake in Sandbox ↗
+                          </a>
+                        </div>
+                      )}
 
                       {/* 5-PART RUBRIC SCORE BREAKDOWN */}
                       {sb && (
@@ -2282,6 +2553,87 @@ export default function RecruitmentModuleViews({
                             </div>
                           </div>
                         ))}
+                      </div>
+
+                      {/* QUICK SHORTLISTING ACTIONS FOR REVIEWER */}
+                      <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Assessment Decision For {sess.candidateName}
+                          </span>
+                          <div className="text-xs text-white font-medium mt-0.5">
+                            Current Status:{" "}
+                            <span className="font-semibold text-blue-300">
+                              {targetCand?.applicationStatus || "Assessment Submitted"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await postAction(
+                                {
+                                  action: "candidate.update",
+                                  candidateId: sess.candidateId,
+                                  updates: { applicationStatus: "Shortlisted for Final Interview" },
+                                },
+                                `Shortlisted ${sess.candidateName} for Final Partner Interview!`
+                              );
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Shortlist for Final Interview</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await postAction(
+                                {
+                                  action: "candidate.update",
+                                  candidateId: sess.candidateId,
+                                  updates: { applicationStatus: "Waitlisted" },
+                                },
+                                `Moved ${sess.candidateName} to Waitlist`
+                              );
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 font-semibold text-xs"
+                          >
+                            Waitlist
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await postAction(
+                                {
+                                  action: "candidate.update",
+                                  candidateId: sess.candidateId,
+                                  updates: { applicationStatus: "Rejected" },
+                                },
+                                `Marked ${sess.candidateName} as Rejected`
+                              );
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-semibold text-xs"
+                          >
+                            Reject
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCandidateId(sess.candidateId);
+                              onChangeSubTab("rec-interviews");
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-1"
+                          >
+                            <span>Schedule Call</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2504,122 +2856,899 @@ export default function RecruitmentModuleViews({
       {/* =====================================================================
           8. SHORTLISTING & LEADERBOARD
          ===================================================================== */}
-      {activeSubTab === "rec-shortlisting" && (
-        <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base font-bold text-white">
-                Candidate Shortlisting & Final Selection Leaderboard
-              </h3>
-              <p className="text-xs text-slate-400">
-                Ranked by Composite Score (Manual Override → AI Interview & Startup Task Score → Stage 1 Non-Academic Profile Score).
-              </p>
+      {activeSubTab === "rec-shortlisting" && (() => {
+        // Build map for candidate sessions lookup
+        const sessionByCand = new Map<string, AIInterviewSessionRecord>();
+        (recruitment.aiInterviewSessions || []).forEach((s) => {
+          if (s.candidateId) sessionByCand.set(s.candidateId, s);
+          if (s.candidateCode) sessionByCand.set(s.candidateCode, s);
+        });
+
+        const realCandidates = candidates.filter((c) => c.id !== "DVC-SAMPLE-001");
+        const sampleCand = candidates.find((c) => c.id === "DVC-SAMPLE-001");
+
+        const isCandidateSubmitted = (c: CandidateRecord) => {
+          const sess = sessionByCand.get(c.id) || sessionByCand.get(c.candidateCode);
+          return Boolean(
+            sess?.status === "Completed" ||
+            (c.aiInterviewScore !== null && c.aiInterviewScore !== undefined) ||
+            c.applicationStatus === "Assessment Submitted" ||
+            c.assessmentStatus === "Submitted" ||
+            c.assessmentStatus === "Evaluated"
+          );
+        };
+
+        const submittedReal = realCandidates.filter(isCandidateSubmitted);
+        const pendingReal = realCandidates.filter((c) => !isCandidateSubmitted(c));
+        const finalistsReal = realCandidates.filter(
+          (c) =>
+            c.applicationStatus === "Shortlisted for Final Interview" ||
+            c.applicationStatus === "Selected"
+        );
+
+        const poolCandidates = includeSampleInLeaderboard ? candidates : realCandidates;
+
+        let filteredList: CandidateRecord[] = [];
+        if (shortlistingFilter === "SUBMITTED") {
+          filteredList = poolCandidates
+            .filter(isCandidateSubmitted)
+            .sort((a, b) => {
+              const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? 0;
+              const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? 0;
+              return scoreB - scoreA;
+            });
+        } else if (shortlistingFilter === "PENDING") {
+          filteredList = poolCandidates
+            .filter((c) => !isCandidateSubmitted(c))
+            .sort((a, b) => {
+              const dateA = a.assessmentDeadlineAt ? new Date(a.assessmentDeadlineAt).getTime() : Infinity;
+              const dateB = b.assessmentDeadlineAt ? new Date(b.assessmentDeadlineAt).getTime() : Infinity;
+              return dateA - dateB;
+            });
+        } else if (shortlistingFilter === "FINALISTS") {
+          filteredList = poolCandidates
+            .filter(
+              (c) =>
+                c.applicationStatus === "Shortlisted for Final Interview" ||
+                c.applicationStatus === "Selected"
+            )
+            .sort((a, b) => {
+              const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? 0;
+              const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? 0;
+              return scoreB - scoreA;
+            });
+        } else {
+          // "ALL"
+          filteredList = [...poolCandidates].sort((a, b) => {
+            const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? b.profileScore;
+            const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? a.profileScore;
+            return scoreB - scoreA;
+          });
+        }
+
+        if (shortlistingSearch.trim()) {
+          const q = shortlistingSearch.toLowerCase().trim();
+          filteredList = filteredList.filter(
+            (c) =>
+              c.fullName.toLowerCase().includes(q) ||
+              c.candidateCode.toLowerCase().includes(q) ||
+              c.email.toLowerCase().includes(q) ||
+              c.ugDegree.toLowerCase().includes(q)
+          );
+        }
+
+        const totalSubmittedCount =
+          submittedReal.length +
+          (includeSampleInLeaderboard && sampleCand && isCandidateSubmitted(sampleCand) ? 1 : 0);
+
+        return (
+          <div className="space-y-6">
+            {/* OVERVIEW & SHORTLISTING WORKFLOW BANNER */}
+            <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[11px] font-bold border border-emerald-500/40 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Post-Assessment Merit Selection</span>
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      All 79 Students Invited • Shortlisting Post-Assessment
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mt-1">
+                    Candidate Shortlisting & Evaluation Leaderboard
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-3xl leading-relaxed mt-1">
+                    All 79 candidates have been invited to complete the proctored AI Interview & Virtual Data Room Deal Triage before the cohort deadline. In accordance with recruitment criteria, <strong>no candidate is pre-selected</strong>: shortlisting for Final Partner Interviews is evaluated strictly among candidates who have submitted their assessments.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sampleSess = recruitment.aiInterviewSessions?.find(
+                        (s) => s.candidateId === "DVC-SAMPLE-001" || s.candidateCode === "DVC-SAMPLE-001"
+                      );
+                      if (sampleSess) {
+                        setSelectedSessionId(sampleSess.id);
+                      }
+                      setSelectedCandidateId("DVC-SAMPLE-001");
+                      onChangeSubTab("rec-submissions");
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-cyan-600/25 hover:bg-cyan-600/35 border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Inspect Sample Test Responses 📝</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onChangeSubTab("rec-emails")}
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Manage Cohort Deadline 📅</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* COHORT STATS METRICS */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <div className="text-[11px] font-medium text-slate-400 uppercase">
+                    Invited Cohort
+                  </div>
+                  <div className="text-2xl font-bold text-white mt-1">
+                    {realCandidates.length}
+                  </div>
+                  <div className="text-[11px] text-slate-400">100% Invited to Test</div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-500/30">
+                  <div className="text-[11px] font-medium text-emerald-400 uppercase">
+                    Submitted Assessments
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-300 mt-1">
+                    {submittedReal.length}
+                  </div>
+                  <div className="text-[11px] text-emerald-400/80">Ready for Shortlist Review</div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <div className="text-[11px] font-medium text-slate-400 uppercase">
+                    Awaiting Submissions
+                  </div>
+                  <div className="text-2xl font-bold text-amber-300 mt-1">
+                    {pendingReal.length}
+                  </div>
+                  <div className="text-[11px] text-slate-400">Window Open Until Deadline</div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-blue-500/30">
+                  <div className="text-[11px] font-medium text-blue-400 uppercase">
+                    Shortlisted for Final
+                  </div>
+                  <div className="text-2xl font-bold text-blue-300 mt-1">
+                    {finalistsReal.length}
+                  </div>
+                  <div className="text-[11px] text-blue-400/80">Partner Interview Call</div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-indigo-500/30">
+                  <div className="text-[11px] font-medium text-indigo-400 uppercase">
+                    Active Deadline
+                  </div>
+                  <div className="text-xs font-mono font-bold text-indigo-300 mt-2 truncate">
+                    {recruitment.settings?.defaultAssessmentDeadlineAt
+                      ? new Date(recruitment.settings.defaultAssessmentDeadlineAt).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Rolling 48h"}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">Cohort Cutoff Window</div>
+                </div>
+              </div>
+            </div>
+
+            {/* LEADERBOARD & SHORTLISTING CONTROLS */}
+            <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                {/* FILTER TABS */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShortlistingFilter("SUBMITTED")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                      shortlistingFilter === "SUBMITTED"
+                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Submitted Assessments ({totalSubmittedCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShortlistingFilter("PENDING")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                      shortlistingFilter === "PENDING"
+                        ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Awaiting Submissions ({pendingReal.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShortlistingFilter("FINALISTS")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                      shortlistingFilter === "FINALISTS"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Shortlisted for Final Interview ({finalistsReal.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShortlistingFilter("ALL")}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                      shortlistingFilter === "ALL"
+                        ? "bg-slate-700 text-white"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>All Cohort ({realCandidates.length})</span>
+                  </button>
+                </div>
+
+                {/* SEARCH & SAMPLE TOGGLE */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={includeSampleInLeaderboard}
+                      onChange={(e) => setIncludeSampleInLeaderboard(e.target.checked)}
+                      className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                    />
+                    <span className="text-cyan-300 font-medium">Include Sample Sandbox (DVC-SAMPLE-001)</span>
+                  </label>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={shortlistingSearch}
+                      onChange={(e) => setShortlistingSearch(e.target.value)}
+                      placeholder="Search name, roll no, degree..."
+                      className="pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-blue-500 outline-none w-56"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* TABLE RENDER: SUBMITTED ASSESSMENTS */}
+              {shortlistingFilter === "SUBMITTED" && (
+                <div>
+                  {filteredList.length === 0 ? (
+                    <div className="p-8 text-center rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div className="text-white font-bold">No Completed Submissions Yet in Filter</div>
+                      <p className="text-slate-400 text-xs max-w-md mx-auto">
+                        Candidates are actively taking their assessments. To preview how completed submissions look on the leaderboard, check &ldquo;Include Sample Sandbox (DVC-SAMPLE-001)&rdquo; above or click below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIncludeSampleInLeaderboard(true);
+                          const sampleSess = recruitment.aiInterviewSessions?.find(
+                            (s) => s.candidateId === "DVC-SAMPLE-001" || s.candidateCode === "DVC-SAMPLE-001"
+                          );
+                          if (sampleSess) {
+                            setSelectedSessionId(sampleSess.id);
+                          }
+                          setSelectedCandidateId("DVC-SAMPLE-001");
+                          onChangeSubTab("rec-submissions");
+                        }}
+                        className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs inline-flex items-center gap-1.5"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Inspect Sample Test Responses 📝</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                            <th className="py-2.5 pr-2">Rank</th>
+                            <th className="py-2.5 px-2">Candidate</th>
+                            <th className="py-2.5 px-2">Stage 1 Profile</th>
+                            <th className="py-2.5 px-2">AI Interview + Task</th>
+                            <th className="py-2.5 px-2">Proctoring</th>
+                            <th className="py-2.5 px-2">Composite Score</th>
+                            <th className="py-2.5 px-2">Submitted Responses</th>
+                            <th className="py-2.5 px-2">Status</th>
+                            <th className="py-2.5 pl-2 text-right">Shortlist Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {filteredList.map((c, idx) => {
+                            const comp =
+                              c.manualScoreOverride ??
+                              c.aiInterviewScore ??
+                              c.finalWeightedScore ??
+                              c.profileScore;
+                            const isSample = c.candidateCode === "DVC-SAMPLE-001";
+                            const sess = sessionByCand.get(c.id) || sessionByCand.get(c.candidateCode);
+
+                            return (
+                              <tr
+                                key={c.id}
+                                className={`hover:bg-slate-800/40 transition ${
+                                  isSample ? "bg-cyan-950/10" : ""
+                                }`}
+                              >
+                                <td className="py-3 pr-2 font-mono font-bold text-slate-400">
+                                  #{idx + 1}
+                                </td>
+                                <td className="py-3 px-2">
+                                  <div className="font-semibold text-white flex items-center gap-1.5">
+                                    <span>{c.fullName}</span>
+                                    {isSample && (
+                                      <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-sans font-medium">
+                                        Sandbox Test
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400">
+                                    {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <span className="text-slate-300">{c.profileScore}/100</span>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <span className="font-bold text-emerald-400 text-sm">
+                                    {c.aiInterviewScore !== null && c.aiInterviewScore !== undefined
+                                      ? `${c.aiInterviewScore}/100`
+                                      : "—"}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-2">
+                                  {c.proctoringIntegrityScore ? (
+                                    <span className="inline-flex items-center gap-1 text-slate-300">
+                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>{c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-2 font-bold text-white text-sm">
+                                  {comp}/100
+                                  {c.manualScoreOverride && (
+                                    <span className="ml-1 text-[10px] text-amber-300 font-normal">
+                                      (Override)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (sess) {
+                                        setSelectedSessionId(sess.id);
+                                      }
+                                      setSelectedCandidateId(c.id);
+                                      onChangeSubTab("rec-submissions");
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                                    <span>View Responses 📝</span>
+                                  </button>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                      c.applicationStatus === "Shortlisted for Final Interview" ||
+                                      c.applicationStatus === "Selected"
+                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                        : c.applicationStatus === "Assessment Submitted"
+                                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                        : c.applicationStatus === "Waitlisted"
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                        : c.applicationStatus === "Rejected"
+                                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                        : "bg-slate-800 text-slate-300"
+                                    }`}
+                                  >
+                                    {c.applicationStatus}
+                                  </span>
+                                </td>
+                                <td className="py-3 pl-2 text-right space-x-1.5 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await postAction(
+                                        {
+                                          action: "candidate.update",
+                                          candidateId: c.id,
+                                          updates: { applicationStatus: "Shortlisted for Final Interview" },
+                                        },
+                                        `Shortlisted ${c.fullName} for Final Partner Interview!`
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs inline-flex items-center gap-1 shadow-sm"
+                                    title="Shortlist candidate for final interview round"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>Shortlist for Final</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedCandidateId(c.id);
+                                      onChangeSubTab("rec-interviews");
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold inline-flex items-center gap-1"
+                                    title="Schedule Partner Defence Interview"
+                                  >
+                                    <span>Schedule Call</span>
+                                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await postAction(
+                                        {
+                                          action: "candidate.update",
+                                          candidateId: c.id,
+                                          updates: { applicationStatus: "Waitlisted" },
+                                        },
+                                        `Moved ${c.fullName} to Waitlist`
+                                      );
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-medium"
+                                  >
+                                    Waitlist
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await postAction(
+                                        {
+                                          action: "candidate.update",
+                                          candidateId: c.id,
+                                          updates: { applicationStatus: "Rejected" },
+                                        },
+                                        `Marked ${c.fullName} as Rejected`
+                                      );
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-medium"
+                                  >
+                                    Reject
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TABLE RENDER: AWAITING SUBMISSIONS */}
+              {shortlistingFilter === "PENDING" && (
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        Showing candidates who have not yet submitted their proctored assessment. Each candidate can access their test via their personal 1-click link until their individual deadline.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onChangeSubTab("rec-emails")}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold whitespace-nowrap"
+                    >
+                      Open Email Dispatcher →
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                          <th className="py-2.5 pr-2">#</th>
+                          <th className="py-2.5 px-2">Candidate</th>
+                          <th className="py-2.5 px-2">Registered Email</th>
+                          <th className="py-2.5 px-2">Profile Score</th>
+                          <th className="py-2.5 px-2">Direct Assessment Link</th>
+                          <th className="py-2.5 px-2">Assessment Deadline</th>
+                          <th className="py-2.5 px-2">Invitation Status</th>
+                          <th className="py-2.5 pl-2 text-right">Quick Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {filteredList.map((c, idx) => {
+                          const directUrl = `https://deeveecapital.com/candidate?code=${encodeURIComponent(c.candidateCode)}&email=${encodeURIComponent(c.email)}`;
+                          const isExpired = c.assessmentDeadlineAt && new Date(c.assessmentDeadlineAt).getTime() < Date.now();
+                          const isInvited = c.inviteStatus === "Sent" || c.inviteStatus === "Accepted";
+
+                          return (
+                            <tr key={c.id} className="hover:bg-slate-800/40 transition">
+                              <td className="py-3 pr-2 font-mono text-slate-500">
+                                {idx + 1}
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="font-semibold text-white">{c.fullName}</div>
+                                <div className="text-[11px] text-slate-400">
+                                  {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 font-mono text-slate-300">
+                                {c.email}
+                              </td>
+                              <td className="py-3 px-2 font-medium text-slate-200">
+                                {c.profileScore}/100
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-1.5">
+                                  <a
+                                    href={directUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-mono text-blue-400 hover:underline text-[11px] truncate max-w-[150px] block"
+                                  >
+                                    /candidate?code={c.candidateCode}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(directUrl);
+                                      showToast(`Copied assessment link for ${c.fullName}!`);
+                                    }}
+                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+                                    title="Copy direct link"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono text-[11px] text-slate-200">
+                                    {c.assessmentDeadlineAt
+                                      ? new Date(c.assessmentDeadlineAt).toLocaleString("en-IN", {
+                                          day: "numeric",
+                                          month: "short",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "Rolling 48h"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIndividualDeadlineModalCand(c);
+                                      const baseDate = c.assessmentDeadlineAt
+                                        ? new Date(c.assessmentDeadlineAt)
+                                        : new Date(Date.now() + 48 * 3600 * 1000);
+                                      const localIso = new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000)
+                                        .toISOString()
+                                        .slice(0, 16);
+                                      setIndividualDeadlineInput(localIso);
+                                    }}
+                                    className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium"
+                                  >
+                                    Extend 📅
+                                  </button>
+                                </div>
+                                {isExpired && (
+                                  <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 text-[9px] font-semibold">
+                                    Window Expired
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-2">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                    isInvited
+                                      ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                      : "bg-slate-800 text-slate-400"
+                                  }`}
+                                >
+                                  {isInvited ? "Sent (SMTP)" : "Pending Dispatch"}
+                                </span>
+                              </td>
+                              <td className="py-3 pl-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await postAction(
+                                      {
+                                        action: "email.send_approved",
+                                        adminApproved: true,
+                                        candidateIds: [c.id],
+                                        templateId: "tpl-invite-assessment",
+                                      },
+                                      `Dispatched invitation to ${c.fullName} via siddharth@deeveecapital.com`
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs inline-flex items-center gap-1"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>{isInvited ? "Resend Invite" : "Send Invite"}</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TABLE RENDER: FINALISTS */}
+              {shortlistingFilter === "FINALISTS" && (
+                <div>
+                  {filteredList.length === 0 ? (
+                    <div className="p-8 text-center rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                      <div className="text-white font-bold">No Candidates Shortlisted for Final Yet</div>
+                      <p className="text-slate-400 text-xs">
+                        Review submitted assessments in the &ldquo;Submitted Assessments&rdquo; tab and click &ldquo;Shortlist for Final&rdquo; to add candidates here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                            <th className="py-2.5 pr-2">Rank</th>
+                            <th className="py-2.5 px-2">Finalist Candidate</th>
+                            <th className="py-2.5 px-2">AI Interview Score</th>
+                            <th className="py-2.5 px-2">Proctoring Status</th>
+                            <th className="py-2.5 px-2">Composite Score</th>
+                            <th className="py-2.5 px-2">Submitted Responses</th>
+                            <th className="py-2.5 pl-2 text-right">Schedule Partner Interview</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {filteredList.map((c, idx) => {
+                            const comp =
+                              c.manualScoreOverride ??
+                              c.aiInterviewScore ??
+                              c.finalWeightedScore ??
+                              c.profileScore;
+                            const sess = sessionByCand.get(c.id) || sessionByCand.get(c.candidateCode);
+
+                            return (
+                              <tr key={c.id} className="hover:bg-slate-800/40 transition">
+                                <td className="py-3 pr-2 font-mono font-bold text-emerald-400">
+                                  #{idx + 1}
+                                </td>
+                                <td className="py-3 px-2">
+                                  <div className="font-semibold text-white">{c.fullName}</div>
+                                  <div className="text-[11px] text-slate-400">
+                                    {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2 font-bold text-emerald-400 text-sm">
+                                  {c.aiInterviewScore ? `${c.aiInterviewScore}/100` : "—"}
+                                </td>
+                                <td className="py-3 px-2">
+                                  {c.proctoringIntegrityScore ? (
+                                    <span className="text-slate-300">
+                                      {c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-2 font-bold text-white text-sm">
+                                  {comp}/100
+                                </td>
+                                <td className="py-3 px-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (sess) setSelectedSessionId(sess.id);
+                                      setSelectedCandidateId(c.id);
+                                      onChangeSubTab("rec-submissions");
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                                    <span>View Responses 📝</span>
+                                  </button>
+                                </td>
+                                <td className="py-3 pl-2 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedCandidateId(c.id);
+                                      onChangeSubTab("rec-interviews");
+                                    }}
+                                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Schedule Partner Call 📞</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TABLE RENDER: ALL COHORT */}
+              {shortlistingFilter === "ALL" && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                        <th className="py-2.5 pr-2">Rank</th>
+                        <th className="py-2.5 px-2">Candidate</th>
+                        <th className="py-2.5 px-2">Stage 1 Profile</th>
+                        <th className="py-2.5 px-2">AI Interview + Task</th>
+                        <th className="py-2.5 px-2">Proctoring</th>
+                        <th className="py-2.5 px-2">Composite Score</th>
+                        <th className="py-2.5 px-2">Submitted Responses</th>
+                        <th className="py-2.5 px-2">Status</th>
+                        <th className="py-2.5 pl-2 text-right">Quick Decision</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {filteredList.map((c, idx) => {
+                        const comp =
+                          c.manualScoreOverride ??
+                          c.aiInterviewScore ??
+                          c.finalWeightedScore ??
+                          c.profileScore;
+                        const isSubmitted = isCandidateSubmitted(c);
+                        const sess = sessionByCand.get(c.id) || sessionByCand.get(c.candidateCode);
+
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-800/40">
+                            <td className="py-2.5 pr-2 font-mono font-bold text-slate-400">
+                              #{idx + 1}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <div className="font-semibold text-white">{c.fullName}</div>
+                              <div className="text-[11px] text-slate-400">
+                                {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-2">{c.profileScore}/100</td>
+                            <td className="py-2.5 px-2 font-semibold">
+                              {c.aiInterviewScore !== null && c.aiInterviewScore !== undefined ? (
+                                <span className="text-emerald-400">{c.aiInterviewScore}/100</span>
+                              ) : (
+                                <span className="text-slate-500">Pending</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {c.proctoringIntegrityScore ? (
+                                <span className="text-blue-300">
+                                  {c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2 font-bold text-white text-sm">
+                              {comp}/100
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {isSubmitted ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (sess) setSelectedSessionId(sess.id);
+                                    setSelectedCandidateId(c.id);
+                                    onChangeSubTab("rec-submissions");
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-semibold text-[11px] flex items-center gap-1"
+                                >
+                                  <FileText className="w-3 h-3 text-indigo-400" />
+                                  <span>View Responses 📝</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-500 text-[11px]">Awaiting Test</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-[11px]">
+                                {c.applicationStatus}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pl-2 text-right space-x-1.5 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await postAction(
+                                    {
+                                      action: "candidate.update",
+                                      candidateId: c.id,
+                                      updates: { applicationStatus: "Shortlisted for Final Interview" },
+                                    },
+                                    `Shortlisted ${c.fullName} for Final Partner Interview!`
+                                  );
+                                }}
+                                className="px-2 py-1 rounded text-[11px] font-semibold bg-emerald-600/25 text-emerald-300 hover:bg-emerald-600/40"
+                              >
+                                Shortlist
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await postAction(
+                                    {
+                                      action: "candidate.update",
+                                      candidateId: c.id,
+                                      updates: { applicationStatus: "Waitlisted" },
+                                    },
+                                    `Moved ${c.fullName} to Waitlist`
+                                  );
+                                }}
+                                className="px-2 py-1 rounded text-[11px] font-semibold bg-amber-600/25 text-amber-300 hover:bg-amber-600/40"
+                              >
+                                Waitlist
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await postAction(
+                                    {
+                                      action: "candidate.update",
+                                      candidateId: c.id,
+                                      updates: { applicationStatus: "Rejected" },
+                                    },
+                                    `Marked ${c.fullName} as Rejected`
+                                  );
+                                }}
+                                className="px-2 py-1 rounded text-[11px] font-semibold bg-rose-600/25 text-rose-300 hover:bg-rose-600/40"
+                              >
+                                Reject
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
-                  <th className="py-2.5 pr-2">Rank</th>
-                  <th className="py-2.5 px-2">Candidate</th>
-                  <th className="py-2.5 px-2">Stage 1 Profile</th>
-                  <th className="py-2.5 px-2">AI Interview + Task</th>
-                  <th className="py-2.5 px-2">Proctoring</th>
-                  <th className="py-2.5 px-2">Composite Score</th>
-                  <th className="py-2.5 px-2">Current Decision</th>
-                  <th className="py-2.5 pl-2 text-right">Quick Decision</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {[...candidates]
-                  .sort(
-                    (a, b) =>
-                      (b.manualScoreOverride ??
-                        b.aiInterviewScore ??
-                        b.finalWeightedScore ??
-                        b.profileScore) -
-                      (a.manualScoreOverride ??
-                        a.aiInterviewScore ??
-                        a.finalWeightedScore ??
-                        a.profileScore)
-                  )
-                  .slice(0, 35)
-                  .map((c, idx) => {
-                    const comp =
-                      c.manualScoreOverride ??
-                      c.aiInterviewScore ??
-                      c.finalWeightedScore ??
-                      c.profileScore;
-                    return (
-                      <tr key={c.id} className="hover:bg-slate-800/40">
-                        <td className="py-2.5 pr-2 font-mono font-bold text-slate-400">
-                          #{idx + 1}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <div className="font-semibold text-white">{c.fullName}</div>
-                          <div className="text-[11px] text-slate-400">
-                            {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths}m Work-Ex)
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-2">{c.profileScore}/100</td>
-                        <td className="py-2.5 px-2 font-semibold text-emerald-400">
-                          {c.aiInterviewScore !== null && c.aiInterviewScore !== undefined
-                            ? `${c.aiInterviewScore}/100`
-                            : "Pending"}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          {c.proctoringIntegrityScore ? (
-                            <span className="text-blue-300">
-                              {c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="py-2.5 px-2 font-bold text-white text-sm">
-                          {comp}/100
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-[11px]">
-                            {c.applicationStatus}
-                          </span>
-                        </td>
-                        <td className="py-2.5 pl-2 text-right space-x-1.5">
-                          {(["Selected", "Waitlisted", "Rejected"] as const).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={async () => {
-                                await postAction(
-                                  {
-                                    action: "candidate.update",
-                                    candidateId: c.id,
-                                    updates: { applicationStatus: st },
-                                  },
-                                  `Marked ${c.fullName} as ${st}`
-                                );
-                              }}
-                              className={`px-2 py-1 rounded text-[11px] font-semibold ${
-                                st === "Selected"
-                                  ? "bg-emerald-600/25 text-emerald-300 hover:bg-emerald-600/40"
-                                  : st === "Waitlisted"
-                                  ? "bg-amber-600/25 text-amber-300 hover:bg-amber-600/40"
-                                  : "bg-rose-600/25 text-rose-300 hover:bg-rose-600/40"
-                              }`}
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* =====================================================================
           9. FINAL PARTNER INTERVIEWS (STAGE 5 RESEARCH DEFENCE)
@@ -3626,143 +4755,6 @@ export default function RecruitmentModuleViews({
               </table>
             </div>
           </div>
-
-          {/* INDIVIDUAL CANDIDATE DEADLINE EXTENSION MODAL */}
-          {individualDeadlineModalCand && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-6 space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-blue-400" />
-                    <div>
-                      <h3 className="text-base font-bold text-white">
-                        Extend Assessment Deadline
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        {individualDeadlineModalCand.fullName} ({individualDeadlineModalCand.candidateCode})
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIndividualDeadlineModalCand(null)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Candidate Email:</span>
-                    <span className="font-mono text-slate-200">{individualDeadlineModalCand.email}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Current Window Deadline:</span>
-                    <span className="font-mono text-indigo-300">
-                      {individualDeadlineModalCand.assessmentDeadlineAt
-                        ? new Date(individualDeadlineModalCand.assessmentDeadlineAt).toLocaleString("en-IN", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })
-                        : "Rolling 48 Hours"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Assessment Status:</span>
-                    <span className="font-medium text-slate-200">{individualDeadlineModalCand.assessmentStatus}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Quick Extension Presets:
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: "+24 Hours", hours: 24 },
-                      { label: "+48 Hours", hours: 48 },
-                      { label: "+72 Hours", hours: 72 },
-                      { label: "+7 Days", hours: 168 },
-                    ].map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => {
-                          const base =
-                            individualDeadlineModalCand.assessmentDeadlineAt &&
-                            new Date(individualDeadlineModalCand.assessmentDeadlineAt).getTime() > Date.now()
-                              ? new Date(individualDeadlineModalCand.assessmentDeadlineAt)
-                              : new Date();
-                          const d = new Date(base.getTime() + preset.hours * 3600 * 1000);
-                          const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-                            .toISOString()
-                            .slice(0, 16);
-                          setIndividualDeadlineInput(localIso);
-                        }}
-                        className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition text-center"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    New Assessment Deadline (Date & Time):
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={individualDeadlineInput}
-                    onChange={(e) => setIndividualDeadlineInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-blue-500 outline-none"
-                  />
-                  <p className="text-[11px] text-slate-400">
-                    Candidate will be permitted to access and submit their proctored assessment until this timestamp.
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setIndividualDeadlineModalCand(null)}
-                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!individualDeadlineInput || isUpdatingDeadline}
-                    onClick={async () => {
-                      if (!individualDeadlineInput) return;
-                      setIsUpdatingDeadline(true);
-                      const deadlineIso = new Date(individualDeadlineInput).toISOString();
-                      await postAction(
-                        {
-                          action: "candidate.update_deadline",
-                          candidateIds: [individualDeadlineModalCand.id],
-                          deadlineAt: deadlineIso,
-                        },
-                        `Extended assessment deadline for ${individualDeadlineModalCand.fullName} to ${new Date(deadlineIso).toLocaleString("en-IN")}`
-                      );
-                      setIsUpdatingDeadline(false);
-                      setIndividualDeadlineModalCand(null);
-                      showToast(`Extended deadline for ${individualDeadlineModalCand.fullName}!`);
-                    }}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20"
-                  >
-                    {isUpdatingDeadline ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                    <span>Save & Extend Deadline</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -3959,6 +4951,143 @@ export default function RecruitmentModuleViews({
           >
             Save Recruitment Settings
           </button>
+        </div>
+      )}
+
+      {/* INDIVIDUAL CANDIDATE DEADLINE EXTENSION MODAL (GLOBALLY ACCESSIBLE) */}
+      {individualDeadlineModalCand && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Extend Assessment Deadline
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {individualDeadlineModalCand.fullName} ({individualDeadlineModalCand.candidateCode})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIndividualDeadlineModalCand(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Candidate Email:</span>
+                <span className="font-mono text-slate-200">{individualDeadlineModalCand.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Current Window Deadline:</span>
+                <span className="font-mono text-indigo-300">
+                  {individualDeadlineModalCand.assessmentDeadlineAt
+                    ? new Date(individualDeadlineModalCand.assessmentDeadlineAt).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Rolling 48 Hours"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Assessment Status:</span>
+                <span className="font-medium text-slate-200">{individualDeadlineModalCand.assessmentStatus}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-300">
+                Quick Extension Presets:
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "+24 Hours", hours: 24 },
+                  { label: "+48 Hours", hours: 48 },
+                  { label: "+72 Hours", hours: 72 },
+                  { label: "+7 Days", hours: 168 },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const base =
+                        individualDeadlineModalCand.assessmentDeadlineAt &&
+                        new Date(individualDeadlineModalCand.assessmentDeadlineAt).getTime() > Date.now()
+                          ? new Date(individualDeadlineModalCand.assessmentDeadlineAt)
+                          : new Date();
+                      const d = new Date(base.getTime() + preset.hours * 3600 * 1000);
+                      const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                      setIndividualDeadlineInput(localIso);
+                    }}
+                    className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition text-center"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                New Assessment Deadline (Date & Time):
+              </label>
+              <input
+                type="datetime-local"
+                value={individualDeadlineInput}
+                onChange={(e) => setIndividualDeadlineInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-blue-500 outline-none"
+              />
+              <p className="text-[11px] text-slate-400">
+                Candidate will be permitted to access and submit their proctored assessment until this timestamp.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIndividualDeadlineModalCand(null)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!individualDeadlineInput || isUpdatingDeadline}
+                onClick={async () => {
+                  if (!individualDeadlineInput) return;
+                  setIsUpdatingDeadline(true);
+                  const deadlineIso = new Date(individualDeadlineInput).toISOString();
+                  await postAction(
+                    {
+                      action: "candidate.update_deadline",
+                      candidateIds: [individualDeadlineModalCand.id],
+                      deadlineAt: deadlineIso,
+                    },
+                    `Extended assessment deadline for ${individualDeadlineModalCand.fullName} to ${new Date(deadlineIso).toLocaleString("en-IN")}`
+                  );
+                  setIsUpdatingDeadline(false);
+                  setIndividualDeadlineModalCand(null);
+                  showToast(`Extended deadline for ${individualDeadlineModalCand.fullName}!`);
+                }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+              >
+                {isUpdatingDeadline ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Save & Extend Deadline</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -38,6 +38,8 @@ export type CandidateSelectionStatus =
   | "Pending Screening"
   | "Shortlisted for Assessment"
   | "In Assessment Funnel"
+  | "Assessment Submitted"
+  | "Shortlisted for Final Interview"
   | "Interview Stage"
   | "Recommended"
   | "Selected"
