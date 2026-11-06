@@ -183,6 +183,7 @@ function sanitizeSessionForCandidate(session: AIInterviewSessionRecord) {
     proctoring: {
       webcamEnabled: session.proctoring.webcamEnabled,
       micEnabled: session.proctoring.micEnabled,
+      screenShareActive: Boolean(session.proctoring.screenShareActive),
       fullscreenEntered: session.proctoring.fullscreenEntered,
       fullscreenExitCount: session.proctoring.fullscreenExitCount,
       tabSwitchCount: session.proctoring.tabSwitchCount,
@@ -190,6 +191,7 @@ function sanitizeSessionForCandidate(session: AIInterviewSessionRecord) {
       integrityScore: session.proctoring.integrityScore,
       integrityStatus: session.proctoring.integrityStatus,
       eventsCount: session.proctoring.events.length,
+      snapshotsCount: (session.proctoring.snapshots || []).length,
     },
   };
 }
@@ -254,7 +256,7 @@ export async function GET(request: NextRequest) {
         roleTitle: rec.settings.roleTitle,
         stipend: rec.settings.stipend,
         workArrangement: rec.settings.workArrangement,
-        aiInterviewDurationMinutes: rec.settings.aiInterviewDurationMinutes || 25,
+        aiInterviewDurationMinutes: rec.settings.aiInterviewDurationMinutes || 45,
       },
     });
   }
@@ -317,7 +319,7 @@ export async function GET(request: NextRequest) {
       roleTitle: rec.settings.roleTitle,
       stipend: rec.settings.stipend,
       workArrangement: rec.settings.workArrangement,
-      aiInterviewDurationMinutes: rec.settings.aiInterviewDurationMinutes || 25,
+      aiInterviewDurationMinutes: rec.settings.aiInterviewDurationMinutes || 45,
       stage2TimeLimitMinutes: rec.settings.stage2TimeLimitMinutes,
       stage3WindowHours: rec.settings.stage3WindowHours,
     },
@@ -382,7 +384,7 @@ export async function POST(request: NextRequest) {
 
     if (!cand) {
       return NextResponse.json(
-        { error: "No matching IIM Amritsar applicant record found for this email/invitation." },
+        { error: "No matching applicant record found for this email/invitation." },
         { status: 404 }
       );
     }
@@ -423,7 +425,7 @@ export async function POST(request: NextRequest) {
     const cand = rec.candidates.find((c) => c.email.toLowerCase() === email);
     if (!cand) {
       return NextResponse.json(
-        { error: "Applicant email not found in the IIM Amritsar cohort database." },
+        { error: "Applicant email not found in the cohort database." },
         { status: 404 }
       );
     }
@@ -526,6 +528,9 @@ export async function POST(request: NextRequest) {
       const proctoring = createInitialProctoringTelemetry();
       proctoring.webcamEnabled = true;
       proctoring.micEnabled = true;
+      if (typeof body.screenShareActive === "boolean") {
+        proctoring.screenShareActive = body.screenShareActive;
+      }
       proctoring.fullscreenEntered = Boolean(body.fullscreenEntered ?? true);
       proctoring.events.push({
         id: `pev-start-${Date.now()}`,
@@ -548,7 +553,7 @@ export async function POST(request: NextRequest) {
         startedAt: now,
         completedAt: null,
         totalDurationSeconds: 0,
-        timeLimitMinutes: rec.settings.aiInterviewDurationMinutes || 25,
+        timeLimitMinutes: rec.settings.aiInterviewDurationMinutes || 45,
         turns,
         currentTurnIndex: 0,
         startupTaskSubmission: null,
@@ -651,6 +656,10 @@ export async function POST(request: NextRequest) {
       session.proctoring.rapidInjectionFlags += 1;
     } else if (eventType === "HEARTBEAT_SNAPSHOT") {
       session.proctoring.webcamSnapshotsCount += 1;
+    } else if (eventType === "SCREEN_SHARE_STOPPED") {
+      session.proctoring.screenShareActive = false;
+    } else if (eventType === "SCREEN_SHARE_STARTED") {
+      session.proctoring.screenShareActive = true;
     }
 
     if (typeof body.webcamEnabled === "boolean") {
@@ -658,6 +667,9 @@ export async function POST(request: NextRequest) {
     }
     if (typeof body.micEnabled === "boolean") {
       session.proctoring.micEnabled = body.micEnabled;
+    }
+    if (typeof body.screenShareActive === "boolean") {
+      session.proctoring.screenShareActive = body.screenShareActive;
     }
     if (typeof body.fullscreenEntered === "boolean") {
       session.proctoring.fullscreenEntered = body.fullscreenEntered;
@@ -668,9 +680,11 @@ export async function POST(request: NextRequest) {
       id: `pev-${Date.now()}`,
       type: eventType,
       severity:
-        eventType === "HEARTBEAT_SNAPSHOT"
+        eventType === "HEARTBEAT_SNAPSHOT" || eventType === "SCREEN_SHARE_STARTED"
           ? "info"
-          : eventType === "TAB_SWITCH" || eventType === "CLIPBOARD_PASTE_BLOCKED"
+          : eventType === "TAB_SWITCH" ||
+            eventType === "CLIPBOARD_PASTE_BLOCKED" ||
+            eventType === "SCREEN_SHARE_STOPPED"
           ? "critical"
           : "warning",
       description,
@@ -693,7 +707,62 @@ export async function POST(request: NextRequest) {
         tabSwitchCount: session.proctoring.tabSwitchCount,
         fullscreenExitCount: session.proctoring.fullscreenExitCount,
         copyPasteBlockedCount: session.proctoring.copyPasteBlockedCount,
+        screenShareActive: session.proctoring.screenShareActive,
       },
+    });
+  }
+
+  // ==========================================================================
+  // 4B. LOG LOW-BANDWIDTH RANDOM SCREEN & WEBCAM PROCTORING SNAPSHOT
+  // ==========================================================================
+  if (action === "ai_interview.snapshot" || action === "proctoring.snapshot") {
+    const session = (rec.aiInterviewSessions || []).find((s) => s.candidateId === cand.id);
+    if (!session) {
+      return NextResponse.json(
+        { ok: false, error: "Active AI interview session not found." },
+        { status: 404 }
+      );
+    }
+
+    const rawDataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
+    const snapType = body.type === "screen" ? "screen" : "webcam";
+
+    if (!Array.isArray(session.proctoring.snapshots)) {
+      session.proctoring.snapshots = [];
+    }
+
+    if (rawDataUrl && rawDataUrl.startsWith("data:image/")) {
+      const snapEntry = {
+        id: `snap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: now,
+        type: snapType as "screen" | "webcam",
+        dataUrl: rawDataUrl,
+        turnIndex: session.currentTurnIndex || 0,
+      };
+
+      session.proctoring.snapshots.push(snapEntry);
+      // Cap at 10 snapshots to ensure ultra-lightweight Firestore documents (< 200KB)
+      if (session.proctoring.snapshots.length > 10) {
+        session.proctoring.snapshots = session.proctoring.snapshots.slice(-10);
+      }
+
+      if (snapType === "screen") {
+        session.proctoring.screenShareSnapshotsCount =
+          (session.proctoring.screenShareSnapshotsCount || 0) + 1;
+        session.proctoring.screenShareActive = true;
+      } else {
+        session.proctoring.webcamSnapshotsCount =
+          (session.proctoring.webcamSnapshotsCount || 0) + 1;
+      }
+
+      session.proctoring.lastHeartbeatAt = now;
+      await saveWorkspaceDb(db);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      snapshotsCount: session.proctoring.snapshots.length,
+      screenShareActive: session.proctoring.screenShareActive,
     });
   }
 

@@ -11,7 +11,7 @@ import { getWorkspaceDb } from "./db";
 import { hasPermission } from "./permissions";
 import { PermissionKey, WorkspaceUser } from "./types";
 
-export const SESSION_COOKIE_NAME = "dvc_workspace_session";
+export const SESSION_COOKIE_NAME = "__session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function getSessionSecret(): string {
@@ -102,7 +102,9 @@ export async function getAuthenticatedUser(
   }
 
   // 2. Check HTTP-only cookie
-  const cookieToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const cookieToken =
+    request.cookies.get(SESSION_COOKIE_NAME)?.value ||
+    request.cookies.get("dvc_workspace_session")?.value;
   if (cookieToken) {
     const verifiedUserId = verifySignedSessionToken(cookieToken);
     if (verifiedUserId) {

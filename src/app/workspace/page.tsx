@@ -133,7 +133,10 @@ function WorkspaceInner() {
 
   const fetchWorkspaceState = useCallback(async () => {
     try {
-      const authRes = await fetch("/api/workspace/auth");
+      const jwt = typeof window !== "undefined" ? localStorage.getItem("dvc_workspace_jwt") : null;
+      const headers: HeadersInit = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+
+      const authRes = await fetch("/api/workspace/auth", { headers });
       const authJson = await authRes.json();
       setAvailableAccounts(authJson.availableAccounts || []);
       setPendingInvitations(authJson.pendingInvitations || []);
@@ -146,7 +149,7 @@ function WorkspaceInner() {
         return;
       }
 
-      const stateRes = await fetch("/api/workspace/state");
+      const stateRes = await fetch("/api/workspace/state", { headers });
       if (!stateRes.ok) {
         setAuthenticated(false);
         setCurrentUser(null);
@@ -755,6 +758,9 @@ function WorkspaceInner() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ action: "logout" }),
                 });
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem("dvc_workspace_jwt");
+                }
                 setAuthenticated(false);
                 setCurrentUser(null);
               }}

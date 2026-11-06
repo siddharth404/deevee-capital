@@ -597,10 +597,10 @@ export function generatePersonalizedInterviewTurns(
         ? ` (alongside your stint at ${secondInternship.organization})`
         : "";
     q1Context = `Internship Experience: ${primaryInternship.designation || "Intern"} @ ${primaryInternship.organization}${secondClause}`;
-    q1Prompt = `Welcome ${firstName}. I'm looking at your profile from IIM Amritsar—specifically your internship as ${primaryInternship.designation || "an Intern"} at ${primaryInternship.organization}${secondClause}. Beyond the high-level bullet points on a CV, walk me through one specific analysis or deliverable you personally built there: what raw data did you gather, what did you discover that wasn't obvious at first, and what was the commercial outcome?`;
+    q1Prompt = `Welcome ${firstName}. I'm looking at your profile—specifically your internship as ${primaryInternship.designation || "an Intern"} at ${primaryInternship.organization}${secondClause}. Beyond the high-level bullet points on a CV, walk me through one specific analysis or deliverable you personally built there: what raw data did you gather, what did you discover that wasn't obvious at first, and what was the commercial outcome?`;
   } else {
     q1Context = `Academic Background: ${candidate.ugDegree} in ${candidate.ugSpecialisation || "General Studies"}`;
-    q1Prompt = `Welcome ${firstName}. Looking at your IIM Amritsar profile and your undergraduate background in ${candidate.ugDegree} (${candidate.ugSpecialisation || "Core specialization"}), tell me about the most rigorous analytical or commercial project you have executed so far. What specific hypothesis were you testing, how did you collect primary or secondary evidence, and what conclusion did the numbers force you to reach?`;
+    q1Prompt = `Welcome ${firstName}. Looking at your profile and your undergraduate background in ${candidate.ugDegree} (${candidate.ugSpecialisation || "Core specialization"}), tell me about the most rigorous analytical or commercial project you have executed so far. What specific hypothesis were you testing, how did you collect primary or secondary evidence, and what conclusion did the numbers force you to reach?`;
   }
 
   turns.push({
@@ -1197,6 +1197,7 @@ export function createInitialProctoringTelemetry(): ProctoringTelemetry {
   return {
     webcamEnabled: false,
     micEnabled: false,
+    screenShareActive: false,
     fullscreenEntered: false,
     fullscreenExitCount: 0,
     tabSwitchCount: 0,
@@ -1205,9 +1206,11 @@ export function createInitialProctoringTelemetry(): ProctoringTelemetry {
     copyPasteBlockedCount: 0,
     rapidInjectionFlags: 0,
     webcamSnapshotsCount: 0,
+    screenShareSnapshotsCount: 0,
     lastHeartbeatAt: new Date().toISOString(),
     integrityScore: 100,
     integrityStatus: "High Integrity",
     events: [],
+    snapshots: [],
   };
 }

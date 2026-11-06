@@ -415,6 +415,7 @@ export async function POST(request: NextRequest) {
     if (action === "logout") {
       const res = NextResponse.json({ ok: true });
       res.cookies.delete(SESSION_COOKIE_NAME);
+      res.cookies.delete("dvc_workspace_session");
       return res;
     }
 

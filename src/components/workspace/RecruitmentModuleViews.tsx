@@ -7,9 +7,11 @@ import {
   BarChart3,
   BookOpen,
   Briefcase,
+  Check,
   CheckCircle2,
   ChevronRight,
   Clock,
+  Copy,
   Download,
   Edit3,
   ExternalLink,
@@ -18,6 +20,7 @@ import {
   FileText,
   Filter,
   GraduationCap,
+  HelpCircle,
   Lock,
   Mail,
   Mic,
@@ -47,7 +50,10 @@ import {
   RecruitmentModuleState,
   StartupCaseSet,
 } from "@/lib/workspace/recruitmentTypes";
-import { generatePersonalizedInterviewTurns } from "@/lib/workspace/aiInterviewEngine";
+import {
+  generatePersonalizedInterviewTurns,
+  selectCaseSetForCandidate,
+} from "@/lib/workspace/aiInterviewEngine";
 
 export type RecruitmentSubTab =
   | "rec-dashboard"
@@ -170,6 +176,10 @@ export default function RecruitmentModuleViews({
     "Strong Hire" | "Hire" | "Waitlist" | "No Hire"
   >("Hire");
 
+  // Pre-Generated Candidate Interview Prompts Inspector State
+  const [promptInspectorCandidateId, setPromptInspectorCandidateId] = useState<string>("");
+  const [copiedPromptId, setCopiedPromptId] = useState<string>("");
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 5000);
@@ -245,6 +255,23 @@ export default function RecruitmentModuleViews({
     [candidates, selectedCandidateId]
   );
 
+  const promptInspectorCandidate = useMemo(() => {
+    if (promptInspectorCandidateId) {
+      return candidates.find((c) => c.id === promptInspectorCandidateId) || null;
+    }
+    return selectedCandidate || candidates[0] || null;
+  }, [candidates, promptInspectorCandidateId, selectedCandidate]);
+
+  const inspectorGeneratedTurns = useMemo(() => {
+    if (!promptInspectorCandidate) return [];
+    return generatePersonalizedInterviewTurns(promptInspectorCandidate);
+  }, [promptInspectorCandidate]);
+
+  const inspectorAssignedCaseSet = useMemo(() => {
+    if (!promptInspectorCandidate) return null;
+    return selectCaseSetForCandidate(promptInspectorCandidate);
+  }, [promptInspectorCandidate]);
+
   // Sync edit inputs when selectedCandidate changes
   useEffect(() => {
     if (selectedCandidate) {
@@ -315,7 +342,7 @@ export default function RecruitmentModuleViews({
     return (
       <div className="p-10 flex items-center justify-center text-slate-400 text-sm gap-2">
         <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
-        <span>Loading IIM Amritsar Recruitment & AI Interview System...</span>
+        <span>Loading Investment Recruitment & AI Interview System...</span>
       </div>
     );
   }
@@ -507,7 +534,7 @@ export default function RecruitmentModuleViews({
               </div>
               <div className="text-2xl font-bold text-amber-400 mt-1">{shortlistedCount}</div>
               <div className="text-[11px] text-slate-400 mt-1">
-                Eligible for 25-Min AI Interview
+                Eligible for 45-Min AI Interview
               </div>
             </div>
 
@@ -532,6 +559,230 @@ export default function RecruitmentModuleViews({
                 Fast-Track for Final Call
               </div>
             </div>
+          </div>
+
+          {/* ===================================================================
+              PRE-GENERATED INTERVIEW QUESTIONS INSPECTOR (CANDIDATE PROFILE-BASED)
+             =================================================================== */}
+          <div className="p-6 rounded-2xl bg-[#0D1527] border border-blue-500/30 space-y-5 shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300 font-mono text-[11px] font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Pre-Generated Interview Prompts Inspector</span>
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    Verify AI Questions beforehand for any applicant
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white mt-1">
+                  Preview Candidate Interview Questions & Case Assignments
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Inspect the exact questions each candidate will receive before their test. Phase 1 is dynamically personalized to their CV/work experience, Phase 2 tests standardized startup sourcing & VC judgment, and Phase 3 assigns their 3-company virtual data room.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Select Applicant:</span>
+                  <select
+                    value={promptInspectorCandidate?.id || ""}
+                    onChange={(e) => setPromptInspectorCandidateId(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white font-medium focus:outline-none focus:border-blue-500"
+                  >
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.candidateCode} — {c.fullName} ({c.ugDegree} • {c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {promptInspectorCandidate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allText = inspectorGeneratedTurns
+                        .map(
+                          (t) =>
+                            `### Q${t.questionIndex} [${t.phaseLabel}]\nContext: ${t.resumeContextCited}\nQuestion: "${t.questionPrompt}"\nSignals to evaluate:\n${t.expectedSignals.map((s) => `- ${s}`).join("\n")}`
+                        )
+                        .join("\n\n");
+                      navigator.clipboard.writeText(
+                        `# Deevee Capital Interview Prompts for ${promptInspectorCandidate.fullName} (${promptInspectorCandidate.candidateCode})\n\n${allText}`
+                      );
+                      setCopiedPromptId("ALL");
+                      setTimeout(() => setCopiedPromptId(""), 3000);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    {copiedPromptId === "ALL" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-300">Copied All Questions!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy All 6 Questions</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {promptInspectorCandidate && (
+                  <a
+                    href={`/candidate?sample=1&code=${encodeURIComponent(promptInspectorCandidate.candidateCode)}&email=${encodeURIComponent(promptInspectorCandidate.email)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Test This Candidate Link</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {promptInspectorCandidate && (
+              <div className="space-y-4">
+                {/* CANDIDATE CONTEXT SNAPSHOT */}
+                <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px] uppercase">Candidate Code & Name</span>
+                    <span className="text-white font-bold text-sm">{promptInspectorCandidate.fullName}</span>
+                    <div className="font-mono text-blue-400 text-[11px]">{promptInspectorCandidate.candidateCode}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px] uppercase">Academic Background</span>
+                    <span className="text-slate-200 font-medium">{promptInspectorCandidate.ugDegree} ({promptInspectorCandidate.ugSpecialisation || "General"})</span>
+                    <div className="text-slate-400 text-[11px]">Class X: {promptInspectorCandidate.classXPercentage ?? "N/A"}% • XII: {promptInspectorCandidate.classXIIPercentage ?? "N/A"}%</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px] uppercase">Work & Internship Experience</span>
+                    <span className="text-slate-200 font-medium">
+                      {promptInspectorCandidate.totalWorkExMonths > 0
+                        ? `${promptInspectorCandidate.totalWorkExMonths} mos full-time`
+                        : "Fresher"}{" "}
+                      • {promptInspectorCandidate.internshipSummary}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px] uppercase">Assigned Startup Case Set</span>
+                    <span className="text-emerald-300 font-semibold">{inspectorAssignedCaseSet?.title || "Indian Tech & Commerce"}</span>
+                    <div className="text-slate-400 text-[11px]">{inspectorAssignedCaseSet?.startups?.map((s) => s.name).join(" • ")}</div>
+                  </div>
+                </div>
+
+                {/* GENERATED QUESTIONS LIST */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* PHASE 1 (PROFILE PERSONALIZED) */}
+                  <div className="p-4 rounded-xl bg-slate-950/60 border border-blue-500/20 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                        <UserCheck className="w-4 h-4 text-blue-400" />
+                        <span>Phase 1 • Profile-Personalized Questions (CV Deep-Dive)</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 font-medium">
+                        Tailored to Resume
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {inspectorGeneratedTurns.slice(0, 3).map((turn) => (
+                        <div key={turn.id} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-blue-400">Q{turn.questionIndex} • {turn.phaseLabel.replace("Phase 1 • ", "")}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(turn.questionPrompt);
+                                setCopiedPromptId(turn.id);
+                                setTimeout(() => setCopiedPromptId(""), 2500);
+                              }}
+                              className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px]"
+                            >
+                              {copiedPromptId === turn.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-emerald-400">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="p-2 rounded bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400">
+                            <strong className="text-slate-300">Cited Context:</strong> {turn.resumeContextCited}
+                          </div>
+                          <p className="text-slate-100 font-medium leading-relaxed">&ldquo;{turn.questionPrompt}&rdquo;</p>
+                          <div className="text-[10px] text-slate-400 pt-1">
+                            <strong className="text-slate-300">Signals to Check:</strong> {turn.expectedSignals.join(" • ")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PHASE 2 (STANDARDIZED VC THINKING) */}
+                  <div className="p-4 rounded-xl bg-slate-950/60 border border-indigo-500/20 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                        <TrendingUp className="w-4 h-4 text-indigo-400" />
+                        <span>Phase 2 • Standardized Startup Sourcing & VC Judgement</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-medium">
+                        Uniform Across All Candidates
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {inspectorGeneratedTurns.slice(3, 6).map((turn) => (
+                        <div key={turn.id} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-indigo-400">Q{turn.questionIndex} • {turn.phaseLabel.replace("Phase 2 • ", "")}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(turn.questionPrompt);
+                                setCopiedPromptId(turn.id);
+                                setTimeout(() => setCopiedPromptId(""), 2500);
+                              }}
+                              className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px]"
+                            >
+                              {copiedPromptId === turn.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-emerald-400">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="p-2 rounded bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400">
+                            <strong className="text-slate-300">Mandate:</strong> {turn.resumeContextCited}
+                          </div>
+                          <p className="text-slate-100 font-medium leading-relaxed">&ldquo;{turn.questionPrompt}&rdquo;</p>
+                          <div className="text-[10px] text-slate-400 pt-1">
+                            <strong className="text-slate-300">Signals to Check:</strong> {turn.expectedSignals.join(" • ")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* WORKBOOK SYNC & PREVIEW CARD + TOP APPLICANTS TABLE */}
@@ -626,13 +877,13 @@ export default function RecruitmentModuleViews({
                 </div>
                 <div className="space-y-1.5 text-[11px] text-slate-400">
                   <div>
-                    • <strong className="text-slate-200">Phase 1 (7m):</strong> 3 personalized questions probing the candidate&apos;s exact IIM Amritsar internships, work-ex & research claim.
+                    • <strong className="text-slate-200">Phase 1 (12m):</strong> 3 personalized questions probing the candidate&apos;s exact internships, work-ex & research claim.
                   </div>
                   <div>
-                    • <strong className="text-slate-200">Phase 2 (8m):</strong> 3 VC questions on non-obvious Indian startup sourcing, bottom-up TAM, and cash traps.
+                    • <strong className="text-slate-200">Phase 2 (13m):</strong> 3 VC questions on non-obvious Indian startup sourcing, bottom-up TAM, and cash traps.
                   </div>
                   <div>
-                    • <strong className="text-slate-200">Phase 3 (10m):</strong> Interactive 3-Startup Virtual Data Room Deal Triage (₹1 Crore allocation + red-flag audit).
+                    • <strong className="text-slate-200">Phase 3 (20m):</strong> Interactive 3-Startup Virtual Data Room Deal Triage (₹1 Crore allocation + red-flag audit).
                   </div>
                 </div>
               </div>
@@ -1449,7 +1700,7 @@ export default function RecruitmentModuleViews({
                   Proctored AI Interview & Startup Simulation Control Room
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Every candidate completes a 25-minute proctored session combining personalized CV verification, VC thinking, and a live 3-startup Data Room deal triage.
+                  Every candidate completes a 45-minute proctored session combining personalized CV verification, VC thinking, and a live 3-startup Data Room deal triage.
                 </p>
               </div>
 
@@ -1476,7 +1727,7 @@ export default function RecruitmentModuleViews({
                   Personalized Resume & Research Probe
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Reads each applicant&apos;s exact IIM Amritsar internships, work experience, and Google Form research claim to generate 3 bespoke verification questions.
+                  Reads each applicant&apos;s exact internships, work experience, and profile claim to generate 3 bespoke verification questions.
                 </p>
               </div>
 
@@ -1512,7 +1763,7 @@ export default function RecruitmentModuleViews({
                   Test the Automated Grading & Proctoring Engine on Any Applicant
                 </div>
                 <div className="text-slate-400">
-                  Select any of the 79 IIM Amritsar applicants to generate a realistic completed session with transcript, startup task audit, and proctoring score.
+                  Select any applicant profile to preview their personalized Phase 1 questions and Phase 2 startup evaluation prompts.
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1676,7 +1927,7 @@ export default function RecruitmentModuleViews({
                 No Completed AI Interview Sessions Yet
               </h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Click below to simulate a complete 25-minute AI Interview + Startup Virtual Data Room submission for Shrey Mishra (`DVC-IIMA-063`) or open `/candidate` to take one live.
+                Click below to simulate a complete 45-minute AI Interview + Startup Virtual Data Room submission for Shrey Mishra (`DVC-IIMA-063`) or open `/candidate` to take one live.
               </p>
               <button
                 type="button"
@@ -1858,8 +2109,8 @@ export default function RecruitmentModuleViews({
                       )}
 
                       {/* PROCTORING TELEMETRY SUMMARY */}
-                      <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
-                        <div className="flex items-center justify-between">
+                      <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
                             <ShieldCheck className="w-4 h-4" />
                             <span>
@@ -1870,9 +2121,41 @@ export default function RecruitmentModuleViews({
                           <span className="text-slate-400">
                             Tab Switches: {sess.proctoring.tabSwitchCount} | Fullscreen Exits:{" "}
                             {sess.proctoring.fullscreenExitCount} | Paste Blocked:{" "}
-                            {sess.proctoring.copyPasteBlockedCount}
+                            {sess.proctoring.copyPasteBlockedCount} | Snapshots:{" "}
+                            {(sess.proctoring.snapshots || []).length}
                           </span>
                         </div>
+
+                        {sess.proctoring.snapshots && sess.proctoring.snapshots.length > 0 && (
+                          <div className="pt-2 border-t border-slate-800/80">
+                            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                              Recorded Proctoring Snapshots ({sess.proctoring.snapshots.length})
+                            </div>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                              {sess.proctoring.snapshots.map((snap, sIdx) => (
+                                <div
+                                  key={snap.id || sIdx}
+                                  className="shrink-0 rounded-lg border border-slate-800 overflow-hidden bg-black text-[10px]"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={snap.dataUrl}
+                                    alt={`Snapshot ${sIdx + 1}`}
+                                    className="w-28 h-16 object-cover"
+                                  />
+                                  <div className="p-1 text-slate-400 truncate w-28 text-[9px]">
+                                    {snap.type === "screen" ? "🖥️ Screen" : "📷 Camera"} •{" "}
+                                    {new Date(snap.timestamp).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* PHASE 3 STARTUP DATA ROOM SUBMISSION */}

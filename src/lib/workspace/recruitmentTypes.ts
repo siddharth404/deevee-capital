@@ -115,6 +115,14 @@ export interface CandidateActivityEntry {
 // PROCTORED ENVIRONMENT & ANTI-CHEAT TELEMETRY TYPES
 // ============================================================================
 
+export interface ProctoringSnapshotEntry {
+  id: string;
+  timestamp: string;
+  type: "screen" | "webcam";
+  dataUrl: string; // low-resolution 640x360 compressed JPEG data URI (~15-25KB)
+  turnIndex: number;
+}
+
 export interface ProctoringViolationEvent {
   id: string;
   type:
@@ -124,6 +132,8 @@ export interface ProctoringViolationEvent {
     | "CLIPBOARD_PASTE_BLOCKED"
     | "DEVTOOLS_ATTEMPT"
     | "WEBCAM_DISCONNECTED"
+    | "SCREEN_SHARE_STOPPED"
+    | "SCREEN_SHARE_STARTED"
     | "RAPID_TEXT_INJECTION"
     | "HEARTBEAT_SNAPSHOT";
   severity: "info" | "warning" | "critical";
@@ -135,6 +145,7 @@ export interface ProctoringViolationEvent {
 export interface ProctoringTelemetry {
   webcamEnabled: boolean;
   micEnabled: boolean;
+  screenShareActive?: boolean;
   fullscreenEntered: boolean;
   fullscreenExitCount: number;
   tabSwitchCount: number;
@@ -143,10 +154,12 @@ export interface ProctoringTelemetry {
   copyPasteBlockedCount: number;
   rapidInjectionFlags: number;
   webcamSnapshotsCount: number;
+  screenShareSnapshotsCount?: number;
   lastHeartbeatAt: string;
   integrityScore: number; // 0-100 (starts at 100, deducts on violations)
   integrityStatus: "High Integrity" | "Review Telemetry" | "Flagged";
   events: ProctoringViolationEvent[];
+  snapshots?: ProctoringSnapshotEntry[];
 }
 
 // ============================================================================

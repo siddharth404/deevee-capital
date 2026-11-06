@@ -3179,7 +3179,7 @@ Deevee Capital`,
 
 We were impressed by your startup research submission and would like to invite you to Stage 5: Live Interview & Research Defence with the Deevee Capital Investment Team.
 
-During this 25-minute session, we will discuss the startups you sourced, your market sizing methodology, what you could not verify, and how you evaluate investment risks.
+During this 45-minute session, we will discuss the startups you sourced, your market sizing methodology, what you could not verify, and how you evaluate investment risks.
 
 Please check the Candidate Portal for your scheduled slot and meeting link:
 {{portalInviteUrl}}
@@ -3271,7 +3271,7 @@ export function buildInitialRecruitmentState(): RecruitmentModuleState {
     stipend: "₹10,000 per month",
     workingHours: "Flexible",
     reportingTo: "Investment Team",
-    aiInterviewDurationMinutes: 25,
+    aiInterviewDurationMinutes: 45,
     proctoringStrictMode: true,
     stage2TimeLimitMinutes: 35,
     stage3WindowHours: 48,
