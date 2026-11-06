@@ -55,6 +55,8 @@ import {
   CompetencyScores,
   InterviewEvaluationRecord,
   RecruitmentEmailLog,
+  RecruitmentEmailTemplate,
+  RecruitmentModuleState,
   ReviewerScoreRecord,
   StartupCaseSet,
 } from "@/lib/workspace/recruitmentTypes";
@@ -117,13 +119,52 @@ function getCanonicalOrigin(request?: NextRequest): string {
   return (process.env.NEXT_PUBLIC_APP_URL || "https://deeveecapital.com").replace(/\/$/, "");
 }
 
+function formatAssessmentDeadline(deadlineIso?: string | null): string {
+  if (!deadlineIso) return "Within the active cohort window specified in your Candidate Portal";
+  const date = new Date(deadlineIso);
+  if (isNaN(date.getTime())) return "Within the active cohort window specified in your Candidate Portal";
+  return (
+    date.toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Kolkata",
+    }) + " IST"
+  );
+}
+
+function ensureEmailTemplatesUpToDate(rec: RecruitmentModuleState): boolean {
+  let templatesChanged = false;
+  if (!Array.isArray(rec.emailTemplates) || rec.emailTemplates.length === 0) {
+    rec.emailTemplates = [...DEFAULT_RECRUITMENT_EMAIL_TEMPLATES];
+    return true;
+  }
+  for (const defTpl of DEFAULT_RECRUITMENT_EMAIL_TEMPLATES) {
+    const idx = rec.emailTemplates.findIndex((t: RecruitmentEmailTemplate) => t.id === defTpl.id);
+    if (idx === -1) {
+      rec.emailTemplates.push(defTpl);
+      templatesChanged = true;
+    } else {
+      const current = rec.emailTemplates[idx];
+      if (
+        current &&
+        (current.bodyText?.includes("through the IIM Amritsar placement process") ||
+          current.bodyText?.includes("48-hour window") ||
+          !current.bodyText?.includes("{{candidatePassword}}"))
+      ) {
+        rec.emailTemplates[idx] = { ...defTpl };
+        templatesChanged = true;
+      }
+    }
+  }
+  return templatesChanged;
+}
+
 function renderEmailTemplate(
   rawText: string,
   candidate: CandidateRecord,
-  originUrl: string
+  originUrl: string,
+  cohortDefaultDeadlineAt?: string | null
 ): string {
-  const token =
-    candidate.inviteToken || createCandidateInviteToken(candidate.id, candidate.email);
   const safeOrigin =
     originUrl &&
     !originUrl.includes("0.0.0.0") &&
@@ -138,13 +179,12 @@ function renderEmailTemplate(
     (candidate.candidateCode === "DVC-SAMPLE-001"
       ? "DVC@Sample2026"
       : generateCandidateRandomPassword(candidate.candidateCode, candidate.email));
-  const deadline =
-    candidate.assessmentDeadlineAt
-      ? new Date(candidate.assessmentDeadlineAt).toLocaleString("en-IN", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        })
-      : "Within 48 hours of receiving this invitation";
+
+  const effectiveDeadline =
+    candidate.assessmentDeadlineAt ||
+    cohortDefaultDeadlineAt ||
+    null;
+  const deadline = formatAssessmentDeadline(effectiveDeadline);
 
   return rawText
     .replace(/\{\{candidateName\}\}/g, candidate.fullName)
@@ -157,7 +197,11 @@ function renderEmailTemplate(
     .replace(/\{\{sampleTestLink\}\}/g, sampleTestLink)
     .replace(/\{\{institution\}\}/g, candidate.institution || "")
     .replace(/\{\{portalInviteUrl\}\}/g, directLink)
-    .replace(/\{\{assessmentDeadline\}\}/g, deadline);
+    .replace(/\{\{assessmentDeadline\}\}/g, deadline)
+    .replace(/\{\{submissionDeadline\}\}/g, deadline)
+    .replace(/\{\{deadline\}\}/g, deadline)
+    .replace(/48-hour window(?:,\s*~3–4 hours effort)?/gi, `Deadline: ${deadline}`)
+    .replace(/Within 48 hours of (?:receipt|receiving this invitation)/gi, deadline);
 }
 
 export async function GET(request: NextRequest) {
@@ -171,26 +215,7 @@ export async function GET(request: NextRequest) {
     db.recruitment = buildInitialRecruitmentState();
     await saveWorkspaceDb(db);
   } else {
-    // Ensure email templates are up-to-date and include credentials template
-    let templatesChanged = false;
-    if (!db.recruitment.emailTemplates) {
-      db.recruitment.emailTemplates = [...DEFAULT_RECRUITMENT_EMAIL_TEMPLATES];
-      templatesChanged = true;
-    } else {
-      for (const defTpl of DEFAULT_RECRUITMENT_EMAIL_TEMPLATES) {
-        const idx = db.recruitment.emailTemplates.findIndex((t) => t.id === defTpl.id);
-        if (idx === -1) {
-          db.recruitment.emailTemplates.push(defTpl);
-          templatesChanged = true;
-        } else if (
-          db.recruitment.emailTemplates[idx]?.bodyText?.includes("through the IIM Amritsar placement process") ||
-          !db.recruitment.emailTemplates[idx]?.bodyText?.includes("{{candidatePassword}}")
-        ) {
-          db.recruitment.emailTemplates[idx] = defTpl;
-          templatesChanged = true;
-        }
-      }
-    }
+    const templatesChanged = ensureEmailTemplatesUpToDate(db.recruitment);
     if (templatesChanged) {
       await saveWorkspaceDb(db);
     }
@@ -345,6 +370,7 @@ export async function POST(request: NextRequest) {
   }
   const rec = db.recruitment;
   sanitizeRecruitmentStateIsolation(rec);
+  ensureEmailTemplatesUpToDate(rec);
 
   let body: Record<string, unknown> = {};
   try {
@@ -715,6 +741,14 @@ export async function POST(request: NextRequest) {
     // Save default in settings as well so subsequent candidate invitations inherit it
     rec.settings.defaultAssessmentDeadlineAt = deadlineIso;
 
+    // Also update dedicated sample candidate so test emails always reflect the latest active deadline
+    const sampleCand = rec.candidates.find(
+      (c) => c.candidateCode === "DVC-SAMPLE-001" || c.id === "cand-sample-demo"
+    );
+    if (sampleCand) {
+      sampleCand.assessmentDeadlineAt = deadlineIso;
+    }
+
     await saveWorkspaceDb(db);
     return NextResponse.json({ ok: true, updatedCount, deadlineAt: deadlineIso, recruitment: rec });
   }
@@ -739,8 +773,12 @@ export async function POST(request: NextRequest) {
       await saveWorkspaceDb(db);
     }
 
-    const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
-    const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
+    const effectiveDeadline =
+      cand.assessmentDeadlineAt ||
+      rec.settings.defaultAssessmentDeadlineAt ||
+      null;
+    const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl, effectiveDeadline);
+    const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl, effectiveDeadline);
     const setupLink = `${originUrl}/candidate?token=${encodeURIComponent(cand.inviteToken)}&email=${encodeURIComponent(cand.email)}`;
     const password =
       cand.assignedPortalPassword ||
@@ -811,8 +849,14 @@ export async function POST(request: NextRequest) {
           : generateCandidateRandomPassword(sampleCandidate.candidateCode, sampleCandidate.email);
     }
 
-    const renderedSubject = `[TEST] ${renderEmailTemplate(tpl.subject, sampleCandidate, originUrl)}`;
-    const renderedBody = renderEmailTemplate(tpl.bodyText, sampleCandidate, originUrl);
+    const effectiveDeadline =
+      sampleCandidate.assessmentDeadlineAt ||
+      rec.settings.defaultAssessmentDeadlineAt ||
+      null;
+    const deadlineFormatted = formatAssessmentDeadline(effectiveDeadline);
+
+    const renderedSubject = `[TEST] ${renderEmailTemplate(tpl.subject, sampleCandidate, originUrl, effectiveDeadline)}`;
+    const renderedBody = renderEmailTemplate(tpl.bodyText, sampleCandidate, originUrl, effectiveDeadline);
 
     // DISPATCH LIVE EMAIL VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
     const sendResult = await sendRecruitmentAssessmentEmail({
@@ -822,6 +866,7 @@ export async function POST(request: NextRequest) {
       candidateCode: sampleCandidate.candidateCode,
       candidateEmail: testRecipientEmail,
       password: sampleCandidate.assignedPortalPassword,
+      deadline: deadlineFormatted,
       directLink: `${originUrl}/candidate?code=${encodeURIComponent(sampleCandidate.candidateCode)}&email=${encodeURIComponent(sampleCandidate.email)}`,
       sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
       rawBodyText: renderedBody,
@@ -903,8 +948,9 @@ export async function POST(request: NextRequest) {
         new Date(Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000).toISOString();
     }
 
-    const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
-    const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
+    const deadlineFormatted = formatAssessmentDeadline(cand.assessmentDeadlineAt);
+    const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl, cand.assessmentDeadlineAt);
+    const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl, cand.assessmentDeadlineAt);
 
     // DISPATCH LIVE EMAIL VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
     const sendResult = await sendRecruitmentAssessmentEmail({
@@ -914,6 +960,7 @@ export async function POST(request: NextRequest) {
       candidateCode: cand.candidateCode,
       candidateEmail: cand.email,
       password: cand.assignedPortalPassword,
+      deadline: deadlineFormatted,
       directLink: `${originUrl}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`,
       sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
       rawBodyText: renderedBody,
@@ -1012,8 +1059,9 @@ export async function POST(request: NextRequest) {
           new Date(Date.now() + (rec.settings.stage3WindowHours || 48) * 3600 * 1000).toISOString();
       }
 
-      const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl);
-      const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl);
+      const deadlineFormatted = formatAssessmentDeadline(cand.assessmentDeadlineAt);
+      const renderedSubject = renderEmailTemplate(tpl.subject, cand, originUrl, cand.assessmentDeadlineAt);
+      const renderedBody = renderEmailTemplate(tpl.bodyText, cand, originUrl, cand.assessmentDeadlineAt);
 
       // LIVE DISPATCH VIA SMTP TRANSPORTER (FROM siddharth@deeveecapital.com)
       const sendResult = await sendRecruitmentAssessmentEmail({
@@ -1023,6 +1071,7 @@ export async function POST(request: NextRequest) {
         candidateCode: cand.candidateCode,
         candidateEmail: cand.email,
         password: cand.assignedPortalPassword,
+        deadline: deadlineFormatted,
         directLink: `${originUrl}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`,
         sampleTestLink: `${originUrl}/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com`,
         rawBodyText: renderedBody,

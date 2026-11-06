@@ -3399,7 +3399,7 @@ Congratulations on advancing to Stage 3 of the Deevee Capital Internship Assessm
 
 Your practical work-sample assignment is now unlocked in the Candidate Assessment Portal:
 • Task: Discover 3 promising early-stage Indian startups (any sector), document your exact discovery trail and verifiable source links, separate verified facts from assumptions, and recommend 1 company for deeper diligence.
-• Submission Window: 48 hours from assignment activation (Expected effort: 3–4 hours).
+• Submission Window: {{assessmentDeadline}} (Expected effort: 3–4 hours).
 
 Access the Portal to view full instructions and submit your work:
 {{portalInviteUrl}}

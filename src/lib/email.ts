@@ -336,9 +336,22 @@ export async function sendRecruitmentAssessmentEmail(data: RecruitmentAssessment
     "https://deeveecapital.com/candidate?sample=1&code=DVC-SAMPLE-001&email=sample.candidate@deeveecapital.com"
   );
   const password = data.password || "Deevee@2026";
-  const deadline = data.deadline || "Within 48 hours of receipt";
+  let deadline = data.deadline;
+  if (!deadline && data.rawBodyText) {
+    const match = data.rawBodyText.match(/Submission Window:\s*([^\n\r]+)/i);
+    if (match && match[1]) {
+      deadline = match[1].trim();
+    }
+  }
+  if (!deadline) {
+    deadline = "As specified in your Candidate Assessment Portal";
+  }
 
-  const rawCleaned = data.rawBodyText ? sanitizeOriginLink(data.rawBodyText) : null;
+  const rawCleaned = data.rawBodyText
+    ? sanitizeOriginLink(data.rawBodyText)
+        .replace(/48-hour window/gi, `Deadline: ${deadline}`)
+        .replace(/Within 48 hours of (?:receipt|receiving this invitation)/gi, deadline)
+    : null;
   const textContent =
     rawCleaned ||
     `
