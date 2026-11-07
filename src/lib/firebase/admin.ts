@@ -6,9 +6,10 @@
 
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getAuth, Auth } from "firebase-admin/auth";
-import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { getFirestore, initializeFirestore, Firestore } from "firebase-admin/firestore";
 
 let adminApp: App | null = null;
+let adminFirestore: Firestore | null = null;
 
 export function isFirebaseAdminConfigured(): boolean {
   const enabled =
@@ -94,8 +95,15 @@ export function getFirebaseAdminAuth(): Auth | null {
 }
 
 export function getFirebaseAdminFirestore(): Firestore | null {
+  if (adminFirestore) return adminFirestore;
   const app = getFirebaseAdminApp();
-  return app ? getFirestore(app) : null;
+  if (!app) return null;
+  try {
+    adminFirestore = initializeFirestore(app, { preferRest: true });
+  } catch {
+    adminFirestore = getFirestore(app);
+  }
+  return adminFirestore;
 }
 
 export function getFirebaseConfigurationStatus() {

@@ -223,11 +223,17 @@ function CandidatePortalInner() {
   const screenShareStreamRef = useRef<MediaStream | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Give a 90-minute grace buffer past the stated deadline (e.g. 3:59 PM -> 5:30 PM) so anyone starting near 3:59 PM or resuming an active session can comfortably finish
+  const DEADLINE_GRACE_BUFFER_MS = 90 * 60 * 1000;
+  const hasInProgressSession = Boolean(
+    aiSession && aiSession.status !== "Not Started" && aiSession.status !== "Completed"
+  );
   const isAssessmentDeadlinePassed = Boolean(
     candidate &&
       candidate.candidateCode !== "DVC-SAMPLE-001" &&
+      !hasInProgressSession &&
       candidate.assessmentDeadlineAt &&
-      new Date(candidate.assessmentDeadlineAt).getTime() < Date.now()
+      new Date(candidate.assessmentDeadlineAt).getTime() + DEADLINE_GRACE_BUFFER_MS < Date.now()
   );
 
   const isSampleCandidate = Boolean(

@@ -709,10 +709,23 @@ export async function POST(request: NextRequest) {
   if (action === "ai_interview.start") {
     const isSample = cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo";
 
+    if (!Array.isArray(rec.aiInterviewSessions)) {
+      rec.aiInterviewSessions = [];
+    }
+
+    let session = rec.aiInterviewSessions.find(
+      (s) =>
+        s.candidateId === cand.id ||
+        (cand.candidateCode && s.candidateCode === cand.candidateCode)
+    );
+
+    // 90-minute grace buffer past the stated deadline (e.g. 3:59 PM -> 5:30 PM) so any candidate who logs in near 3:59 PM or is already in progress can complete and submit
+    const DEADLINE_GRACE_BUFFER_MS = 90 * 60 * 1000;
     if (
       !isSample &&
+      !session &&
       cand.assessmentDeadlineAt &&
-      new Date(cand.assessmentDeadlineAt).getTime() < Date.now()
+      new Date(cand.assessmentDeadlineAt).getTime() + DEADLINE_GRACE_BUFFER_MS < Date.now()
     ) {
       return NextResponse.json(
         {
@@ -727,15 +740,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!Array.isArray(rec.aiInterviewSessions)) {
-      rec.aiInterviewSessions = [];
-    }
-
-    let session = rec.aiInterviewSessions.find(
-      (s) =>
-        s.candidateId === cand.id ||
-        (cand.candidateCode && s.candidateCode === cand.candidateCode)
-    );
     const assignedCaseSet = selectCaseSetForCandidate(cand);
 
     // If candidate is a real candidate and already truly finalized, reject retake attempt

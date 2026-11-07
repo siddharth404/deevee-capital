@@ -26,6 +26,7 @@ import { getAuthenticatedUser } from "@/lib/workspace/auth";
 import {
   deleteSessionFromFirestore,
   getWorkspaceDb,
+  hydrateSessionSnapshotsFromFirestore,
   recordAuditAndActivity,
   saveRecruitmentMetadataAndCandidatesToFirestore,
   saveSingleCandidateSessionToFirestore,
@@ -354,6 +355,10 @@ export async function GET(request: NextRequest) {
         "Content-Disposition": `attachment; filename="Deevee_Capital_Recruitment_Report_${new Date().toISOString().slice(0, 10)}.pdf"`,
       },
     });
+  }
+
+  if (searchParams.get("includeSnapshots") === "1") {
+    await hydrateSessionSnapshotsFromFirestore(db);
   }
 
   return NextResponse.json({

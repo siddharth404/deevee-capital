@@ -276,9 +276,12 @@ export default function RecruitmentModuleViews({
       }
       try {
         let lastErr = "";
+        const url = silent
+          ? "/api/workspace/recruitment?includeSnapshots=1"
+          : "/api/workspace/recruitment";
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            const res = await fetch("/api/workspace/recruitment");
+            const res = await fetch(url);
             const rawText = await res.text();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let data: any = null;

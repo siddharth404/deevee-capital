@@ -944,13 +944,10 @@ export function reconcileCandidatesAndSessions(
     const assignedCaseSet =
       caseSets.find((cs) => cs.id === s.assignedCaseSetId) || selectCaseSetForCandidate(c);
 
-    // Recompute scoringBreakdown if missing OR if an unsubmitted Phase 3 draft dragged Phase 3 score to 0
+    // Recompute scoringBreakdown only if missing OR if overallAiInterviewScore was dragged to 0 by an unsubmitted Phase 3 draft
     const needsRescore =
       !s.scoringBreakdown ||
-      (!hasSubmittedTask &&
-        s.startupTaskSubmission &&
-        s.scoringBreakdown.phase3Task1RedFlagAuditScore === 0 &&
-        s.scoringBreakdown.phase3Task2CapitalAllocationScore === 0 &&
+      (s.scoringBreakdown.overallAiInterviewScore === 0 &&
         (s.scoringBreakdown.phase1ResumeProbeScore > 0 ||
           s.scoringBreakdown.phase2StartupThinkingScore > 0));
 
@@ -1524,13 +1521,49 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
  * Writes ONLY the active candidate's session document (`ai_interview_sessions/{candidateId}`)
  * and optionally their candidate chunk (`recruitment_candidates_0` or `1`), avoiding full-DB rewrites.
  */
+const LIGHT_SESSION_SELECT_FIELDS = [
+  "id",
+  "candidateId",
+  "candidateCode",
+  "candidateName",
+  "candidateEmail",
+  "status",
+  "assignedCaseSetId",
+  "startedAt",
+  "completedAt",
+  "totalDurationSeconds",
+  "timeLimitMinutes",
+  "turns",
+  "currentTurnIndex",
+  "startupTaskSubmission",
+  "scoringBreakdown",
+  "reviewerOverrideScore",
+  "reviewerNotes",
+  "reviewedBy",
+  "reviewedAt",
+  "continuationEmailSentAt",
+  "proctoring.webcamEnabled",
+  "proctoring.micEnabled",
+  "proctoring.screenShareActive",
+  "proctoring.fullscreenEntered",
+  "proctoring.fullscreenExitCount",
+  "proctoring.tabSwitchCount",
+  "proctoring.windowBlurCount",
+  "proctoring.copyPasteBlockedCount",
+  "proctoring.rightClickBlockedCount",
+  "proctoring.webcamSnapshotsCount",
+  "proctoring.lastHeartbeatAt",
+  "proctoring.integrityScore",
+  "proctoring.integrityStatus",
+  "proctoring.events",
+] as const;
+
 export async function saveSingleCandidateSessionToFirestore(
   db: WorkspaceDatabaseSchema,
   candidateId: string,
   syncCandidateRecord = true
 ): Promise<void> {
   cachedDb = db;
-  cachedDbLoadedAt = Date.now();
 
   if (!isFirebaseAdminConfigured()) {
     try {
@@ -1571,17 +1604,14 @@ export async function saveSingleCandidateSessionToFirestore(
       await sessRef.set(JSON.parse(JSON.stringify(localSess)));
     }
 
-    reconcileCandidatesAndSessions(
-      db.recruitment.candidates || [],
-      db.recruitment.aiInterviewSessions || [],
-      db.recruitment
-    );
-
     if (syncCandidateRecord) {
       const candidates = db.recruitment.candidates || [];
       const candIdx = candidates.findIndex((c) => c.id === candidateId);
       const chunkSize = 40;
       if (candIdx >= 0) {
+        const cand = candidates[candIdx]!;
+        const sess = sessIdx >= 0 ? [sessions[sessIdx]!] : [];
+        reconcileCandidatesAndSessions([cand], sess, db.recruitment);
         const chunkIndex = Math.floor(candIdx / chunkSize);
         const chunk = candidates.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize);
         const chunkRef = firestore
@@ -1595,6 +1625,38 @@ export async function saveSingleCandidateSessionToFirestore(
   }
 }
 
+export async function hydrateSessionSnapshotsFromFirestore(
+  db: WorkspaceDatabaseSchema
+): Promise<void> {
+  if (!isFirebaseAdminConfigured()) return;
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore || !db.recruitment?.aiInterviewSessions?.length) return;
+  try {
+    const snap = await firestore
+      .collection("ai_interview_sessions")
+      .select("candidateId", "proctoring.snapshots")
+      .get();
+    if (snap.empty) return;
+    const snapMap = new Map<string, AIInterviewSessionRecord["proctoring"]["snapshots"]>();
+    for (const docSnap of snap.docs) {
+      const d = docSnap.data() as {
+        candidateId?: string;
+        proctoring?: { snapshots?: AIInterviewSessionRecord["proctoring"]["snapshots"] };
+      };
+      if (d?.candidateId && Array.isArray(d.proctoring?.snapshots)) {
+        snapMap.set(d.candidateId, d.proctoring.snapshots);
+      }
+    }
+    for (const s of db.recruitment.aiInterviewSessions) {
+      if (snapMap.has(s.candidateId) && s.proctoring) {
+        s.proctoring.snapshots = snapMap.get(s.candidateId) || [];
+      }
+    }
+  } catch (err) {
+    console.warn("[Workspace DB] Snapshot hydration warning:", err);
+  }
+}
+
 async function refreshRecruitmentFromFirestore(
   existingDb: WorkspaceDatabaseSchema
 ): Promise<boolean> {
@@ -1603,9 +1665,16 @@ async function refreshRecruitmentFromFirestore(
   if (!firestore) return false;
 
   try {
-    const [recMetaDoc, perCandSnap] = await Promise.all([
+    const [recMetaDoc, perCandSnap, candChunk0, candChunk1, candChunk2] = await Promise.all([
       firestore.collection("workspace_settings").doc("recruitment_meta").get(),
-      firestore.collection("ai_interview_sessions").get().catch(() => null),
+      firestore
+        .collection("ai_interview_sessions")
+        .select(...LIGHT_SESSION_SELECT_FIELDS)
+        .get()
+        .catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_0").get().catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_1").get().catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_2").get().catch(() => null),
     ]);
     if (!recMetaDoc.exists) return false;
 
@@ -1613,14 +1682,22 @@ async function refreshRecruitmentFromFirestore(
       candidateChunkCount?: number;
     };
     const chunkCount = Number(meta.candidateChunkCount || 2);
-    const candChunkDocs = await Promise.all(
-      Array.from({ length: chunkCount }, (_, i) =>
-        firestore.collection("workspace_settings").doc(`recruitment_candidates_${i}`).get()
-      )
-    );
+    const preloadedChunks = [candChunk0, candChunk1, candChunk2];
+    const extraChunkDocs =
+      chunkCount > 3
+        ? await Promise.all(
+            Array.from({ length: chunkCount - 3 }, (_, idx) =>
+              firestore
+                .collection("workspace_settings")
+                .doc(`recruitment_candidates_${idx + 3}`)
+                .get()
+            )
+          )
+        : [];
+    const candChunkDocs = [...preloadedChunks.slice(0, chunkCount), ...extraChunkDocs];
     const loadedCandidates: ApplicantCandidateRecord[] = [];
     for (const chunkDoc of candChunkDocs) {
-      if (chunkDoc.exists) {
+      if (chunkDoc && chunkDoc.exists) {
         const data = chunkDoc.data() as { items?: ApplicantCandidateRecord[] };
         if (Array.isArray(data?.items)) {
           loadedCandidates.push(...data.items);
@@ -1633,6 +1710,9 @@ async function refreshRecruitmentFromFirestore(
       for (const docSnap of perCandSnap.docs) {
         const s = docSnap.data() as AIInterviewSessionRecord;
         if (!s?.candidateId) continue;
+        if (s.proctoring && !Array.isArray(s.proctoring.snapshots)) {
+          s.proctoring.snapshots = [];
+        }
         const prev = sessionByCandidateId.get(s.candidateId);
         sessionByCandidateId.set(
           s.candidateId,
@@ -1778,7 +1858,11 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       firestore.collection("users").get(),
       firestore.collection("workspace_settings").doc("default").get(),
       firestore.collection("workspace_settings").doc("recruitment_meta").get(),
-      firestore.collection("ai_interview_sessions").get().catch(() => null),
+      firestore
+        .collection("ai_interview_sessions")
+        .select(...LIGHT_SESSION_SELECT_FIELDS)
+        .get()
+        .catch(() => null),
       firestore.collection("workspace_settings").doc("recruitment_candidates_0").get().catch(() => null),
       firestore.collection("workspace_settings").doc("recruitment_candidates_1").get().catch(() => null),
       firestore.collection("workspace_settings").doc("recruitment_candidates_2").get().catch(() => null),
@@ -1837,6 +1921,9 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
         for (const docSnap of perCandSnap.docs) {
           const s = docSnap.data() as AIInterviewSessionRecord;
           if (!s?.candidateId) continue;
+          if (s.proctoring && !Array.isArray(s.proctoring.snapshots)) {
+            s.proctoring.snapshots = [];
+          }
           const prev = sessionByCandidateId.get(s.candidateId);
           sessionByCandidateId.set(
             s.candidateId,
