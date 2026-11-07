@@ -221,12 +221,8 @@ export async function GET(request: NextRequest) {
   const db = await getWorkspaceDb();
   if (!db.recruitment || !db.recruitment.candidates?.length) {
     db.recruitment = buildInitialRecruitmentState();
-    void saveRecruitmentMetadataAndCandidatesToFirestore(db);
   } else {
-    const templatesChanged = ensureEmailTemplatesUpToDate(db.recruitment);
-    if (templatesChanged) {
-      void saveRecruitmentMetadataAndCandidatesToFirestore(db);
-    }
+    ensureEmailTemplatesUpToDate(db.recruitment);
   }
 
   const { searchParams } = new URL(request.url);
@@ -358,13 +354,6 @@ export async function GET(request: NextRequest) {
         "Content-Disposition": `attachment; filename="Deevee_Capital_Recruitment_Report_${new Date().toISOString().slice(0, 10)}.pdf"`,
       },
     });
-  }
-
-  // Automatically check and dispatch continuation emails to any student who started >=10 mins ago and is still In Progress (throttled to once every 3 mins)
-  const originUrl = getCanonicalOrigin(request);
-  if (Date.now() - lastAutoCheckAt > 3 * 60 * 1000) {
-    lastAutoCheckAt = Date.now();
-    void dispatchAutoContinuationReminders(db, originUrl);
   }
 
   return NextResponse.json({

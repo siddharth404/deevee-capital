@@ -1911,7 +1911,7 @@ let inFlightRefreshPromise: Promise<boolean> | null = null;
 let jsonlMigratedOnce = false;
 
 export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
-  const isStale = Date.now() - cachedDbLoadedAt > 15000;
+  const isStale = Date.now() - cachedDbLoadedAt > 20000;
   if (!cachedDb) {
     if (isFirebaseAdminConfigured()) {
       if (!inFlightLoadPromise) {
@@ -1941,36 +1941,32 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
       }
     }
   } else if (isFirebaseAdminConfigured() && isStale) {
-    // Stale-While-Revalidate: return cachedDb immediately in 0ms while refreshing recruitment docs in background
-    cachedDbLoadedAt = Date.now();
     if (!inFlightRefreshPromise) {
       inFlightRefreshPromise = refreshRecruitmentFromFirestore(cachedDb).finally(() => {
         inFlightRefreshPromise = null;
       });
     }
+    await inFlightRefreshPromise;
+    cachedDbLoadedAt = Date.now();
   }
 
-  let recruitmentInitialized = false;
   if (!cachedDb.recruitment || !cachedDb.recruitment.candidates?.length) {
     cachedDb.recruitment = buildInitialRecruitmentState();
-    recruitmentInitialized = true;
   } else {
     if (!Array.isArray(cachedDb.recruitment.aiInterviewSessions)) {
       cachedDb.recruitment.aiInterviewSessions = [];
-      recruitmentInitialized = true;
     }
     if (!Array.isArray(cachedDb.recruitment.startupCaseSets) || cachedDb.recruitment.startupCaseSets.length === 0) {
       cachedDb.recruitment.startupCaseSets = buildInitialRecruitmentState().startupCaseSets;
-      recruitmentInitialized = true;
     }
   }
 
-  if (!jsonlMigratedOnce) {
+  if (!jsonlMigratedOnce && !isFirebaseAdminConfigured()) {
     jsonlMigratedOnce = true;
     const jsonlRows = await readSubmissionsJsonl();
     const migrated = syncJsonlSubmissionsIntoDb(cachedDb, jsonlRows);
-    if (migrated || recruitmentInitialized) {
-      void saveWorkspaceDb(cachedDb);
+    if (migrated) {
+      await saveWorkspaceDb(cachedDb);
     }
   }
 
