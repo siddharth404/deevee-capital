@@ -330,9 +330,21 @@ export default function RecruitmentModuleViews({
     [mergeSnapshotsFromPrev]
   );
 
+  const snapshotsHydratedRef = useState<{ done: boolean }>({ done: false })[0];
+
   useEffect(() => {
-    void fetchRecruitmentData(Boolean(initialRecruitment));
-  }, [fetchRecruitmentData, initialRecruitment]);
+    if (!initialRecruitment) {
+      void fetchRecruitmentData(false);
+      return;
+    }
+    if (
+      !snapshotsHydratedRef.done &&
+      (activeSubTab === "rec-assessment-centre" || activeSubTab === "rec-submissions")
+    ) {
+      snapshotsHydratedRef.done = true;
+      void fetchRecruitmentData(true);
+    }
+  }, [fetchRecruitmentData, initialRecruitment, activeSubTab, snapshotsHydratedRef]);
 
   const postAction = async (payload: Record<string, unknown>, successToast?: string) => {
     setBusyAction(String(payload.action || "working"));

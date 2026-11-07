@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import zlib from "zlib";
 import { NextRequest, NextResponse } from "next/server";
 import { sendWorkspaceTeamInvitationEmail } from "@/lib/email";
 import { getFirebaseConfigurationStatus } from "@/lib/firebase/admin";
@@ -143,6 +144,10 @@ export async function GET(request: NextRequest) {
   const lightRecruitment = db.recruitment
     ? {
         ...db.recruitment,
+        candidates: (db.recruitment.candidates || []).map((c) => ({
+          ...c,
+          originalRowPayload: {},
+        })),
         aiInterviewSessions: (db.recruitment.aiInterviewSessions || []).map((s) => ({
           ...s,
           proctoring: {
@@ -154,7 +159,7 @@ export async function GET(request: NextRequest) {
       }
     : undefined;
 
-  return NextResponse.json({
+  const payload = {
     ok: true,
     currentUser: sanitizeUserForClient(user),
     firebaseStatus: getFirebaseConfigurationStatus(),
@@ -187,7 +192,23 @@ export async function GET(request: NextRequest) {
       workspace_settings: db.workspace_settings,
       recruitment: lightRecruitment,
     },
-  });
+  };
+
+  const jsonStr = JSON.stringify(payload);
+  const acceptEncoding = request.headers.get("accept-encoding") || "";
+  if (acceptEncoding.includes("gzip") && jsonStr.length > 1024) {
+    const gz = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"));
+    return new NextResponse(gz, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Encoding": "gzip",
+        "Content-Length": String(gz.length),
+      },
+    });
+  }
+
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: NextRequest) {

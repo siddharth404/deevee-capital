@@ -20,6 +20,7 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
+import zlib from "zlib";
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getAuthenticatedUser } from "@/lib/workspace/auth";
@@ -357,18 +358,38 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (searchParams.get("includeSnapshots") === "1") {
+  const includeSnapshots = searchParams.get("includeSnapshots") === "1";
+  if (includeSnapshots) {
     await hydrateSessionSnapshotsFromFirestore(db);
   }
 
+  const outRec = includeSnapshots ? db.recruitment : toLightRecruitment(db.recruitment);
+  const jsonStr = JSON.stringify({ recruitment: outRec });
+  const acceptEncoding = request.headers.get("accept-encoding") || "";
+  if (acceptEncoding.includes("gzip") && jsonStr.length > 1024) {
+    const gz = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"));
+    return new NextResponse(gz, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Encoding": "gzip",
+        "Content-Length": String(gz.length),
+      },
+    });
+  }
+
   return NextResponse.json({
-    recruitment: db.recruitment,
+    recruitment: outRec,
   });
 }
 
 function toLightRecruitment(rec: RecruitmentModuleState): RecruitmentModuleState {
   return {
     ...rec,
+    candidates: (rec.candidates || []).map((c) => ({
+      ...c,
+      originalRowPayload: {},
+    })),
     aiInterviewSessions: (rec.aiInterviewSessions || []).map((s) => ({
       ...s,
       proctoring: {
