@@ -418,6 +418,22 @@ function getOrAutoHealCandidateSession(
     }
   } else {
     session.candidateId = cand.id;
+    const isTrulyDone = Boolean(
+      session.completedAt ||
+        (session.startupTaskSubmission?.submittedAt &&
+          session.startupTaskSubmission.submittedAt.trim().length > 0)
+    );
+    if (!isTrulyDone && session.status === "Completed") {
+      session.status =
+        (session.currentTurnIndex || 0) >= (session.turns?.length || 6)
+          ? "Phase 3: Startup Case Task"
+          : (session.currentTurnIndex || 0) >= 3
+          ? "Phase 2: Startup Thinking"
+          : "Phase 1: Resume Probe";
+      if (cand.assessmentStatus === "Submitted" || cand.assessmentStatus === "Evaluated") {
+        cand.assessmentStatus = "In Progress";
+      }
+    }
   }
 
   // If the client browser passed clientTurns snapshot, merge any previously answered turns
@@ -722,14 +738,14 @@ export async function POST(request: NextRequest) {
     );
     const assignedCaseSet = selectCaseSetForCandidate(cand);
 
-    // If candidate is a real candidate and already submitted / completed, reject retake attempt
-    if (
-      !isSample &&
+    // If candidate is a real candidate and already truly finalized, reject retake attempt
+    const isTrulyCompleted = Boolean(
       session &&
-      (session.status === "Completed" ||
-        cand.assessmentStatus === "Submitted" ||
-        cand.assessmentStatus === "Evaluated")
-    ) {
+        (session.completedAt ||
+          (session.startupTaskSubmission?.submittedAt &&
+            session.startupTaskSubmission.submittedAt.trim().length > 0))
+    );
+    if (!isSample && session && isTrulyCompleted) {
       return NextResponse.json(
         {
           error:
@@ -863,8 +879,25 @@ export async function POST(request: NextRequest) {
     const assignedCaseSet =
       caseSets.find((cs) => cs.id === session.assignedCaseSetId) ||
       selectCaseSetForCandidate(cand);
-    session.scoringBreakdown = evaluateCompleteAIInterviewSession(session, assignedCaseSet);
-    cand.aiInterviewScore = session.scoringBreakdown.overallAiInterviewScore;
+    const bd = evaluateCompleteAIInterviewSession(session, assignedCaseSet);
+    session.scoringBreakdown = bd;
+    cand.aiInterviewScore = bd.overallAiInterviewScore;
+    const p1 = bd.phase1ResumeProbeScore;
+    const p2 = bd.phase2StartupThinkingScore || p1;
+    const avg = bd.overallAiInterviewScore || Math.round((p1 + p2) / 2);
+    cand.competencyScores = {
+      researchAptitude: p1,
+      startupDiscoverySourcing: p2,
+      marketBusinessAnalysis: p2,
+      financialCommercialUnderstanding: avg,
+      criticalThinkingRisk: p2,
+      communicationDocumentation: avg,
+      interviewOwnership: p1,
+    };
+    cand.finalWeightedScore = calculateWeightedCompetencyScore(
+      cand.competencyScores,
+      rec.settings.weights
+    );
     cand.assessmentStatus =
       session.status === "Completed" ? "Submitted" : "In Progress";
     cand.updatedAt = now;
@@ -880,7 +913,12 @@ export async function POST(request: NextRequest) {
   // ==========================================================================
   if (action === "ai_interview.save_draft") {
     const session = getOrAutoHealCandidateSession(rec, cand, now, body);
-    if (session.status === "Completed") {
+    const isTrulyDone = Boolean(
+      session.completedAt ||
+        (session.startupTaskSubmission?.submittedAt &&
+          session.startupTaskSubmission.submittedAt.trim().length > 0)
+    );
+    if (isTrulyDone) {
       return NextResponse.json({ ok: true });
     }
     if (typeof body.turnIndex === "number" && typeof body.draftAnswer === "string") {

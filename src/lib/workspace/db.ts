@@ -35,11 +35,20 @@ import {
   WorkspaceTeam,
   WorkspaceUser,
 } from "./types";
-import { buildInitialRecruitmentState } from "./iimAmritsarApplicants";
+import {
+  buildInitialRecruitmentState,
+  calculateWeightedCompetencyScore,
+} from "./iimAmritsarApplicants";
+import {
+  DEFAULT_STARTUP_CASE_SETS,
+  evaluateCompleteAIInterviewSession,
+  selectCaseSetForCandidate,
+} from "./aiInterviewEngine";
 import type {
   AIInterviewSessionRecord,
   ApplicantCandidateRecord,
   RecruitmentModuleState,
+  StartupSimulationTaskSubmission,
 } from "./recruitmentTypes";
 
 const DB_DIR = path.join(process.cwd(), "data", "workspace");
@@ -755,6 +764,52 @@ const ASSESSMENT_STATUS_RANK: Record<string, number> = {
   "Evaluated": 4,
 };
 
+function mergeStartupTaskSubmission(
+  a?: StartupSimulationTaskSubmission | null,
+  b?: StartupSimulationTaskSubmission | null
+): StartupSimulationTaskSubmission | null {
+  if (!a && !b) return null;
+  if (!a) return b || null;
+  if (!b) return a || null;
+
+  const pickLonger = (x?: string, y?: string) => {
+    const sx = (x || "").trim();
+    const sy = (y || "").trim();
+    return sy.length > sx.length ? y || "" : x || "";
+  };
+
+  return {
+    caseSetId: a.caseSetId || b.caseSetId,
+    caseSetTitle: a.caseSetTitle || b.caseSetTitle,
+    startupBTrueMetricAnalysis: pickLonger(
+      a.startupBTrueMetricAnalysis,
+      b.startupBTrueMetricAnalysis
+    ),
+    startupCTrueMetricAnalysis: pickLonger(
+      a.startupCTrueMetricAnalysis,
+      b.startupCTrueMetricAnalysis
+    ),
+    spottedRedFlagsSummary: pickLonger(a.spottedRedFlagsSummary, b.spottedRedFlagsSummary),
+    selectedStartupFor1CrId: a.selectedStartupFor1CrId || b.selectedStartupFor1CrId,
+    watchlistedStartupId: a.watchlistedStartupId || b.watchlistedStartupId,
+    passedStartupId: a.passedStartupId || b.passedStartupId,
+    investmentThesisAndNumbers: pickLonger(
+      a.investmentThesisAndNumbers,
+      b.investmentThesisAndNumbers
+    ),
+    winningStartupPrimaryRisk: pickLonger(
+      a.winningStartupPrimaryRisk,
+      b.winningStartupPrimaryRisk
+    ),
+    threeFounderDiligenceQuestions: pickLonger(
+      a.threeFounderDiligenceQuestions,
+      b.threeFounderDiligenceQuestions
+    ),
+    submittedAt: a.submittedAt || b.submittedAt || "",
+    timeSpentSeconds: Math.max(a.timeSpentSeconds || 0, b.timeSpentSeconds || 0),
+  };
+}
+
 export function mergeSessionMonotonically(
   a: AIInterviewSessionRecord,
   b: AIInterviewSessionRecord
@@ -785,14 +840,28 @@ export function mergeSessionMonotonically(
 
   const answeredCount = mergedTurns.filter((t) => (t.candidateAnswer || "").trim().length > 0).length;
   const maxTurnIdx = Math.max(primary.currentTurnIndex || 0, secondary.currentTurnIndex || 0, answeredCount);
+  const mergedTask = mergeStartupTaskSubmission(
+    primary.startupTaskSubmission,
+    secondary.startupTaskSubmission
+  );
+
+  // CRITICAL: Only mark Completed when actually finalized (completedAt or submittedAt is non-empty).
+  // Auto-saved Phase 3 drafts have submittedAt === "" and must stay in "Phase 3: Startup Case Task"!
+  const isTrulyCompleted = Boolean(
+    primary.completedAt ||
+      secondary.completedAt ||
+      (mergedTask?.submittedAt && mergedTask.submittedAt.trim().length > 0)
+  );
 
   let effectiveStatus = primary.status;
-  if (rankA === 4 || rankB === 4 || primary.startupTaskSubmission || secondary.startupTaskSubmission) {
+  if (isTrulyCompleted) {
     effectiveStatus = "Completed";
   } else if (maxTurnIdx >= mergedTurns.length && mergedTurns.length > 0) {
     effectiveStatus = "Phase 3: Startup Case Task";
   } else if (maxTurnIdx >= 3) {
     effectiveStatus = "Phase 2: Startup Thinking";
+  } else if (effectiveStatus === "Completed") {
+    effectiveStatus = "Phase 1: Resume Probe";
   }
 
   return {
@@ -802,7 +871,7 @@ export function mergeSessionMonotonically(
     currentTurnIndex: Math.min(mergedTurns.length, maxTurnIdx),
     turns: mergedTurns,
     completedAt: primary.completedAt || secondary.completedAt || null,
-    startupTaskSubmission: primary.startupTaskSubmission || secondary.startupTaskSubmission || null,
+    startupTaskSubmission: mergedTask,
     scoringBreakdown: primary.scoringBreakdown || secondary.scoringBreakdown || null,
     continuationEmailSentAt: primary.continuationEmailSentAt || secondary.continuationEmailSentAt || null,
     proctoring: {
@@ -814,6 +883,145 @@ export function mergeSessionMonotonically(
           : secondary.proctoring?.snapshots || [],
     },
   };
+}
+
+export function reconcileCandidatesAndSessions(
+  candidates: ApplicantCandidateRecord[],
+  sessions: AIInterviewSessionRecord[],
+  rec?: Partial<RecruitmentModuleState>
+): void {
+  const caseSets =
+    rec?.startupCaseSets && rec.startupCaseSets.length > 0
+      ? rec.startupCaseSets
+      : DEFAULT_STARTUP_CASE_SETS;
+  const weights = rec?.settings?.weights;
+
+  const sessMap = new Map<string, AIInterviewSessionRecord>();
+  for (const s of sessions) {
+    if (!s?.candidateId) continue;
+    const hasSubmittedTask = Boolean(
+      s.startupTaskSubmission?.submittedAt && s.startupTaskSubmission.submittedAt.trim().length > 0
+    );
+    const isTrulyCompleted = Boolean(s.completedAt || hasSubmittedTask);
+
+    // Heal any session that was prematurely marked Completed by an unsubmitted Phase 3 draft
+    if (!isTrulyCompleted && s.status === "Completed") {
+      const answeredCount = (s.turns || []).filter(
+        (t) => (t.candidateAnswer || "").trim().length > 0
+      ).length;
+      const maxIdx = Math.max(s.currentTurnIndex || 0, answeredCount);
+      if (maxIdx >= (s.turns?.length || 6)) {
+        s.status = "Phase 3: Startup Case Task";
+      } else if (maxIdx >= 3) {
+        s.status = "Phase 2: Startup Thinking";
+      } else {
+        s.status = "Phase 1: Resume Probe";
+      }
+    } else if (isTrulyCompleted && s.status !== "Completed") {
+      s.status = "Completed";
+    }
+
+    sessMap.set(s.candidateId, s);
+  }
+
+  for (const c of candidates) {
+    if (c.sessionDeleted) continue;
+    const s = sessMap.get(c.id);
+    if (!s) continue;
+
+    const hasSubmittedTask = Boolean(
+      s.startupTaskSubmission?.submittedAt && s.startupTaskSubmission.submittedAt.trim().length > 0
+    );
+    const isTrulyCompleted = Boolean(s.completedAt || hasSubmittedTask);
+
+    const assignedCaseSet =
+      caseSets.find((cs) => cs.id === s.assignedCaseSetId) || selectCaseSetForCandidate(c);
+
+    // Recompute scoringBreakdown if missing OR if an unsubmitted Phase 3 draft dragged Phase 3 score to 0
+    const needsRescore =
+      !s.scoringBreakdown ||
+      (!hasSubmittedTask &&
+        s.startupTaskSubmission &&
+        s.scoringBreakdown.phase3Task1RedFlagAuditScore === 0 &&
+        s.scoringBreakdown.phase3Task2CapitalAllocationScore === 0 &&
+        (s.scoringBreakdown.phase1ResumeProbeScore > 0 ||
+          s.scoringBreakdown.phase2StartupThinkingScore > 0));
+
+    if (needsRescore) {
+      s.scoringBreakdown = evaluateCompleteAIInterviewSession(s, assignedCaseSet);
+    }
+
+    if (isTrulyCompleted) {
+      if (c.assessmentStatus !== "Evaluated" && c.assessmentStatus !== "Submitted") {
+        c.assessmentStatus = s.scoringBreakdown ? "Evaluated" : "Submitted";
+      }
+      if (
+        c.applicationStatus === "In Assessment Funnel" ||
+        c.applicationStatus === "Pending Screening"
+      ) {
+        c.applicationStatus = "Assessment Submitted";
+      }
+    } else {
+      // Candidate is still actively in progress (including Phase 3 worksheet)
+      if (
+        c.assessmentStatus === "Evaluated" ||
+        c.assessmentStatus === "Submitted" ||
+        c.assessmentStatus === "Invited" ||
+        c.assessmentStatus === "Not Assigned"
+      ) {
+        c.assessmentStatus = "In Progress";
+      }
+      if (c.applicationStatus === "Assessment Submitted" || c.applicationStatus === "Pending Screening") {
+        c.applicationStatus = "In Assessment Funnel";
+      }
+    }
+
+    if (s.scoringBreakdown) {
+      const bd = s.scoringBreakdown;
+      if (bd.overallAiInterviewScore > 0) {
+        c.aiInterviewScore = bd.overallAiInterviewScore;
+      }
+
+      if (hasSubmittedTask && (bd.phase3Task1RedFlagAuditScore > 0 || bd.phase3Task2CapitalAllocationScore > 0)) {
+        if (!c.competencyScores || c.competencyScores.researchAptitude === 0) {
+          c.competencyScores = {
+            researchAptitude: bd.phase1ResumeProbeScore,
+            startupDiscoverySourcing: bd.phase2StartupThinkingScore,
+            marketBusinessAnalysis: bd.phase3Task2CapitalAllocationScore,
+            financialCommercialUnderstanding: bd.phase3Task1RedFlagAuditScore,
+            criticalThinkingRisk: bd.phase3Task3RiskAndFounderQuestionsScore,
+            communicationDocumentation: Math.round(
+              (bd.phase1ResumeProbeScore + bd.phase2StartupThinkingScore) / 2
+            ),
+            interviewOwnership: bd.phase1ResumeProbeScore,
+          };
+          c.finalWeightedScore = calculateWeightedCompetencyScore(c.competencyScores, weights);
+        }
+      } else if (bd.phase1ResumeProbeScore > 0 || bd.phase2StartupThinkingScore > 0) {
+        // Populate live competency & weighted scores from Phase 1 + Phase 2 interview performance
+        // so candidates who completed 6/6 questions (e.g. Arpit Nath 77.7, Parth Shekhawat 69.0, Shrey Mishra 68.0)
+        // never display 0 competency scores / 18 weighted score on the leaderboard.
+        const p1 = bd.phase1ResumeProbeScore;
+        const p2 = bd.phase2StartupThinkingScore || p1;
+        const avg = bd.overallAiInterviewScore || Math.round((p1 + p2) / 2);
+        c.competencyScores = {
+          researchAptitude: p1,
+          startupDiscoverySourcing: p2,
+          marketBusinessAnalysis: p2,
+          financialCommercialUnderstanding: avg,
+          criticalThinkingRisk: p2,
+          communicationDocumentation: avg,
+          interviewOwnership: p1,
+        };
+        c.finalWeightedScore = calculateWeightedCompetencyScore(c.competencyScores, weights);
+      }
+    }
+
+    if (s.proctoring) {
+      c.proctoringIntegrityScore = s.proctoring.integrityScore;
+      c.proctoringIntegrityStatus = s.proctoring.integrityStatus;
+    }
+  }
 }
 
 export function mergeCandidateMonotonically(
@@ -1273,31 +1481,12 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
         console.warn("[Workspace DB] Pre-save session merge warning:", mergeErr);
       }
 
-      // Ensure candidate records stay in sync with their merged sessions
-      const sessMap = new Map<string, AIInterviewSessionRecord>();
-      for (const s of db.recruitment.aiInterviewSessions || []) {
-        sessMap.set(s.candidateId, s);
-      }
-      for (const c of db.recruitment.candidates || []) {
-        if (c.sessionDeleted) continue;
-        const s = sessMap.get(c.id);
-        if (!s) continue;
-        if (s.status === "Completed") {
-          if (c.assessmentStatus !== "Evaluated" && c.assessmentStatus !== "Submitted") {
-            c.assessmentStatus = s.scoringBreakdown ? "Evaluated" : "Submitted";
-          }
-          if (c.applicationStatus === "In Assessment Funnel" || c.applicationStatus === "Pending Screening") {
-            c.applicationStatus = "Assessment Submitted";
-          }
-        }
-        if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
-          c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
-        }
-        if (s.proctoring) {
-          c.proctoringIntegrityScore = s.proctoring.integrityScore;
-          c.proctoringIntegrityStatus = s.proctoring.integrityStatus;
-        }
-      }
+      // Ensure candidate records and scoring breakdowns stay in sync with their merged sessions
+      reconcileCandidatesAndSessions(
+        db.recruitment.candidates || [],
+        db.recruitment.aiInterviewSessions || [],
+        db.recruitment
+      );
 
       const candidates = db.recruitment.candidates || [];
       const chunkSize = 40;
@@ -1420,6 +1609,12 @@ export async function saveSingleCandidateSessionToFirestore(
       await sessRef.set(JSON.parse(JSON.stringify(localSess)));
     }
 
+    reconcileCandidatesAndSessions(
+      db.recruitment.candidates || [],
+      db.recruitment.aiInterviewSessions || [],
+      db.recruitment
+    );
+
     if (syncCandidateRecord) {
       const candidates = db.recruitment.candidates || [];
       const candIdx = candidates.findIndex((c) => c.id === candidateId);
@@ -1435,6 +1630,99 @@ export async function saveSingleCandidateSessionToFirestore(
     }
   } catch (err) {
     console.warn("[Workspace DB] Single candidate session save warning:", err);
+  }
+}
+
+async function refreshRecruitmentFromFirestore(
+  existingDb: WorkspaceDatabaseSchema
+): Promise<boolean> {
+  if (!isFirebaseAdminConfigured()) return false;
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore) return false;
+
+  try {
+    const [recMetaDoc, perCandSnap] = await Promise.all([
+      firestore.collection("workspace_settings").doc("recruitment_meta").get(),
+      firestore.collection("ai_interview_sessions").get().catch(() => null),
+    ]);
+    if (!recMetaDoc.exists) return false;
+
+    const meta = recMetaDoc.data() as Partial<RecruitmentModuleState> & {
+      candidateChunkCount?: number;
+    };
+    const chunkCount = Number(meta.candidateChunkCount || 2);
+    const candChunkDocs = await Promise.all(
+      Array.from({ length: chunkCount }, (_, i) =>
+        firestore.collection("workspace_settings").doc(`recruitment_candidates_${i}`).get()
+      )
+    );
+    const loadedCandidates: ApplicantCandidateRecord[] = [];
+    for (const chunkDoc of candChunkDocs) {
+      if (chunkDoc.exists) {
+        const data = chunkDoc.data() as { items?: ApplicantCandidateRecord[] };
+        if (Array.isArray(data?.items)) {
+          loadedCandidates.push(...data.items);
+        }
+      }
+    }
+
+    const sessionByCandidateId = new Map<string, AIInterviewSessionRecord>();
+    if (perCandSnap && !perCandSnap.empty) {
+      for (const docSnap of perCandSnap.docs) {
+        const s = docSnap.data() as AIInterviewSessionRecord;
+        if (!s?.candidateId) continue;
+        const prev = sessionByCandidateId.get(s.candidateId);
+        sessionByCandidateId.set(
+          s.candidateId,
+          prev ? mergeSessionMonotonically(prev, s) : s
+        );
+      }
+    }
+
+    const deletedCandIds = new Set(
+      loadedCandidates.filter((c) => c.sessionDeleted).map((c) => c.id)
+    );
+    for (const localS of existingDb.recruitment?.aiInterviewSessions || []) {
+      if (!localS?.candidateId || deletedCandIds.has(localS.candidateId)) continue;
+      const cloudS = sessionByCandidateId.get(localS.candidateId);
+      if (!cloudS) {
+        if (
+          localS.candidateCode !== "DVC-SAMPLE-001" &&
+          localS.candidateId !== "cand-sample-demo"
+        ) {
+          sessionByCandidateId.set(localS.candidateId, localS);
+        }
+      } else {
+        sessionByCandidateId.set(
+          localS.candidateId,
+          mergeSessionMonotonically(cloudS, localS)
+        );
+      }
+    }
+
+    const loadedSessions = Array.from(sessionByCandidateId.values()).filter(
+      (s) => !deletedCandIds.has(s.candidateId)
+    );
+
+    reconcileCandidatesAndSessions(loadedCandidates, loadedSessions, meta);
+
+    if (existingDb.recruitment) {
+      if (loadedCandidates.length > 0) {
+        existingDb.recruitment.candidates = loadedCandidates;
+      }
+      existingDb.recruitment.aiInterviewSessions = loadedSessions;
+      if (meta.settings) existingDb.recruitment.settings = meta.settings;
+      if (Array.isArray(meta.submissions)) existingDb.recruitment.submissions = meta.submissions;
+      if (Array.isArray(meta.interviews)) existingDb.recruitment.interviews = meta.interviews;
+      if (Array.isArray(meta.emailLogs)) existingDb.recruitment.emailLogs = meta.emailLogs;
+      if (Array.isArray(meta.scoreAuditLogs)) {
+        existingDb.recruitment.scoreAuditLogs = meta.scoreAuditLogs;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Workspace DB] Lightweight recruitment refresh warning:", err);
+    return false;
   }
 }
 
@@ -1529,29 +1817,7 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
         (s) => !deletedCandIds.has(s.candidateId)
       );
 
-      // Reconcile candidate statuses with their session state so no completed candidate shows In Progress
-      for (const c of loadedCandidates) {
-        if (c.sessionDeleted) continue;
-        const s = sessionByCandidateId.get(c.id);
-        if (!s) continue;
-        if (s.status === "Completed") {
-          if (c.assessmentStatus !== "Evaluated" && c.assessmentStatus !== "Submitted") {
-            c.assessmentStatus = s.scoringBreakdown ? "Evaluated" : "Submitted";
-          }
-          if (c.applicationStatus === "In Assessment Funnel" || c.applicationStatus === "Pending Screening") {
-            c.applicationStatus = "Assessment Submitted";
-          }
-        } else if (c.assessmentStatus === "Invited" || c.assessmentStatus === "Not Assigned") {
-          c.assessmentStatus = "In Progress";
-        }
-        if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
-          c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
-        }
-        if (s.proctoring) {
-          c.proctoringIntegrityScore = s.proctoring.integrityScore;
-          c.proctoringIntegrityStatus = s.proctoring.integrityStatus;
-        }
-      }
+      reconcileCandidatesAndSessions(loadedCandidates, loadedSessions, meta);
 
       const fallbackRecruitment = buildInitialRecruitmentState();
       base.recruitment = {
@@ -1608,43 +1874,32 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
 }
 
 let inFlightLoadPromise: Promise<WorkspaceDatabaseSchema | null> | null = null;
+let inFlightRefreshPromise: Promise<boolean> | null = null;
 
 export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
-  const isStale = Date.now() - cachedDbLoadedAt > 6000;
+  const isStale = Date.now() - cachedDbLoadedAt > 8000;
   if (!cachedDb || (isFirebaseAdminConfigured() && isStale)) {
     if (isFirebaseAdminConfigured()) {
-      if (!inFlightLoadPromise) {
-        inFlightLoadPromise = loadDatabaseFromFirestore().finally(() => {
-          inFlightLoadPromise = null;
-        });
-      }
-      const fromCloud = await inFlightLoadPromise;
-      if (fromCloud) {
-        if (cachedDb?.recruitment && fromCloud.recruitment) {
-          const mergedSess = new Map<string, AIInterviewSessionRecord>();
-          for (const s of fromCloud.recruitment.aiInterviewSessions || []) {
-            mergedSess.set(s.candidateId, s);
-          }
-          const cloudDeletedIds = new Set(
-            (fromCloud.recruitment.candidates || [])
-              .filter((c) => c.sessionDeleted)
-              .map((c) => c.id)
-          );
-          for (const localS of cachedDb.recruitment.aiInterviewSessions || []) {
-            if (cloudDeletedIds.has(localS.candidateId)) continue;
-            const cloudS = mergedSess.get(localS.candidateId);
-            if (!cloudS) {
-              if (localS.candidateCode !== "DVC-SAMPLE-001" && localS.candidateId !== "cand-sample-demo") {
-                mergedSess.set(localS.candidateId, localS);
-              }
-            } else {
-              mergedSess.set(localS.candidateId, mergeSessionMonotonically(cloudS, localS));
-            }
-          }
-          fromCloud.recruitment.aiInterviewSessions = Array.from(mergedSess.values());
+      if (cachedDb) {
+        // Fast, low-memory refresh of recruitment docs only (avoids querying 21 non-recruitment collections)
+        if (!inFlightRefreshPromise) {
+          inFlightRefreshPromise = refreshRecruitmentFromFirestore(cachedDb).finally(() => {
+            inFlightRefreshPromise = null;
+          });
         }
-        cachedDb = fromCloud;
+        await inFlightRefreshPromise;
         cachedDbLoadedAt = Date.now();
+      } else {
+        if (!inFlightLoadPromise) {
+          inFlightLoadPromise = loadDatabaseFromFirestore().finally(() => {
+            inFlightLoadPromise = null;
+          });
+        }
+        const fromCloud = await inFlightLoadPromise;
+        if (fromCloud) {
+          cachedDb = fromCloud;
+          cachedDbLoadedAt = Date.now();
+        }
       }
     }
 

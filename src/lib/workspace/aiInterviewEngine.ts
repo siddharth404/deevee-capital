@@ -1135,8 +1135,12 @@ export function evaluateCompleteAIInterviewSession(
 
   const hasTaskSubmission = Boolean(
     session.startupTaskSubmission &&
-      (session.startupTaskSubmission.startupBTrueMetricAnalysis?.trim() ||
-        session.startupTaskSubmission.investmentThesisAndNumbers?.trim())
+      Boolean(
+        session.startupTaskSubmission.submittedAt ||
+          (session.startupTaskSubmission.startupBTrueMetricAnalysis?.trim() &&
+            session.startupTaskSubmission.startupCTrueMetricAnalysis?.trim() &&
+            session.startupTaskSubmission.investmentThesisAndNumbers?.trim())
+      )
   );
 
   const taskEval = hasTaskSubmission

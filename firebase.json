@@ -17,6 +17,11 @@
       "data/**",
       "public/uploads/**"
     ],
-    "cleanUrls": true
+    "cleanUrls": true,
+    "frameworksBackend": {
+      "region": "us-central1",
+      "memory": "1GiB",
+      "maxInstances": 10
+    }
   }
 }
