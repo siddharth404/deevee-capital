@@ -1107,10 +1107,16 @@ export function evaluateCompleteAIInterviewSession(
   const startupTurns = session.turns.filter((t) => t.phase === "STARTUP_THINKING");
 
   for (const turn of session.turns) {
-    const res = scoreSingleInterviewTurn(turn);
-    turn.turnScore = res.score;
-    turn.turnStrengths = res.strengths;
-    turn.turnConcerns = res.concerns;
+    if ((turn.candidateAnswer || "").trim().length > 0) {
+      const res = scoreSingleInterviewTurn(turn);
+      turn.turnScore = res.score;
+      turn.turnStrengths = res.strengths;
+      turn.turnConcerns = res.concerns;
+    } else {
+      turn.turnScore = null;
+      turn.turnStrengths = [];
+      turn.turnConcerns = [];
+    }
   }
 
   const phase1ResumeProbeScore =
@@ -1127,8 +1133,14 @@ export function evaluateCompleteAIInterviewSession(
         )
       : 0;
 
-  const taskEval = session.startupTaskSubmission
-    ? evaluateStartupSimulationTask(session.startupTaskSubmission, caseSet)
+  const hasTaskSubmission = Boolean(
+    session.startupTaskSubmission &&
+      (session.startupTaskSubmission.startupBTrueMetricAnalysis?.trim() ||
+        session.startupTaskSubmission.investmentThesisAndNumbers?.trim())
+  );
+
+  const taskEval = hasTaskSubmission
+    ? evaluateStartupSimulationTask(session.startupTaskSubmission!, caseSet)
     : {
         task1Score: 0,
         task2Score: 0,
@@ -1138,42 +1150,45 @@ export function evaluateCompleteAIInterviewSession(
         caughtUnitEconomicsRtoTrap: false,
         identifiedWorkingCapitalRisk: false,
         strengths: [],
-        redFlags: ["Startup Data Room task was not submitted."],
+        redFlags: ["Phase 3 Startup Data Room worksheet pending submission."],
       };
 
-  const overallAiInterviewScore =
-    Math.round(
-      (phase1ResumeProbeScore * 0.2 +
-        phase2StartupThinkingScore * 0.2 +
-        taskEval.task1Score * 0.25 +
-        taskEval.task2Score * 0.2 +
-        taskEval.task3Score * 0.15) *
-        10
-    ) / 10;
+  const totalTurnsCount = Math.max(1, session.turns.length);
+  const answeredTurnsSum = session.turns.reduce((acc, t) => acc + (t.turnScore || 0), 0);
+
+  const overallAiInterviewScore = hasTaskSubmission
+    ? Math.round(
+        (phase1ResumeProbeScore * 0.2 +
+          phase2StartupThinkingScore * 0.2 +
+          taskEval.task1Score * 0.25 +
+          taskEval.task2Score * 0.2 +
+          taskEval.task3Score * 0.15) *
+          10
+      ) / 10
+    : Math.round((answeredTurnsSum / totalTurnsCount) * 10) / 10;
 
   const allStrengths = [
     ...taskEval.strengths,
-    ...session.turns.flatMap((t) => t.turnStrengths).slice(0, 3),
+    ...session.turns.flatMap((t) => t.turnStrengths || []).slice(0, 4),
   ];
   const allRedFlags = [
     ...taskEval.redFlags,
-    ...session.turns.flatMap((t) => t.turnConcerns).slice(0, 3),
+    ...session.turns.flatMap((t) => t.turnConcerns || []).slice(0, 4),
   ];
 
+  // Never auto-reject solely due to proctoring flags; proctoring is for human reviewer context
   let recommendedNextStep: AIInterviewScoringBreakdown["recommendedNextStep"] = "Hold / Review";
-  if (
-    overallAiInterviewScore >= 75 &&
-    taskEval.pickedCorrectWinningStartup &&
-    session.proctoring.integrityScore >= 75
-  ) {
+  if (overallAiInterviewScore >= 75 && (hasTaskSubmission ? taskEval.pickedCorrectWinningStartup : true)) {
     recommendedNextStep = "Fast-Track to Final Partner Call";
-  } else if (overallAiInterviewScore >= 62 && taskEval.pickedCorrectWinningStartup) {
+  } else if (overallAiInterviewScore >= 60) {
     recommendedNextStep = "Assign Deep-Dive Sourcing Task";
-  } else if (overallAiInterviewScore < 48) {
+  } else if (overallAiInterviewScore < 45 && session.status === "Completed") {
     recommendedNextStep = "Pass";
   }
 
-  const executiveSummary = `${session.candidateName} (${session.candidateCode}) scored ${overallAiInterviewScore}/100 across the Proctored AI Interview & Startup Deal Simulation (Resume Probe: ${phase1ResumeProbeScore}/100, Startup Thinking: ${phase2StartupThinkingScore}/100, Red-Flag Audit: ${taskEval.task1Score}/100, ₹1Cr Allocation: ${taskEval.task2Score}/100, Risk & Diligence: ${taskEval.task3Score}/100). Proctoring Integrity: ${session.proctoring.integrityScore}% (${session.proctoring.integrityStatus}).`;
+  const executiveSummary = hasTaskSubmission
+    ? `${session.candidateName} (${session.candidateCode}) scored ${overallAiInterviewScore}/100 across the Proctored AI Interview & Startup Deal Simulation (Resume Probe: ${phase1ResumeProbeScore}/100, Startup Thinking: ${phase2StartupThinkingScore}/100, Red-Flag Audit: ${taskEval.task1Score}/100, ₹1Cr Allocation: ${taskEval.task2Score}/100, Risk & Diligence: ${taskEval.task3Score}/100). Proctoring Integrity: ${session.proctoring.integrityScore}% (${session.proctoring.integrityStatus}).`
+    : `${session.candidateName} (${session.candidateCode}) scored ${overallAiInterviewScore}/100 across ${session.turns.filter((t) => (t.candidateAnswer || "").trim()).length}/${session.turns.length} completed AI Interview questions (Phase 1 Resume Probe: ${phase1ResumeProbeScore}/100, Phase 2 Startup Thinking: ${phase2StartupThinkingScore}/100; Phase 3 Data Room pending). Proctoring Integrity: ${session.proctoring.integrityScore}% (${session.proctoring.integrityStatus}).`;
 
   return {
     phase1ResumeProbeScore,

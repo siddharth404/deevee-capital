@@ -231,12 +231,12 @@ export default function RecruitmentModuleViews({
       if (data.recruitment) {
         setRecruitment(data.recruitment);
         const firstCand = data.recruitment.candidates?.[0];
-        if (firstCand && !selectedCandidateId) {
-          setSelectedCandidateId(firstCand.id);
+        if (firstCand) {
+          setSelectedCandidateId((prev) => prev || firstCand.id);
         }
         const firstSess = data.recruitment.aiInterviewSessions?.[0];
-        if (firstSess && !selectedSessionId) {
-          setSelectedSessionId(firstSess.id);
+        if (firstSess) {
+          setSelectedSessionId((prev) => prev || firstSess.id);
         }
       }
     } catch (err) {
@@ -244,7 +244,7 @@ export default function RecruitmentModuleViews({
     } finally {
       setLoading(false);
     }
-  }, [selectedCandidateId, selectedSessionId]);
+  }, []);
 
   useEffect(() => {
     void fetchRecruitmentData();
@@ -2205,41 +2205,76 @@ export default function RecruitmentModuleViews({
                 </p>
               </div>
 
-              {/* QUICK ACTION: INSPECT SAMPLE TEST SUBMISSION */}
-              <button
-                type="button"
-                onClick={async () => {
-                  const sampleSess = aiSessions.find(
-                    (s) =>
-                      s.candidateCode === "DVC-SAMPLE-001" ||
-                      s.id.includes("sample") ||
-                      s.candidateEmail.includes("sample")
-                  );
-                  if (sampleSess) {
-                    setSelectedSessionId(sampleSess.id);
-                    setSubmissionFilter("ALL");
-                    showToast("Inspecting Sample Candidate (DVC-SAMPLE-001) test responses!");
-                  } else {
-                    const sampleCand = candidates.find(
-                      (c) => c.candidateCode === "DVC-SAMPLE-001"
-                    );
+              {/* QUICK ACTIONS: SEND RESUME EMAIL TO IN-PROGRESS & INSPECT SAMPLE */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
                     const res = await postAction(
                       {
-                        action: "ai_interview.simulate_demo_candidate",
-                        candidateId: sampleCand?.id || "cand-sample-demo",
+                        action: "email.auto_nudge_in_progress",
+                        force: true,
                       },
-                      "Loaded complete Sample Test submission for DVC-SAMPLE-001!"
+                      "Dispatched continuation & resume emails to all in-progress candidates!"
                     );
-                    if (res?.session) {
-                      setSelectedSessionId(res.session.id);
+                    if (res?.sentCount !== undefined) {
+                      showToast(
+                        `Sent ${res.sentCount} continuation resume email(s) via siddharth@deeveecapital.com!`
+                      );
                     }
-                  }
-                }}
-                className="px-4 py-2.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-200 text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-950/40 transition"
-              >
-                <Sparkles className="w-4 h-4 text-cyan-400" />
-                <span>Inspect Sample Test Submission (DVC-SAMPLE-001)</span>
-              </button>
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center gap-2 shadow-lg shadow-amber-950/40 transition"
+                >
+                  <Send className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    Send Resume Email to In-Progress (
+                    {
+                      aiSessions.filter(
+                        (s) =>
+                          s.status !== "Completed" &&
+                          s.candidateCode !== "DVC-SAMPLE-001" &&
+                          !s.id.includes("sample")
+                      ).length
+                    }
+                    )
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const sampleSess = aiSessions.find(
+                      (s) =>
+                        s.candidateCode === "DVC-SAMPLE-001" ||
+                        s.id.includes("sample") ||
+                        s.candidateEmail.includes("sample")
+                    );
+                    if (sampleSess) {
+                      setSelectedSessionId(sampleSess.id);
+                      setSubmissionFilter("ALL");
+                      showToast("Inspecting Sample Candidate (DVC-SAMPLE-001) test responses!");
+                    } else {
+                      const sampleCand = candidates.find(
+                        (c) => c.candidateCode === "DVC-SAMPLE-001"
+                      );
+                      const res = await postAction(
+                        {
+                          action: "ai_interview.simulate_demo_candidate",
+                          candidateId: sampleCand?.id || "cand-sample-demo",
+                        },
+                        "Loaded complete Sample Test submission for DVC-SAMPLE-001!"
+                      );
+                      if (res?.session) {
+                        setSelectedSessionId(res.session.id);
+                      }
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-200 text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-950/40 transition"
+                >
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <span>Inspect Sample Test Submission (DVC-SAMPLE-001)</span>
+                </button>
+              </div>
             </div>
 
             {/* FILTER PILLS & SEARCH */}
@@ -2318,6 +2353,10 @@ export default function RecruitmentModuleViews({
                     s.id.includes("sample") ||
                     s.candidateEmail.includes("sample");
                   const isSelected = s.id === (selectedSessionId || filteredSessions[0]?.id);
+                  const answeredCount = (s.turns || []).filter(
+                    (t) => t.candidateAnswer && t.candidateAnswer.trim().length > 0
+                  ).length;
+                  const liveScore = s.scoringBreakdown?.overallAiInterviewScore;
 
                   return (
                     <button
@@ -2343,8 +2382,20 @@ export default function RecruitmentModuleViews({
                             </span>
                           )}
                         </div>
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
-                          Score: {s.scoringBreakdown?.overallAiInterviewScore ?? "In Progress"}/100
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            s.status === "Completed"
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : liveScore !== undefined
+                              ? "bg-blue-500/15 text-blue-300 border border-blue-500/30"
+                              : "bg-amber-500/15 text-amber-300"
+                          }`}
+                        >
+                          {s.status === "Completed"
+                            ? `Score: ${liveScore ?? "—"}/100`
+                            : liveScore !== undefined
+                            ? `Score: ${liveScore}/100 (${answeredCount}/6 Qs)`
+                            : `Started (${answeredCount}/6 Qs)`}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2405,16 +2456,28 @@ export default function RecruitmentModuleViews({
                                 Real Candidate Submission
                               </span>
                             )}
+                            {sess.status !== "Completed" && (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-sans font-semibold border border-amber-500/30">
+                                In Progress ({sess.status})
+                              </span>
+                            )}
+                            {sess.continuationEmailSentAt && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-sans font-semibold border border-emerald-500/30">
+                                Resume Email Sent ✓
+                              </span>
+                            )}
                             <span className="text-xs text-slate-500">• {sess.assignedCaseSetId}</span>
                           </div>
                           <h3 className="text-xl font-bold text-white">{sess.candidateName}</h3>
                           <p className="text-xs text-slate-400">{sess.candidateEmail}</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           {sb && (
                             <div className="text-right">
                               <div className="text-[11px] text-slate-400">
-                                Overall AI Interview + Task Score
+                                {sess.status === "Completed"
+                                  ? "Overall AI Interview + Task Score"
+                                  : "Live / Provisional Score (Answered Turns)"}
                               </div>
                               <div className="text-2xl font-bold text-emerald-400">
                                 {sess.reviewerOverrideScore ?? sb.overallAiInterviewScore}/100
@@ -2423,6 +2486,26 @@ export default function RecruitmentModuleViews({
                                 {targetCand?.applicationStatus || sb.recommendedNextStep}
                               </div>
                             </div>
+                          )}
+                          {sess.status !== "Completed" && !isSampleSess && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await postAction(
+                                  {
+                                    action: "email.send_continuation_reminder",
+                                    candidateId: sess.candidateId,
+                                    force: true,
+                                  },
+                                  `Sent continuation resume email to ${sess.candidateName} (${sess.candidateEmail})!`
+                                );
+                              }}
+                              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition shrink-0 shadow-sm"
+                              title="Send 1-click resume link & credentials to help student continue from where they left off"
+                            >
+                              <Send className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Send Resume Email</span>
+                            </button>
                           )}
                           <button
                             type="button"
@@ -3358,7 +3441,8 @@ export default function RecruitmentModuleViews({
                                   </span>
                                 </td>
                                 <td className="py-3 px-2">
-                                  {c.proctoringIntegrityScore ? (
+                                  {c.proctoringIntegrityScore !== null &&
+                                  c.proctoringIntegrityScore !== undefined ? (
                                     <span className="inline-flex items-center gap-1 text-slate-300">
                                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                                       <span>{c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})</span>
@@ -3685,10 +3769,13 @@ export default function RecruitmentModuleViews({
                                   </div>
                                 </td>
                                 <td className="py-3 px-2 font-bold text-emerald-400 text-sm">
-                                  {c.aiInterviewScore ? `${c.aiInterviewScore}/100` : "—"}
+                                  {c.aiInterviewScore !== null && c.aiInterviewScore !== undefined
+                                    ? `${c.aiInterviewScore}/100`
+                                    : "—"}
                                 </td>
                                 <td className="py-3 px-2">
-                                  {c.proctoringIntegrityScore ? (
+                                  {c.proctoringIntegrityScore !== null &&
+                                  c.proctoringIntegrityScore !== undefined ? (
                                     <span className="text-slate-300">
                                       {c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})
                                     </span>
@@ -3783,7 +3870,8 @@ export default function RecruitmentModuleViews({
                               )}
                             </td>
                             <td className="py-2.5 px-2">
-                              {c.proctoringIntegrityScore ? (
+                              {c.proctoringIntegrityScore !== null &&
+                              c.proctoringIntegrityScore !== undefined ? (
                                 <span className="text-blue-300">
                                   {c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})
                                 </span>

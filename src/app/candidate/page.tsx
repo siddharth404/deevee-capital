@@ -346,10 +346,75 @@ function CandidatePortalInner() {
         }
         if (data.aiInterviewSession) {
           setAiSession(data.aiInterviewSession);
+          // Seamless Resume on Refresh: if the candidate already started their session,
+          // jump directly to their active question or Phase 3 Data Room without forcing pre-check again!
+          if (data.aiInterviewSession.status !== "Not Started") {
+            setPreCheckDone(true);
+            setPledgeAccepted(true);
+          }
           const idx = data.aiInterviewSession.currentTurnIndex || 0;
-          const activeTurn = data.aiInterviewSession.turns?.[idx];
-          if (activeTurn?.candidateAnswer) {
-            setCurrentAnswer(activeTurn.candidateAnswer);
+          const activeTurnOnLoad = data.aiInterviewSession.turns?.[idx];
+          if (activeTurnOnLoad?.candidateAnswer) {
+            setCurrentAnswer(activeTurnOnLoad.candidateAnswer);
+          }
+
+          // Restore Phase 3 draft from server if present
+          const sub = data.aiInterviewSession.startupTaskSubmission;
+          if (sub) {
+            if (sub.startupBTrueMetricAnalysis) setStartupBAnalysis(sub.startupBTrueMetricAnalysis);
+            if (sub.startupCTrueMetricAnalysis) setStartupCAnalysis(sub.startupCTrueMetricAnalysis);
+            if (sub.selectedStartupFor1CrId) setSelected1CrStartupId(sub.selectedStartupFor1CrId);
+            if (sub.watchlistedStartupId) setWatchlistedStartupId(sub.watchlistedStartupId);
+            if (sub.passedStartupId) setPassedStartupId(sub.passedStartupId);
+            if (sub.investmentThesisAndNumbers) setInvestmentThesis(sub.investmentThesisAndNumbers);
+            if (sub.winningStartupPrimaryRisk) setWinningStartupRisk(sub.winningStartupPrimaryRisk);
+            if (sub.threeFounderDiligenceQuestions) {
+              setThreeFounderQuestions(sub.threeFounderDiligenceQuestions);
+            }
+          }
+
+          // Restore any unsaved browser localStorage draft for current turn & Phase 3
+          if (typeof window !== "undefined" && data.candidate?.id) {
+            try {
+              const rawDraft = localStorage.getItem(`dvc_draft_${data.candidate.id}`);
+              if (rawDraft) {
+                const parsed = JSON.parse(rawDraft);
+                if (
+                  parsed.turnIndex === idx &&
+                  parsed.currentAnswer &&
+                  (!activeTurnOnLoad?.candidateAnswer ||
+                    parsed.currentAnswer.length > activeTurnOnLoad.candidateAnswer.length)
+                ) {
+                  setCurrentAnswer(parsed.currentAnswer);
+                }
+                if (parsed.startupBAnalysis && !sub?.startupBTrueMetricAnalysis) {
+                  setStartupBAnalysis(parsed.startupBAnalysis);
+                }
+                if (parsed.startupCAnalysis && !sub?.startupCTrueMetricAnalysis) {
+                  setStartupCAnalysis(parsed.startupCAnalysis);
+                }
+                if (parsed.selected1CrStartupId && !sub?.selectedStartupFor1CrId) {
+                  setSelected1CrStartupId(parsed.selected1CrStartupId);
+                }
+                if (parsed.watchlistedStartupId && !sub?.watchlistedStartupId) {
+                  setWatchlistedStartupId(parsed.watchlistedStartupId);
+                }
+                if (parsed.passedStartupId && !sub?.passedStartupId) {
+                  setPassedStartupId(parsed.passedStartupId);
+                }
+                if (parsed.investmentThesis && !sub?.investmentThesisAndNumbers) {
+                  setInvestmentThesis(parsed.investmentThesis);
+                }
+                if (parsed.winningStartupRisk && !sub?.winningStartupPrimaryRisk) {
+                  setWinningStartupRisk(parsed.winningStartupRisk);
+                }
+                if (parsed.threeFounderQuestions && !sub?.threeFounderDiligenceQuestions) {
+                  setThreeFounderQuestions(parsed.threeFounderQuestions);
+                }
+              }
+            } catch {
+              // ignore localStorage parse errors
+            }
           }
         } else {
           setAiSession(null);
@@ -366,9 +431,9 @@ function CandidatePortalInner() {
         console.warn("Candidate portal load error:", err);
         const msg = err?.message || String(err);
         if (msg.includes("abort") || err?.name === "AbortError") {
-          setErrorMsg("Connection took longer than expected. Please tap 'Retry' or refresh.");
+          setErrorMsg("Connection took longer than expected. Please tap 'Retry' or refresh (F5 / Cmd+R) to continue from where you left off.");
         } else {
-          setErrorMsg(msg || "Failed to load candidate portal.");
+          setErrorMsg(msg || "Failed to load candidate portal. Please refresh (F5 / Cmd+R) to continue from where you left off.");
         }
       } finally {
         setLoading(false);
@@ -376,6 +441,87 @@ function CandidatePortalInner() {
     },
     [codeParam, emailParam, sampleParam, tokenParam]
   );
+
+  // Auto-save live draft to localStorage immediately & sync to server every 8s
+  useEffect(() => {
+    if (!candidate || !aiSession || aiSession.status === "Completed") return;
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(
+          `dvc_draft_${candidate.id}`,
+          JSON.stringify({
+            turnIndex: aiSession.currentTurnIndex,
+            currentAnswer,
+            startupBAnalysis,
+            startupCAnalysis,
+            selected1CrStartupId,
+            watchlistedStartupId,
+            passedStartupId,
+            investmentThesis,
+            winningStartupRisk,
+            threeFounderQuestions,
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      } catch {
+        // ignore storage quota errors
+      }
+    }
+
+    const timer = setTimeout(() => {
+      if (
+        !currentAnswer.trim() &&
+        !startupBAnalysis.trim() &&
+        !startupCAnalysis.trim() &&
+        !investmentThesis.trim() &&
+        !winningStartupRisk.trim() &&
+        !threeFounderQuestions.trim()
+      ) {
+        return;
+      }
+      void fetch("/api/workspace/candidate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        },
+        body: JSON.stringify({
+          action: "ai_interview.save_draft",
+          candidateId: candidate.id,
+          turnIndex: aiSession.currentTurnIndex,
+          draftAnswer: currentAnswer,
+          startupTaskDraft:
+            aiSession.status === "Phase 3: Startup Case Task"
+              ? {
+                  startupBTrueMetricAnalysis: startupBAnalysis,
+                  startupCTrueMetricAnalysis: startupCAnalysis,
+                  selectedStartupFor1CrId: selected1CrStartupId,
+                  watchlistedStartupId,
+                  passedStartupId,
+                  investmentThesisAndNumbers: investmentThesis,
+                  winningStartupPrimaryRisk: winningStartupRisk,
+                  threeFounderDiligenceQuestions: threeFounderQuestions,
+                }
+              : undefined,
+        }),
+      }).catch(() => {});
+    }, 8000);
+
+    return () => clearTimeout(timer);
+  }, [
+    aiSession,
+    candidate,
+    currentAnswer,
+    investmentThesis,
+    passedStartupId,
+    selected1CrStartupId,
+    sessionToken,
+    startupBAnalysis,
+    startupCAnalysis,
+    threeFounderQuestions,
+    watchlistedStartupId,
+    winningStartupRisk,
+  ]);
 
   useEffect(() => {
     if (hasInitialLoadedRef.current) return;
@@ -1090,11 +1236,11 @@ function CandidatePortalInner() {
     }
   };
 
-  // Submit current question turn (Phase 1 & Phase 2)
+  // Submit current question turn (Phase 1 & Phase 2) with automatic network retry
   const handleSubmitTurnAnswer = async () => {
     if (!candidate || !aiSession || !activeTurn) return;
-    if (currentAnswer.trim().split(/\s+/).filter(Boolean).length < 8) {
-      setErrorMsg("Please provide a substantive response (at least 8–10 words) before advancing.");
+    if (currentAnswer.trim().split(/\s+/).filter(Boolean).length < 6) {
+      setErrorMsg("Please provide a substantive response (at least 6–8 words) before advancing.");
       return;
     }
 
@@ -1106,39 +1252,58 @@ function CandidatePortalInner() {
     setSubmittingTurn(true);
     setErrorMsg("");
     try {
-      const res = await fetch("/api/workspace/candidate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-        },
-        body: JSON.stringify({
-          action: "ai_interview.submit_turn",
-          candidateId: candidate.id,
-          turnIndex: aiSession.currentTurnIndex,
-          candidateAnswer: currentAnswer.trim(),
-          inputMethod: turnInputMethod,
-          timeTakenSeconds: Math.max(12, turnElapsedSec),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || "Failed to save response.");
-        return;
+      let lastErr = "Failed to save response.";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch("/api/workspace/candidate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+            },
+            body: JSON.stringify({
+              action: "ai_interview.submit_turn",
+              candidateId: candidate.id,
+              turnIndex: aiSession.currentTurnIndex,
+              candidateAnswer: currentAnswer.trim(),
+              inputMethod: turnInputMethod,
+              timeTakenSeconds: Math.max(12, turnElapsedSec),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            lastErr = data.error || "Failed to save response.";
+            if (res.status >= 500 && attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1200));
+              continue;
+            }
+            setErrorMsg(
+              `${lastErr} — Your answer is auto-saved! Please click Submit again or refresh the page (F5 / Cmd+R) to continue directly from where you left off.`
+            );
+            return;
+          }
+          if (data.session) {
+            setAiSession(data.session);
+            setCurrentAnswer("");
+            setTurnElapsedSec(0);
+          }
+          return;
+        } catch (netErr) {
+          lastErr = (netErr as Error).message || "Network connection interrupted.";
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1200));
+          }
+        }
       }
-      if (data.session) {
-        setAiSession(data.session);
-        setCurrentAnswer("");
-        setTurnElapsedSec(0);
-      }
-    } catch (err) {
-      setErrorMsg((err as Error).message);
+      setErrorMsg(
+        `Connection interrupted (${lastErr}). Your typed answer is safely auto-saved! Please check your internet and click Submit again, or refresh the page (F5 / Cmd+R) to continue from where you left off.`
+      );
     } finally {
       setSubmittingTurn(false);
     }
   };
 
-  // Submit Phase 3 Startup Virtual Data Room Simulation & Complete Session
+  // Submit Phase 3 Startup Virtual Data Room Simulation & Complete Session with automatic retry
   const handleCompleteStartupSimulation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!candidate || !aiSession || !caseSet) return;
@@ -1159,42 +1324,65 @@ function CandidatePortalInner() {
     setSubmittingFinalTask(true);
     setErrorMsg("");
     try {
-      const res = await fetch("/api/workspace/candidate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-        },
-        body: JSON.stringify({
-          action: "ai_interview.submit_complete",
-          candidateId: candidate.id,
-          startupTaskSubmission: {
-            startupBTrueMetricAnalysis: startupBAnalysis,
-            startupCTrueMetricAnalysis: startupCAnalysis,
-            spottedRedFlagsSummary:
-              spottedRedFlags || `${startupBAnalysis} | ${startupCAnalysis}`,
-            selectedStartupFor1CrId: selected1CrStartupId || caseSet.startups[0]?.id,
-            watchlistedStartupId: watchlistedStartupId || caseSet.startups[1]?.id,
-            passedStartupId: passedStartupId || caseSet.startups[2]?.id,
-            investmentThesisAndNumbers: investmentThesis,
-            winningStartupPrimaryRisk: winningStartupRisk,
-            threeFounderDiligenceQuestions: threeFounderQuestions,
-            timeSpentSeconds: Math.max(180, turnElapsedSec),
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || "Failed to submit Startup Simulation Task.");
-        return;
+      let lastErr = "Failed to submit Startup Simulation Task.";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch("/api/workspace/candidate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+            },
+            body: JSON.stringify({
+              action: "ai_interview.submit_complete",
+              candidateId: candidate.id,
+              startupTaskSubmission: {
+                startupBTrueMetricAnalysis: startupBAnalysis,
+                startupCTrueMetricAnalysis: startupCAnalysis,
+                spottedRedFlagsSummary:
+                  spottedRedFlags || `${startupBAnalysis} | ${startupCAnalysis}`,
+                selectedStartupFor1CrId: selected1CrStartupId || caseSet.startups[0]?.id,
+                watchlistedStartupId: watchlistedStartupId || caseSet.startups[1]?.id,
+                passedStartupId: passedStartupId || caseSet.startups[2]?.id,
+                investmentThesisAndNumbers: investmentThesis,
+                winningStartupPrimaryRisk: winningStartupRisk,
+                threeFounderDiligenceQuestions: threeFounderQuestions,
+                timeSpentSeconds: Math.max(180, turnElapsedSec),
+              },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            lastErr = data.error || "Failed to submit Startup Simulation Task.";
+            if (res.status >= 500 && attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1200));
+              continue;
+            }
+            setErrorMsg(
+              `${lastErr} — Your worksheet is auto-saved! Please click Submit again or refresh the page (F5 / Cmd+R) to continue directly from where you left off.`
+            );
+            return;
+          }
+          if (data.session) setAiSession(data.session);
+          if (data.candidate) setCandidate(data.candidate);
+          if (typeof window !== "undefined" && candidate.id) {
+            try {
+              localStorage.removeItem(`dvc_draft_${candidate.id}`);
+            } catch {
+              // ignore
+            }
+          }
+          return;
+        } catch (netErr) {
+          lastErr = (netErr as Error).message || "Network connection interrupted.";
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1200));
+          }
+        }
       }
-      if (data.session) setAiSession(data.session);
-      if (data.candidate) setCandidate(data.candidate);
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => {});
-      }
-    } catch (err) {
-      setErrorMsg((err as Error).message);
+      setErrorMsg(
+        `Connection interrupted (${lastErr}). Your entire Deal Triage worksheet is safely auto-saved! Please click Submit again or refresh the page (F5 / Cmd+R) to complete your submission.`
+      );
     } finally {
       setSubmittingFinalTask(false);
     }
@@ -1412,31 +1600,66 @@ function CandidatePortalInner() {
         )}
       </header>
 
-      {/* PROCTORING ALERT BANNER */}
+      {/* CONNECTION & REFRESH ASSURANCE BANNER */}
+      <div className="bg-blue-950/60 border-b border-blue-800/50 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-blue-200">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span>
+            <strong className="text-white">Disconnected or Hit an Error?</strong> Simply{" "}
+            <strong className="text-cyan-300 underline">refresh this page (F5 / Cmd+R)</strong> or re-open your invite link to{" "}
+            <strong className="text-white">continue directly from where you left off</strong>. All answers are auto-saved.{" "}
+            <span className="text-emerald-300 font-medium">
+              • Proctoring flags never cancel or lock your exam.
+            </span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="px-2.5 py-1 rounded-md bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-white font-semibold text-[11px] flex items-center gap-1 shrink-0 transition"
+        >
+          <RefreshCw className="w-3 h-3" />
+          <span>Refresh & Sync Progress</span>
+        </button>
+      </div>
+
+      {/* PROCTORING ALERT BANNER (NON-CANCELLING REASSURANCE) */}
       {proctoringWarningBanner && (
-        <div className="bg-rose-950/90 border-b border-rose-700 px-6 py-2.5 flex items-center justify-between text-xs text-rose-200">
+        <div className="bg-amber-950/90 border-b border-amber-700 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-            <span className="font-medium">{proctoringWarningBanner}</span>
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-medium">
+              {proctoringWarningBanner} — <strong>Your test is NOT cancelled. Please continue and complete your submission normally.</strong>
+            </span>
           </div>
-          <span className="font-mono text-[11px] text-rose-300">Logged to Audit Trail</span>
+          <span className="font-mono text-[11px] text-amber-300">Note Logged • Exam Active</span>
         </div>
       )}
 
       {errorMsg && (
         <div className="max-w-5xl mx-auto w-full mt-4 px-6">
-          <div className="bg-rose-950/60 border border-rose-700/60 rounded-xl px-4 py-3 flex items-center justify-between text-xs text-rose-200">
+          <div className="bg-rose-950/70 border border-rose-600/60 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-100 shadow-lg">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setErrorMsg("")}
-              className="text-rose-300 hover:text-white font-medium"
-            >
-              Dismiss
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Refresh & Continue</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setErrorMsg("")}
+                className="text-rose-300 hover:text-white font-medium"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2149,9 +2372,26 @@ function CandidatePortalInner() {
                   className="w-full p-3.5 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 text-base sm:text-sm text-slate-100 leading-relaxed focus:outline-none focus:border-blue-500"
                 />
 
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-600/60 text-xs text-rose-100 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{errorMsg}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Refresh & Continue</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
                   <span className="text-[11px] text-slate-400">
-                    Tip: Be specific—mention exact metrics, ratios, and verification sources.
+                    ✓ Auto-saved locally • If disconnected, refresh (F5) to continue from here.
                   </span>
 
                   <button
@@ -2597,6 +2837,27 @@ function CandidatePortalInner() {
                         className="w-full p-3 sm:p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-base sm:text-xs text-white focus:border-blue-500 focus:outline-none"
                       />
                     </div>
+                  </div>
+
+                  {errorMsg && (
+                    <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-600/60 text-xs text-rose-100 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{errorMsg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Refresh & Continue</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-slate-400 text-center">
+                    ✓ All worksheet inputs are auto-saved locally & synced. If disconnected, simply refresh (F5) and click Submit.
                   </div>
 
                   <button

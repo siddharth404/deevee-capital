@@ -785,3 +785,179 @@ https://deeveecapital.com
     mode: "logged_only",
   };
 }
+
+export interface AssessmentContinuationEmailData {
+  to: string;
+  candidateName: string;
+  candidateCode: string;
+  candidateEmail: string;
+  password?: string;
+  directLink: string;
+  currentPhaseAndQuestion: string;
+  answeredQuestionsCount: number;
+  totalQuestionsCount: number;
+  deadline?: string;
+}
+
+export async function sendAssessmentContinuationEmail(
+  data: AssessmentContinuationEmailData
+): Promise<{
+  success: boolean;
+  mode: "smtp" | "logged_only";
+  messageId?: string;
+  error?: string;
+}> {
+  const transporter = createSmtpTransporter();
+  const fromAddress =
+    process.env.SMTP_FROM ||
+    `"Siddharth Kaushik (Deevee Capital)" <siddharth@deeveecapital.com>`;
+
+  const directLink = sanitizeOriginLink(data.directLink, "https://deeveecapital.com/candidate");
+  const password = data.password || "Deevee@2026";
+  const deadline = data.deadline || "Tuesday, Nov 10, 2026 at 11:59 PM IST";
+  const subject = `Resume & Complete Your Deevee Capital Assessment [${data.candidateCode}] — Progress Saved`;
+
+  const textContent = `
+Dear ${data.candidateName},
+
+We noticed that your Deevee Capital Investment Research & Startup Sourcing Intern Assessment (${data.candidateCode}) is currently in progress (${data.currentPhaseAndQuestion}) and has not yet been finally submitted.
+
+============================================================
+IMPORTANT REASSURANCE — YOUR TEST IS NOT CANCELLED
+============================================================
+• If you experienced an internet disconnection, browser refresh, camera/screen-share interruption, or saw a proctoring alert, please do NOT worry — your assessment is NOT cancelled.
+• All of your completed responses (${data.answeredQuestionsCount} of ${data.totalQuestionsCount} interview turns) are safely saved.
+• Simply click your direct resume link below (or press F5 / Cmd+R to refresh your open browser tab) to continue directly from where you left off and submit your final Phase 3 Deal Triage Worksheet.
+
+============================================================
+1-CLICK RESUME LINK & CREDENTIALS
+============================================================
+Resume Directly Here:    ${directLink}
+Candidate ID (Username): ${data.candidateCode}
+Registered Email:        ${data.candidateEmail}
+Portal Password/Passkey: ${password}
+Saved Progress:          ${data.currentPhaseAndQuestion}
+Submission Deadline:     ${deadline}
+
+Please make sure to click "Submit Deal Triage & Complete Proctored Assessment" at the bottom of Phase 3 so your final evaluation is locked and recorded.
+
+Warm regards,
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+https://deeveecapital.com
+`.trim();
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0; padding:0; background-color:#070B14; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#E2E8F0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#070B14; padding:28px 14px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px; background-color:#0D1527; border:1px solid #1E293B; border-radius:16px; overflow:hidden;">
+          <tr>
+            <td style="padding:24px 28px; background:linear-gradient(135deg, #0F1A30 0%, #091020 100%); border-bottom:1px solid #1E293B;">
+              <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:#38BDF8; margin-bottom:4px;">
+                Deevee Capital &bull; Assessment Continuation Notice
+              </div>
+              <div style="font-size:20px; font-weight:700; color:#FFFFFF;">
+                Your Progress Is Saved — Resume &amp; Complete Your Assessment
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px 28px; font-size:14px; line-height:1.65; color:#CBD5E1;">
+              <p style="margin:0 0 14px 0; color:#FFFFFF; font-size:15px;">
+                Dear <strong>${data.candidateName}</strong>,
+              </p>
+              <p style="margin:0 0 16px 0;">
+                We noticed your Deevee Capital assessment session (<strong>${data.candidateCode}</strong>) is currently at <strong style="color:#38BDF8;">${data.currentPhaseAndQuestion}</strong> and awaits final submission.
+              </p>
+
+              <div style="background-color:#064E3B; border:1px solid #10B981; border-radius:12px; padding:16px 18px; margin:18px 0;">
+                <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#6EE7B7; margin-bottom:6px;">
+                  &#10003; Reassurance: Your Exam Is Active &amp; Not Cancelled
+                </div>
+                <div style="font-size:13px; color:#ECFDF5; line-height:1.55;">
+                  If you lost internet connectivity, experienced a browser/hardware glitch, or saw a proctoring flag, <strong>your test has NOT been cancelled</strong>. All your completed answers (${data.answeredQuestionsCount}/${data.totalQuestionsCount} interview questions) are safely preserved. Simply refresh your page (<strong>F5 / Cmd+R</strong>) or click the button below to continue from where you left off.
+                </div>
+              </div>
+
+              <div style="background-color:#070B14; border:1px solid #334155; border-radius:12px; padding:16px 18px; margin:18px 0;">
+                <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#94A3B8; margin-bottom:10px;">
+                  Saved Session &amp; Access Credentials
+                </div>
+                <table role="presentation" width="100%" style="font-size:13px; line-height:1.75;">
+                  <tr>
+                    <td style="color:#94A3B8; width:155px;">Candidate ID:</td>
+                    <td style="color:#38BDF8; font-family:monospace; font-weight:700;">${data.candidateCode}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Registered Email:</td>
+                    <td style="color:#F8FAFC; font-family:monospace;">${data.candidateEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Portal Passkey:</td>
+                    <td style="color:#FCD34D; font-family:monospace; font-weight:700;">${password}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Current Stage:</td>
+                    <td style="color:#6EE7B7; font-weight:600;">${data.currentPhaseAndQuestion}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Submission Deadline:</td>
+                    <td style="color:#F8FAFC;">${deadline}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <div style="text-align:center; margin:24px 0;">
+                <a href="${directLink}" target="_blank" style="display:inline-block; padding:14px 28px; background:linear-gradient(90deg, #2563EB 0%, #4F46E5 100%); color:#FFFFFF; font-weight:700; font-size:14px; text-decoration:none; border-radius:10px;">
+                  Resume Assessment From Where You Left Off &rarr;
+                </a>
+              </div>
+
+              <p style="font-size:12px; color:#94A3B8; margin:16px 0 0 0;">
+                <strong>Note for Phase 3:</strong> Once you reach Phase 3 (Virtual Startup Data Room), please complete the 3 tasks on the right-hand worksheet and click <em>&ldquo;Submit Deal Triage &amp; Complete Proctored Assessment&rdquo;</em> to lock in your final submission.
+              </p>
+
+              <div style="margin-top:24px; padding-top:16px; border-top:1px solid #1E293B; font-size:12px; color:#94A3B8;">
+                <strong style="color:#FFFFFF;">Siddharth Kaushik</strong> &bull; Managing Partner, Deevee Capital<br/>
+                <a href="mailto:siddharth@deeveecapital.com" style="color:#38BDF8; text-decoration:none;">siddharth@deeveecapital.com</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`.trim();
+
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: data.to,
+        replyTo: "siddharth@deeveecapital.com",
+        subject,
+        text: textContent,
+        html: htmlContent,
+      });
+      console.log(`[Email] Continuation reminder sent to ${data.to} (${data.candidateCode}) - MessageId: ${info.messageId}`);
+      return { success: true, mode: "smtp", messageId: info.messageId };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[Email] Continuation reminder failed for ${data.to}:`, errMsg);
+      return { success: false, mode: "smtp", error: errMsg };
+    }
+  }
+
+  return { success: true, mode: "logged_only" };
+}
+

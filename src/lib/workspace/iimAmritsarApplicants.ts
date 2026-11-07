@@ -21,6 +21,8 @@ import {
 import {
   createDedicatedSampleCompletedSession,
   DEFAULT_STARTUP_CASE_SETS,
+  evaluateCompleteAIInterviewSession,
+  selectCaseSetForCandidate,
 } from "./aiInterviewEngine";
 
 export const RAW_IIM_AMRITSAR_WORKBOOK_ROWS: Array<Record<string, string>> = [
@@ -2631,28 +2633,66 @@ export function sanitizeRecruitmentStateIsolation(state: RecruitmentModuleState)
   }
 
   // 2. Normalize real candidates: everyone is invited for assessment!
-  // Candidates who haven't taken the assessment yet should not be prematurely marked as "Shortlisted for Assessment" or "Recommended".
+  // Also ensure any session with answered turns has its per-turn scores & breakdown computed.
+  const caseSets =
+    state.startupCaseSets && state.startupCaseSets.length > 0
+      ? state.startupCaseSets
+      : DEFAULT_STARTUP_CASE_SETS;
+
   for (const cand of state.candidates) {
     if (cand.candidateCode === "DVC-SAMPLE-001" || cand.id === "cand-sample-demo") continue;
 
     const candSession = state.aiInterviewSessions.find((s) => s.candidateId === cand.id);
-    const hasCompletedSession = candSession && candSession.status === "Completed";
+    if (candSession) {
+      const answeredCount = (candSession.turns || []).filter(
+        (t) => (t.candidateAnswer || "").trim().length > 0
+      ).length;
+      const needsTurnScoring = (candSession.turns || []).some(
+        (t) => (t.candidateAnswer || "").trim().length > 0 && t.turnScore == null
+      );
 
-    if (hasCompletedSession) {
-      if (
-        cand.applicationStatus !== "Selected" &&
-        cand.applicationStatus !== "Waitlisted" &&
-        cand.applicationStatus !== "Rejected" &&
-        cand.applicationStatus !== "Shortlisted for Final Interview"
-      ) {
-        cand.applicationStatus = "Assessment Submitted";
+      if (answeredCount > 0 && (!candSession.scoringBreakdown || needsTurnScoring)) {
+        const assignedCaseSet =
+          caseSets.find((cs) => cs.id === candSession.assignedCaseSetId) ||
+          selectCaseSetForCandidate(cand);
+        candSession.scoringBreakdown = evaluateCompleteAIInterviewSession(
+          candSession,
+          assignedCaseSet
+        );
       }
-      cand.assessmentStatus = "Evaluated";
-      if (candSession.scoringBreakdown?.overallAiInterviewScore) {
+
+      if (candSession.proctoring) {
+        cand.proctoringIntegrityScore = candSession.proctoring.integrityScore;
+        cand.proctoringIntegrityStatus = candSession.proctoring.integrityStatus;
+      }
+
+      const hasCompletedSession = candSession.status === "Completed";
+      if (hasCompletedSession) {
+        if (
+          cand.applicationStatus !== "Selected" &&
+          cand.applicationStatus !== "Waitlisted" &&
+          cand.applicationStatus !== "Rejected" &&
+          cand.applicationStatus !== "Shortlisted for Final Interview"
+        ) {
+          cand.applicationStatus = "Assessment Submitted";
+        }
+        cand.assessmentStatus = "Evaluated";
+      } else {
+        cand.assessmentStatus = "In Progress";
+        if (
+          cand.applicationStatus === "Shortlisted for Assessment" ||
+          cand.applicationStatus === "Pending Screening" ||
+          cand.applicationStatus === "Recommended"
+        ) {
+          cand.applicationStatus = "In Assessment Funnel";
+        }
+      }
+
+      if (candSession.scoringBreakdown?.overallAiInterviewScore != null) {
         cand.aiInterviewScore = candSession.scoringBreakdown.overallAiInterviewScore;
       }
     } else {
-      // Still awaiting assessment submission
+      // Still awaiting assessment start
       if (
         cand.applicationStatus === "Shortlisted for Assessment" ||
         cand.applicationStatus === "Pending Screening" ||

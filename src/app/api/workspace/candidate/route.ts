@@ -12,6 +12,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  deleteSessionFromFirestore,
   getWorkspaceDb,
   hashPasswordScrypt,
   saveWorkspaceDb,
@@ -30,6 +31,7 @@ import {
   DEFAULT_STARTUP_CASE_SETS,
   evaluateCompleteAIInterviewSession,
   generatePersonalizedInterviewTurns,
+  scoreSingleInterviewTurn,
   selectCaseSetForCandidate,
 } from "@/lib/workspace/aiInterviewEngine";
 import {
@@ -530,6 +532,7 @@ export async function POST(request: NextRequest) {
         (s) => s.candidateId !== cand.id
       );
     }
+    await deleteSessionFromFirestore(cand.id);
     cand.assessmentStatus = "In Progress";
     cand.updatedAt = now;
     await saveWorkspaceDb(db);
@@ -698,29 +701,69 @@ export async function POST(request: NextRequest) {
     turn.timeTakenSeconds = Number(body.timeTakenSeconds || 45);
     turn.answeredAt = now;
 
+    // Immediately score this turn and update live session scoring breakdown so progress is never unscored
+    const turnEval = scoreSingleInterviewTurn(turn);
+    turn.turnScore = turnEval.score;
+    turn.turnStrengths = turnEval.strengths;
+    turn.turnConcerns = turnEval.concerns;
+
     if (typeof body.adaptiveFollowUpAnswer === "string" && body.adaptiveFollowUpAnswer.trim()) {
       turn.adaptiveFollowUpAnswer = body.adaptiveFollowUpAnswer.trim();
     }
 
     // Advance turn index & update phase status
-    const nextIdx = turnIdx + 1;
+    const nextIdx = Math.max(session.currentTurnIndex || 0, turnIdx + 1);
     session.currentTurnIndex = nextIdx;
     session.totalDurationSeconds += turn.timeTakenSeconds;
+    session.proctoring.lastHeartbeatAt = now;
 
-    if (nextIdx < session.turns.length) {
-      const nextTurn = session.turns[nextIdx]!;
-      session.status =
-        nextTurn.phase === "RESUME_PROBE"
-          ? "Phase 1: Resume Probe"
-          : "Phase 2: Startup Thinking";
-    } else {
-      session.status = "Phase 3: Startup Case Task";
+    if (session.status !== "Completed") {
+      if (nextIdx < session.turns.length) {
+        const nextTurn = session.turns[nextIdx]!;
+        session.status =
+          nextTurn.phase === "RESUME_PROBE"
+            ? "Phase 1: Resume Probe"
+            : "Phase 2: Startup Thinking";
+      } else {
+        session.status = "Phase 3: Startup Case Task";
+      }
     }
+
+    const caseSets =
+      rec.startupCaseSets && rec.startupCaseSets.length > 0
+        ? rec.startupCaseSets
+        : DEFAULT_STARTUP_CASE_SETS;
+    const assignedCaseSet =
+      caseSets.find((cs) => cs.id === session.assignedCaseSetId) ||
+      selectCaseSetForCandidate(cand);
+    session.scoringBreakdown = evaluateCompleteAIInterviewSession(session, assignedCaseSet);
+    cand.aiInterviewScore = session.scoringBreakdown.overallAiInterviewScore;
+    cand.updatedAt = now;
 
     await saveWorkspaceDb(db);
     return NextResponse.json({
       session: sanitizeSessionForCandidate(session),
     });
+  }
+
+  // ==========================================================================
+  // 3B. AUTO-SAVE LIVE DRAFT PROGRESS (TURN OR PHASE 3 WORKSHEET)
+  // ==========================================================================
+  if (action === "ai_interview.save_draft") {
+    const session = (rec.aiInterviewSessions || []).find((s) => s.candidateId === cand.id);
+    if (!session || session.status === "Completed") {
+      return NextResponse.json({ ok: true });
+    }
+    if (typeof body.turnIndex === "number" && typeof body.draftAnswer === "string") {
+      const t = session.turns[body.turnIndex];
+      if (t && !t.answeredAt && body.draftAnswer.trim().length > 0) {
+        t.candidateAnswer = body.draftAnswer;
+        t.wordCount = body.draftAnswer.trim().split(/\s+/).filter(Boolean).length;
+      }
+    }
+    session.proctoring.lastHeartbeatAt = now;
+    await saveWorkspaceDb(db);
+    return NextResponse.json({ ok: true });
   }
 
   // ==========================================================================
@@ -730,6 +773,24 @@ export async function POST(request: NextRequest) {
     const session = (rec.aiInterviewSessions || []).find((s) => s.candidateId === cand.id);
     if (!session) {
       return NextResponse.json({ ok: false });
+    }
+
+    // CRITICAL: Never mutate or overwrite a session that is already Completed
+    if (
+      session.status === "Completed" ||
+      cand.assessmentStatus === "Submitted" ||
+      cand.assessmentStatus === "Evaluated"
+    ) {
+      return NextResponse.json({
+        proctoring: {
+          integrityScore: session.proctoring.integrityScore,
+          integrityStatus: session.proctoring.integrityStatus,
+          tabSwitchCount: session.proctoring.tabSwitchCount,
+          fullscreenExitCount: session.proctoring.fullscreenExitCount,
+          copyPasteBlockedCount: session.proctoring.copyPasteBlockedCount,
+          screenShareActive: session.proctoring.screenShareActive,
+        },
+      });
     }
 
     const eventType = String(
@@ -818,6 +879,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL: Never mutate or overwrite a session that is already Completed
+    if (
+      session.status === "Completed" ||
+      cand.assessmentStatus === "Submitted" ||
+      cand.assessmentStatus === "Evaluated"
+    ) {
+      return NextResponse.json({
+        ok: true,
+        snapshotsCount: (session.proctoring.snapshots || []).length,
+        screenShareActive: session.proctoring.screenShareActive,
+      });
+    }
+
     const rawDataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
     const snapType = body.type === "screen" ? "screen" : "webcam";
 
@@ -835,9 +909,9 @@ export async function POST(request: NextRequest) {
       };
 
       session.proctoring.snapshots.push(snapEntry);
-      // Cap at 10 snapshots to ensure ultra-lightweight Firestore documents (< 200KB)
-      if (session.proctoring.snapshots.length > 10) {
-        session.proctoring.snapshots = session.proctoring.snapshots.slice(-10);
+      // Cap at 6 snapshots to keep documents compact and blazingly fast
+      if (session.proctoring.snapshots.length > 6) {
+        session.proctoring.snapshots = session.proctoring.snapshots.slice(-6);
       }
 
       if (snapType === "screen") {

@@ -737,6 +737,124 @@ export function createEmptyResearchWorkspace(params: {
 }
 
 let cachedDb: WorkspaceDatabaseSchema | null = null;
+let cachedDbLoadedAt = 0;
+
+const SESSION_STATUS_RANK: Record<string, number> = {
+  "Not Started": 0,
+  "Phase 1: Resume Probe": 1,
+  "Phase 2: Startup Thinking": 2,
+  "Phase 3: Startup Case Task": 3,
+  "Completed": 4,
+};
+
+const ASSESSMENT_STATUS_RANK: Record<string, number> = {
+  "Not Started": 0,
+  "Invited": 1,
+  "In Progress": 2,
+  "Submitted": 3,
+  "Evaluated": 4,
+};
+
+export function mergeSessionMonotonically(
+  a: AIInterviewSessionRecord,
+  b: AIInterviewSessionRecord
+): AIInterviewSessionRecord {
+  const rankA = SESSION_STATUS_RANK[a.status] ?? 0;
+  const rankB = SESSION_STATUS_RANK[b.status] ?? 0;
+  const primary = rankB >= rankA ? b : a;
+  const secondary = primary === b ? a : b;
+
+  const mergedTurns = (primary.turns || []).map((t, idx) => {
+    const otherTurn = secondary.turns?.[idx];
+    if (!otherTurn) return t;
+    const primaryAns = (t.candidateAnswer || "").trim();
+    const otherAns = (otherTurn.candidateAnswer || "").trim();
+    if (!primaryAns && otherAns) {
+      return otherTurn;
+    }
+    if (primaryAns && otherAns && otherAns.length > primaryAns.length && !t.turnScore && otherTurn.turnScore) {
+      return otherTurn;
+    }
+    return {
+      ...t,
+      turnScore: t.turnScore ?? otherTurn.turnScore ?? null,
+      turnStrengths: t.turnStrengths?.length ? t.turnStrengths : otherTurn.turnStrengths || [],
+      turnConcerns: t.turnConcerns?.length ? t.turnConcerns : otherTurn.turnConcerns || [],
+    };
+  });
+
+  const answeredCount = mergedTurns.filter((t) => (t.candidateAnswer || "").trim().length > 0).length;
+  const maxTurnIdx = Math.max(primary.currentTurnIndex || 0, secondary.currentTurnIndex || 0, answeredCount);
+
+  let effectiveStatus = primary.status;
+  if (rankA === 4 || rankB === 4 || primary.startupTaskSubmission || secondary.startupTaskSubmission) {
+    effectiveStatus = "Completed";
+  } else if (maxTurnIdx >= mergedTurns.length && mergedTurns.length > 0) {
+    effectiveStatus = "Phase 3: Startup Case Task";
+  } else if (maxTurnIdx >= 3) {
+    effectiveStatus = "Phase 2: Startup Thinking";
+  }
+
+  return {
+    ...secondary,
+    ...primary,
+    status: effectiveStatus,
+    currentTurnIndex: Math.min(mergedTurns.length, maxTurnIdx),
+    turns: mergedTurns,
+    completedAt: primary.completedAt || secondary.completedAt || null,
+    startupTaskSubmission: primary.startupTaskSubmission || secondary.startupTaskSubmission || null,
+    scoringBreakdown: primary.scoringBreakdown || secondary.scoringBreakdown || null,
+    continuationEmailSentAt: primary.continuationEmailSentAt || secondary.continuationEmailSentAt || null,
+    proctoring: {
+      ...secondary.proctoring,
+      ...primary.proctoring,
+      snapshots:
+        (primary.proctoring?.snapshots?.length || 0) >= (secondary.proctoring?.snapshots?.length || 0)
+          ? primary.proctoring?.snapshots || []
+          : secondary.proctoring?.snapshots || [],
+    },
+  };
+}
+
+export function mergeCandidateMonotonically(
+  a: ApplicantCandidateRecord,
+  b: ApplicantCandidateRecord
+): ApplicantCandidateRecord {
+  // If either record explicitly had sessionDeleted toggled most recently, respect the newer timestamp
+  const timeA = new Date(a.updatedAt || 0).getTime();
+  const timeB = new Date(b.updatedAt || 0).getTime();
+  const newer = timeB >= timeA ? b : a;
+  const older = newer === b ? a : b;
+
+  if (newer.sessionDeleted) {
+    return newer;
+  }
+
+  const rankA = ASSESSMENT_STATUS_RANK[a.assessmentStatus] ?? 0;
+  const rankB = ASSESSMENT_STATUS_RANK[b.assessmentStatus] ?? 0;
+  const bestAssessmentStatus = rankB >= rankA ? b.assessmentStatus : a.assessmentStatus;
+
+  const hasSubmitted =
+    bestAssessmentStatus === "Submitted" ||
+    bestAssessmentStatus === "Evaluated" ||
+    a.applicationStatus === "Assessment Submitted" ||
+    b.applicationStatus === "Assessment Submitted";
+
+  return {
+    ...older,
+    ...newer,
+    assessmentStatus: bestAssessmentStatus,
+    applicationStatus:
+      hasSubmitted && newer.applicationStatus === "In Assessment Funnel"
+        ? "Assessment Submitted"
+        : newer.applicationStatus,
+    aiInterviewScore: newer.aiInterviewScore ?? older.aiInterviewScore ?? null,
+    proctoringIntegrityScore:
+      newer.proctoringIntegrityScore ?? older.proctoringIntegrityScore ?? null,
+    proctoringIntegrityStatus:
+      newer.proctoringIntegrityStatus ?? older.proctoringIntegrityStatus,
+  };
+}
 
 async function readSubmissionsJsonl(): Promise<Array<Record<string, unknown>>> {
   try {
@@ -1123,18 +1241,78 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
     opCount += 1;
 
     if (db.recruitment) {
+      // 0. Non-destructively merge with any concurrent sessions/candidates in Firestore before saving
+      try {
+        const existingSessSnap = await firestore.collection("ai_interview_sessions").get();
+        if (!existingSessSnap.empty) {
+          const byCandId = new Map<string, AIInterviewSessionRecord>();
+          for (const s of db.recruitment.aiInterviewSessions || []) {
+            byCandId.set(s.candidateId, s);
+          }
+          const deletedCandIds = new Set(
+            (db.recruitment.candidates || [])
+              .filter((c) => c.sessionDeleted)
+              .map((c) => c.id)
+          );
+          for (const docSnap of existingSessSnap.docs) {
+            const cloudSess = docSnap.data() as AIInterviewSessionRecord;
+            if (!cloudSess?.candidateId) continue;
+            if (deletedCandIds.has(cloudSess.candidateId)) continue;
+            const localSess = byCandId.get(cloudSess.candidateId);
+            if (!localSess) {
+              // Preserve concurrent session created on another container (unless sample was just reset)
+              if (cloudSess.candidateCode !== "DVC-SAMPLE-001" && cloudSess.candidateId !== "cand-sample-demo") {
+                byCandId.set(cloudSess.candidateId, cloudSess);
+              }
+            } else {
+              byCandId.set(cloudSess.candidateId, mergeSessionMonotonically(cloudSess, localSess));
+            }
+          }
+          db.recruitment.aiInterviewSessions = Array.from(byCandId.values());
+        }
+      } catch (mergeErr) {
+        console.warn("[Workspace DB] Pre-save session merge warning:", mergeErr);
+      }
+
+      // Ensure candidate records stay in sync with their merged sessions
+      const sessMap = new Map<string, AIInterviewSessionRecord>();
+      for (const s of db.recruitment.aiInterviewSessions || []) {
+        sessMap.set(s.candidateId, s);
+      }
+      for (const c of db.recruitment.candidates || []) {
+        if (c.sessionDeleted) continue;
+        const s = sessMap.get(c.id);
+        if (!s) continue;
+        if (s.status === "Completed") {
+          if (c.assessmentStatus !== "Evaluated" && c.assessmentStatus !== "Submitted") {
+            c.assessmentStatus = s.scoringBreakdown ? "Evaluated" : "Submitted";
+          }
+          if (c.applicationStatus === "In Assessment Funnel" || c.applicationStatus === "Pending Screening") {
+            c.applicationStatus = "Assessment Submitted";
+          }
+          if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
+            c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
+          }
+        }
+        if (s.proctoring) {
+          c.proctoringIntegrityScore = s.proctoring.integrityScore;
+          c.proctoringIntegrityStatus = s.proctoring.integrityStatus;
+        }
+      }
+
       const candidates = db.recruitment.candidates || [];
       const chunkSize = 40;
       const chunkCount = Math.ceil(candidates.length / chunkSize);
       const sessions = db.recruitment.aiInterviewSessions || [];
-      const sessionChunkSize = 20;
+      // Keep chunk size small (3 sessions per chunk doc ~ 180KB) so no chunk ever approaches Firestore's 1MB limit
+      const sessionChunkSize = 3;
       const sessionChunkCount = Math.ceil(sessions.length / sessionChunkSize);
 
       const recruitmentMeta = {
         settings: db.recruitment.settings,
         questions: db.recruitment.questions || [],
         submissions: db.recruitment.submissions || [],
-        aiInterviewSessions: sessions.slice(0, 5),
+        aiInterviewSessions: [],
         sessionChunkCount,
         startupCaseSets: db.recruitment.startupCaseSets || [],
         interviews: db.recruitment.interviews || [],
@@ -1160,6 +1338,18 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
         }
       }
 
+      // 1. Write each session as an isolated per-candidate document in ai_interview_sessions
+      for (const sess of sessions) {
+        if (!sess?.candidateId) continue;
+        const sessRef = firestore.collection("ai_interview_sessions").doc(String(sess.candidateId));
+        batch.set(sessRef, JSON.parse(JSON.stringify(sess)));
+        opCount += 1;
+        if (opCount >= 400) {
+          await commitAndReset();
+        }
+      }
+
+      // 2. Also write small 3-session chunks for backward compatibility
       for (let i = 0; i < sessionChunkCount; i++) {
         const chunk = sessions.slice(i * sessionChunkSize, (i + 1) * sessionChunkSize);
         const chunkRef = firestore
@@ -1233,8 +1423,9 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
           }
         }
       }
+
+      const sessionByCandidateId = new Map<string, AIInterviewSessionRecord>();
       const sessionChunkCount = Number(meta.sessionChunkCount || 0);
-      const loadedSessions: AIInterviewSessionRecord[] = [];
       if (sessionChunkCount > 0) {
         for (let i = 0; i < sessionChunkCount; i++) {
           const chunkDoc = await firestore
@@ -1244,12 +1435,65 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
           if (chunkDoc.exists) {
             const data = chunkDoc.data() as { items?: AIInterviewSessionRecord[] };
             if (Array.isArray(data?.items)) {
-              loadedSessions.push(...data.items);
+              for (const s of data.items) {
+                if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
+              }
             }
           }
         }
       } else if (Array.isArray(meta.aiInterviewSessions)) {
-        loadedSessions.push(...meta.aiInterviewSessions);
+        for (const s of meta.aiInterviewSessions) {
+          if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
+        }
+      }
+
+      // Also load isolated per-candidate session docs from ai_interview_sessions and monotonically merge
+      try {
+        const perCandSnap = await firestore.collection("ai_interview_sessions").get();
+        if (!perCandSnap.empty) {
+          for (const docSnap of perCandSnap.docs) {
+            const s = docSnap.data() as AIInterviewSessionRecord;
+            if (!s?.candidateId) continue;
+            const prev = sessionByCandidateId.get(s.candidateId);
+            sessionByCandidateId.set(
+              s.candidateId,
+              prev ? mergeSessionMonotonically(prev, s) : s
+            );
+          }
+        }
+      } catch {
+        // Ignore if collection does not exist yet
+      }
+
+      const deletedCandIds = new Set(
+        loadedCandidates.filter((c) => c.sessionDeleted).map((c) => c.id)
+      );
+      const loadedSessions = Array.from(sessionByCandidateId.values()).filter(
+        (s) => !deletedCandIds.has(s.candidateId)
+      );
+
+      // Reconcile candidate statuses with their session state so no completed candidate shows In Progress
+      for (const c of loadedCandidates) {
+        if (c.sessionDeleted) continue;
+        const s = sessionByCandidateId.get(c.id);
+        if (!s) continue;
+        if (s.status === "Completed") {
+          if (c.assessmentStatus !== "Evaluated" && c.assessmentStatus !== "Submitted") {
+            c.assessmentStatus = s.scoringBreakdown ? "Evaluated" : "Submitted";
+          }
+          if (c.applicationStatus === "In Assessment Funnel" || c.applicationStatus === "Pending Screening") {
+            c.applicationStatus = "Assessment Submitted";
+          }
+        } else if (c.assessmentStatus === "Invited" || c.assessmentStatus === "Not Assigned") {
+          c.assessmentStatus = "In Progress";
+        }
+        if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
+          c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
+        }
+        if (s.proctoring) {
+          c.proctoringIntegrityScore = s.proctoring.integrityScore;
+          c.proctoringIntegrityStatus = s.proctoring.integrityStatus;
+        }
       }
 
       const fallbackRecruitment = buildInitialRecruitmentState();
@@ -1316,7 +1560,6 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
 
       for (const inv of base.invitations) {
         const em = (inv.email || "").toLowerCase();
-        // If an invitation was already accepted or user is already active, drop duplicate pending ones
         if (inv.status === "pending" && (acceptedEmails.has(em) || activeEmails.has(em))) {
           deleteInvitationFromFirestore(inv.id);
           continue;
@@ -1341,11 +1584,37 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
 }
 
 export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
-  if (!cachedDb) {
+  const isStale = Date.now() - cachedDbLoadedAt > 2000;
+  if (!cachedDb || (isFirebaseAdminConfigured() && isStale)) {
     if (isFirebaseAdminConfigured()) {
       const fromCloud = await loadDatabaseFromFirestore();
       if (fromCloud) {
+        if (cachedDb?.recruitment && fromCloud.recruitment) {
+          // Monotonically merge any in-memory sessions with freshly loaded cloud sessions
+          const mergedSess = new Map<string, AIInterviewSessionRecord>();
+          for (const s of fromCloud.recruitment.aiInterviewSessions || []) {
+            mergedSess.set(s.candidateId, s);
+          }
+          const cloudDeletedIds = new Set(
+            (fromCloud.recruitment.candidates || [])
+              .filter((c) => c.sessionDeleted)
+              .map((c) => c.id)
+          );
+          for (const localS of cachedDb.recruitment.aiInterviewSessions || []) {
+            if (cloudDeletedIds.has(localS.candidateId)) continue;
+            const cloudS = mergedSess.get(localS.candidateId);
+            if (!cloudS) {
+              if (localS.candidateCode !== "DVC-SAMPLE-001" && localS.candidateId !== "cand-sample-demo") {
+                mergedSess.set(localS.candidateId, localS);
+              }
+            } else {
+              mergedSess.set(localS.candidateId, mergeSessionMonotonically(cloudS, localS));
+            }
+          }
+          fromCloud.recruitment.aiInterviewSessions = Array.from(mergedSess.values());
+        }
         cachedDb = fromCloud;
+        cachedDbLoadedAt = Date.now();
       }
     }
 
@@ -1354,8 +1623,10 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
         await fs.mkdir(DB_DIR, { recursive: true });
         const raw = await fs.readFile(DB_FILE, "utf-8");
         cachedDb = JSON.parse(raw) as WorkspaceDatabaseSchema;
+        cachedDbLoadedAt = Date.now();
       } catch {
         cachedDb = buildInitialDatabase();
+        cachedDbLoadedAt = Date.now();
         if (isFirebaseAdminConfigured()) {
           await syncAllCollectionsToFirestore(cachedDb);
         }
@@ -1390,6 +1661,7 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
 
 export async function saveWorkspaceDb(db: WorkspaceDatabaseSchema): Promise<void> {
   cachedDb = db;
+  cachedDbLoadedAt = Date.now();
   try {
     await fs.mkdir(DB_DIR, { recursive: true });
     await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), {
@@ -1403,6 +1675,17 @@ export async function saveWorkspaceDb(db: WorkspaceDatabaseSchema): Promise<void
   // Mirror all collections to Cloud Firestore when configured
   if (isFirebaseAdminConfigured()) {
     await syncAllCollectionsToFirestore(db);
+  }
+}
+
+export async function deleteSessionFromFirestore(candidateId: string): Promise<void> {
+  if (!isFirebaseAdminConfigured()) return;
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore) return;
+  try {
+    await firestore.collection("ai_interview_sessions").doc(String(candidateId)).delete();
+  } catch (err) {
+    console.warn("[Workspace DB] Firestore delete session warning:", err);
   }
 }
 

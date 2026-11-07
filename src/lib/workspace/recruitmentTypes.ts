@@ -290,6 +290,7 @@ export interface AIInterviewSessionRecord {
   reviewerNotes?: string;
   reviewedBy?: string;
   reviewedAt?: string;
+  continuationEmailSentAt?: string | null;
 }
 
 export interface CandidateRecord {

@@ -23,8 +23,8 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getAuthenticatedUser } from "@/lib/workspace/auth";
-import { getWorkspaceDb, recordAuditAndActivity, saveWorkspaceDb } from "@/lib/workspace/db";
-import { sendRecruitmentAssessmentEmail } from "@/lib/email";
+import { deleteSessionFromFirestore, getWorkspaceDb, recordAuditAndActivity, saveWorkspaceDb } from "@/lib/workspace/db";
+import { sendAssessmentContinuationEmail, sendRecruitmentAssessmentEmail } from "@/lib/email";
 import {
   buildCandidatesFromWorkbookRows,
   buildInitialRecruitmentState,
@@ -352,10 +352,128 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Automatically check and dispatch continuation emails to any student who started >=10 mins ago and is still In Progress
+  const originUrl = getCanonicalOrigin(request);
+  void dispatchAutoContinuationReminders(db, originUrl);
+
   // Strip server-side correctOptionIndex from questions only when needed, but admins in /workspace can view everything
   return NextResponse.json({
     recruitment: db.recruitment,
   });
+}
+
+let isAutoDispatchRunning = false;
+
+async function dispatchAutoContinuationReminders(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  originUrl: string,
+  targetCandidateId?: string,
+  forceSend?: boolean
+): Promise<number> {
+  if (isAutoDispatchRunning && !forceSend) return 0;
+  isAutoDispatchRunning = true;
+  let sentCount = 0;
+
+  try {
+    const rec = db.recruitment as RecruitmentModuleState;
+    if (!rec || !Array.isArray(rec.aiInterviewSessions)) return 0;
+
+    const nowMs = Date.now();
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+    for (const sess of rec.aiInterviewSessions) {
+      if (sess.status === "Completed") continue;
+      if (sess.candidateCode === "DVC-SAMPLE-001" || sess.candidateId === "cand-sample-demo") continue;
+      if (targetCandidateId && sess.candidateId !== targetCandidateId) continue;
+
+      if (!forceSend && sess.continuationEmailSentAt) continue;
+
+      const lastActiveIso = sess.proctoring?.lastHeartbeatAt || sess.startedAt;
+      const lastActiveMs = lastActiveIso ? new Date(lastActiveIso).getTime() : 0;
+      const inactiveMs = nowMs - lastActiveMs;
+
+      if (!forceSend && inactiveMs < TEN_MINUTES_MS) continue;
+
+      const cand = rec.candidates.find((c) => c.id === sess.candidateId);
+      if (!cand || !cand.email) continue;
+
+      const passkey =
+        cand.assignedPortalPassword ||
+        generateCandidateRandomPassword(cand.candidateCode, cand.email);
+      const token = cand.inviteToken || createCandidateInviteToken(cand.id, cand.email);
+      const directLink = `${originUrl}/candidate?token=${encodeURIComponent(token)}&email=${encodeURIComponent(cand.email)}&code=${encodeURIComponent(cand.candidateCode)}`;
+      const answeredCount = (sess.turns || []).filter(
+        (t) => (t.candidateAnswer || "").trim().length > 0
+      ).length;
+      const totalCount = (sess.turns || []).length || 6;
+      const deadlineStr = cand.assessmentDeadlineAt
+        ? new Date(cand.assessmentDeadlineAt).toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: "Asia/Kolkata",
+          }) + " IST"
+        : "Tuesday, Nov 10, 2026 at 11:59 PM IST";
+
+      const phaseLabel =
+        sess.status === "Phase 3: Startup Case Task"
+          ? `Phase 3: Startup Virtual Data Room (${answeredCount}/${totalCount} Interview Questions Completed)`
+          : `${sess.status} (Question ${Math.min(totalCount, (sess.currentTurnIndex || 0) + 1)} of ${totalCount})`;
+
+      const sendTime = new Date().toISOString();
+      sess.continuationEmailSentAt = sendTime;
+
+      const result = await sendAssessmentContinuationEmail({
+        to: cand.email,
+        candidateName: cand.fullName,
+        candidateCode: cand.candidateCode,
+        candidateEmail: cand.email,
+        password: passkey,
+        directLink,
+        currentPhaseAndQuestion: phaseLabel,
+        answeredQuestionsCount: answeredCount,
+        totalQuestionsCount: totalCount,
+        deadline: deadlineStr,
+      });
+
+      if (result.success) {
+        sentCount += 1;
+        cand.lastCommunicationAt = sendTime;
+        cand.activityTimeline.unshift({
+          id: `act-cont-mail-${Date.now()}-${cand.serialNo}`,
+          action: "email.continuation_sent",
+          summary: `Sent automatic assessment continuation & recovery link (${phaseLabel}) to ${cand.email}`,
+          actorName: "Automated Continuation Engine",
+          timestamp: sendTime,
+        });
+
+        rec.emailLogs.unshift({
+          id: `elog-cont-${Date.now()}-${cand.serialNo}`,
+          candidateId: cand.id,
+          candidateName: cand.fullName,
+          recipientEmail: cand.email,
+          templateId: "tpl-continuation-recovery",
+          subject: `Resume & Complete Your Deevee Capital Assessment [${cand.candidateCode}] — Progress Saved`,
+          status: "Sent (SMTP)",
+          isTestSend: false,
+          sentBy: "Automated 10-Min Recovery",
+          sentAt: sendTime,
+        });
+      } else {
+        sess.continuationEmailSentAt = null;
+      }
+    }
+
+    if (sentCount > 0) {
+      await saveWorkspaceDb(db);
+    }
+  } catch (e) {
+    console.warn("[Recruitment Auto-Continuation] Warning:", e);
+  } finally {
+    isAutoDispatchRunning = false;
+  }
+
+  return sentCount;
 }
 
 export async function POST(request: NextRequest) {
@@ -382,6 +500,17 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "");
   const now = new Date().toISOString();
   const originUrl = getCanonicalOrigin(request);
+
+  if (action === "email.send_continuation_reminder" || action === "email.auto_nudge_in_progress") {
+    const targetCandidateId = typeof body.candidateId === "string" ? body.candidateId : undefined;
+    const forceSend = Boolean(body.forceSend ?? Boolean(targetCandidateId));
+    const sentCount = await dispatchAutoContinuationReminders(db, originUrl, targetCandidateId, forceSend);
+    return NextResponse.json({
+      ok: true,
+      sentCount,
+      recruitment: db.recruitment,
+    });
+  }
 
   // ==========================================================================
   // 1. EXCEL WORKBOOK UPLOAD PREVIEW & IMPORT
@@ -1372,6 +1501,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (targetCandidateId) {
+      await deleteSessionFromFirestore(targetCandidateId);
+    }
     await saveWorkspaceDb(db);
     return NextResponse.json({
       ok: true,
