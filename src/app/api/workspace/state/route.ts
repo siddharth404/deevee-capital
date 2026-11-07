@@ -8,6 +8,7 @@ import {
 } from "@/lib/workspace/auth";
 import {
   createEmptyResearchWorkspace,
+  deleteInvitationFromFirestore,
   deleteStartupFromFirestore,
   detectDuplicateStartups,
   extractDomain,
@@ -1786,6 +1787,26 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Check if user is already an active member in the workspace
+      const existingActiveUser = db.users.find(
+        (u) => u.email.toLowerCase() === email.toLowerCase() && u.status === "active"
+      );
+      if (existingActiveUser) {
+        return NextResponse.json(
+          { ok: false, message: `${name} (${email}) already has an active account in the workspace.` },
+          { status: 400 }
+        );
+      }
+
+      // Prevent duplicate pending invitations for the same email: remove older pending invite before creating new
+      const existingPendingIdx = db.invitations.findIndex(
+        (i) => i.email.toLowerCase() === email.toLowerCase() && i.status === "pending"
+      );
+      if (existingPendingIdx !== -1) {
+        const oldInv = db.invitations.splice(existingPendingIdx, 1)[0];
+        await deleteInvitationFromFirestore(oldInv.id);
+      }
+
       // Prevent non-Super-Admin from ever creating a Super Admin
       if (role === "SUPER_ADMIN" && user.role !== "SUPER_ADMIN") {
         return NextResponse.json(
@@ -1882,6 +1903,43 @@ export async function POST(request: NextRequest) {
 
       await saveWorkspaceDb(db);
       return NextResponse.json({ ok: true, invitation: inv, emailResult });
+    }
+
+    if (action === "user.delete_invite" || action === "user.revoke_invite") {
+      if (!hasPermission(user, "users.manage") && user.role !== "SUPER_ADMIN") {
+        return NextResponse.json(
+          { ok: false, message: "Only Super Admins can revoke workspace invitations." },
+          { status: 403 }
+        );
+      }
+
+      const invitationId = String(body.invitationId || "");
+      const inviteCode = String(body.inviteCode || "");
+      const invIdx = db.invitations.findIndex(
+        (i) => (invitationId && i.id === invitationId) || (inviteCode && i.inviteCode === inviteCode)
+      );
+
+      if (invIdx === -1) {
+        return NextResponse.json({ ok: false, message: "Invitation not found." }, { status: 404 });
+      }
+
+      const removed = db.invitations.splice(invIdx, 1)[0];
+      await deleteInvitationFromFirestore(removed.id);
+
+      await recordAuditAndActivity(db, {
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "user.invite_revoked",
+        entityType: "user",
+        entityId: removed.id,
+        entityName: `${removed.name} (${removed.email})`,
+        summary: `${user.name} revoked workspace invitation for ${removed.name} (${removed.email}) [Code: ${removed.inviteCode}]`,
+        newValue: null,
+      });
+
+      await saveWorkspaceDb(db);
+      return NextResponse.json({ ok: true, removedId: removed.id, invitations: db.invitations });
     }
 
     if (action === "user.update_role_or_status") {

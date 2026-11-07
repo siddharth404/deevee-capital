@@ -1027,6 +1027,7 @@ export function TeamAndRolesView({
     useState<UserRole>("RESEARCH_ANALYST");
 
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState("");
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
 
@@ -1199,6 +1200,43 @@ export function TeamAndRolesView({
                     className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium text-[11px]"
                   >
                     {resendingInviteId === inv.id ? "Sending..." : "Resend Email"}
+                  </button>
+                )}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    disabled={deletingInviteId === inv.id}
+                    onClick={async () => {
+                      if (!confirm(`Are you sure you want to remove invitation ${inv.inviteCode} for ${inv.email}?`)) {
+                        return;
+                      }
+                      setDeletingInviteId(inv.id);
+                      try {
+                        const res = await fetch("/api/workspace/state", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "user.delete_invite",
+                            invitationId: inv.id,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          setInviteSuccessMsg(`Removed invitation ${inv.inviteCode}!`);
+                          setTimeout(() => setInviteSuccessMsg(""), 5000);
+                          await onRefresh();
+                        } else {
+                          alert(data.message || "Failed to remove invitation.");
+                        }
+                      } finally {
+                        setDeletingInviteId(null);
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-medium text-[11px] flex items-center gap-1 transition"
+                    title="Remove or revoke this invitation"
+                  >
+                    <span>🗑️</span>
+                    <span>{deletingInviteId === inv.id ? "Removing..." : "Remove"}</span>
                   </button>
                 )}
               </div>

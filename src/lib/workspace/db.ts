@@ -1298,6 +1298,41 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       base.recruitment = buildInitialRecruitmentState();
     }
 
+    // Prune duplicate or obsolete invitations for the same email
+    if (Array.isArray(base.invitations) && base.invitations.length > 1) {
+      const activeEmails = new Set(
+        base.users
+          .filter((u) => u.status === "active")
+          .map((u) => u.email.toLowerCase())
+      );
+      const acceptedEmails = new Set(
+        base.invitations
+          .filter((i) => i.status === "accepted")
+          .map((i) => i.email.toLowerCase())
+      );
+
+      const pruned: typeof base.invitations = [];
+      const seenPendingEmails = new Set<string>();
+
+      for (const inv of base.invitations) {
+        const em = (inv.email || "").toLowerCase();
+        // If an invitation was already accepted or user is already active, drop duplicate pending ones
+        if (inv.status === "pending" && (acceptedEmails.has(em) || activeEmails.has(em))) {
+          deleteInvitationFromFirestore(inv.id);
+          continue;
+        }
+        if (inv.status === "pending") {
+          if (seenPendingEmails.has(em)) {
+            deleteInvitationFromFirestore(inv.id);
+            continue;
+          }
+          seenPendingEmails.add(em);
+        }
+        pruned.push(inv);
+      }
+      base.invitations = pruned;
+    }
+
     return base;
   } catch (err) {
     console.warn("[Workspace DB] Failed to load from Cloud Firestore:", err);
@@ -1481,6 +1516,17 @@ export async function deleteStartupFromFirestore(startupId: string): Promise<voi
     await firestore.collection("startups").doc(startupId).delete();
   } catch (err) {
     console.warn("[Workspace DB] Firestore delete startup warning:", err);
+  }
+}
+
+export async function deleteInvitationFromFirestore(invitationId: string): Promise<void> {
+  if (!isFirebaseAdminConfigured()) return;
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore) return;
+  try {
+    await firestore.collection("invitations").doc(invitationId).delete();
+  } catch (err) {
+    console.warn("[Workspace DB] Firestore delete invitation warning:", err);
   }
 }
 
