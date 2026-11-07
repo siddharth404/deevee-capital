@@ -54,6 +54,7 @@ import {
   StartupCaseSet,
 } from "@/lib/workspace/recruitmentTypes";
 import {
+  DEFAULT_STARTUP_CASE_SETS,
   generatePersonalizedInterviewTurns,
   selectCaseSetForCandidate,
 } from "@/lib/workspace/aiInterviewEngine";
@@ -2732,69 +2733,456 @@ export default function RecruitmentModuleViews({
                         )}
                       </div>
 
-                      {/* PHASE 3 STARTUP DATA ROOM SUBMISSION */}
-                      {sess.startupTaskSubmission && (
-                        <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/30 space-y-2.5 text-xs">
-                          <div className="font-bold text-blue-300 uppercase tracking-wider">
-                            Phase 3: Startup Virtual Data Room Deal Triage Submission
-                          </div>
-                          <div>
-                            <span className="text-slate-400 font-semibold">
-                              Startup B Discrepancy Audit:{" "}
-                            </span>
-                            <span className="text-slate-200">
-                              {sess.startupTaskSubmission.startupBTrueMetricAnalysis}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 font-semibold">
-                              Startup C Unit Economics Audit:{" "}
-                            </span>
-                            <span className="text-slate-200">
-                              {sess.startupTaskSubmission.startupCTrueMetricAnalysis}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-emerald-400 font-semibold">
-                              ₹1 Crore Allocation Thesis:{" "}
-                            </span>
-                            <span className="text-slate-100">
-                              {sess.startupTaskSubmission.investmentThesisAndNumbers}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-amber-300 font-semibold">
-                              Winning Startup #1 Risk:{" "}
-                            </span>
-                            <span className="text-slate-200">
-                              {sess.startupTaskSubmission.winningStartupPrimaryRisk}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-indigo-300 font-semibold block">
-                              3 Founder Diligence Questions:
-                            </span>
-                            <p className="text-slate-200 whitespace-pre-line mt-0.5">
-                              {sess.startupTaskSubmission.threeFounderDiligenceQuestions}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      {/* PHASE 3 STARTUP DATA ROOM SUBMISSION + INTERVIEWER CASE REFERENCE & MODEL ANSWERS */}
+                      {(() => {
+                        const allCaseSets =
+                          recruitment.startupCaseSets && recruitment.startupCaseSets.length > 0
+                            ? recruitment.startupCaseSets
+                            : DEFAULT_STARTUP_CASE_SETS;
+                        const assignedCaseSet =
+                          allCaseSets.find(
+                            (cs) =>
+                              cs.id === sess.assignedCaseSetId ||
+                              cs.id === sess.startupTaskSubmission?.caseSetId
+                          ) ||
+                          (targetCand
+                            ? selectCaseSetForCandidate(targetCand)
+                            : DEFAULT_STARTUP_CASE_SETS[0]!);
 
-                      {/* PHASE 1 & 2 TRANSCRIPT */}
+                        const startupA =
+                          assignedCaseSet.startups.find((s) => s.code === "STARTUP_A") ||
+                          assignedCaseSet.startups[0];
+                        const startupB =
+                          assignedCaseSet.startups.find((s) => s.code === "STARTUP_B") ||
+                          assignedCaseSet.startups[1];
+                        const startupC =
+                          assignedCaseSet.startups.find((s) => s.code === "STARTUP_C") ||
+                          assignedCaseSet.startups[2];
+
+                        const resolveStartupLabel = (idOrCode?: string) => {
+                          if (!idOrCode) return "Not selected";
+                          const found = assignedCaseSet.startups.find(
+                            (s) =>
+                              s.id === idOrCode ||
+                              s.code.toLowerCase() === idOrCode.toLowerCase() ||
+                              s.name.toLowerCase().includes(idOrCode.toLowerCase())
+                          );
+                          return found ? `${found.code}: ${found.name} (${found.sector})` : idOrCode;
+                        };
+
+                        const sub = sess.startupTaskSubmission;
+                        const pickedWinnerCorrect =
+                          sub &&
+                          startupA &&
+                          (sub.selectedStartupFor1CrId === startupA.id ||
+                            sub.selectedStartupFor1CrId.toUpperCase().includes("STARTUP_A") ||
+                            sub.investmentThesisAndNumbers
+                              .toUpperCase()
+                              .includes("STARTUP A") ||
+                            sub.investmentThesisAndNumbers
+                              .toLowerCase()
+                              .includes(startupA.name.split(" ")[0]!.toLowerCase()));
+
+                        return (
+                          <div className="p-5 rounded-xl bg-blue-950/20 border border-blue-500/30 space-y-4 text-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-500/20 pb-3">
+                              <div>
+                                <div className="font-bold text-blue-300 uppercase tracking-wider text-xs flex items-center gap-1.5">
+                                  <BookOpen className="w-4 h-4 text-blue-400" />
+                                  <span>
+                                    Phase 3: Startup Virtual Data Room Submission & Interviewer Reference Key
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-300 mt-0.5">
+                                  Assigned Case Set:{" "}
+                                  <strong className="text-white">{assignedCaseSet.title}</strong>{" "}
+                                  <span className="font-mono text-slate-400">
+                                    ({assignedCaseSet.id})
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold">
+                                Ground-Truth Winner: {startupA?.code} ({startupA?.name})
+                              </span>
+                            </div>
+
+                            {/* INTERVIEWER BRIEFING: THE 3 STARTUPS GIVEN TO THE CANDIDATE */}
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 flex items-center justify-between">
+                                <span>
+                                  📋 Interviewer Cheat-Sheet: The 3 Startups & Data Room Numbers Given to Candidate
+                                </span>
+                                <span className="text-[10px] font-normal text-slate-400">
+                                  For interviewers who haven&apos;t read {assignedCaseSet.title.split("—")[0]}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                                {assignedCaseSet.startups.map((st) => {
+                                  const isWinner =
+                                    st.groundTruthClassification === "BEST_INVESTMENT_CANDIDATE";
+                                  const isArrTrap =
+                                    st.groundTruthClassification === "TRAP_INFLATED_ARR";
+                                  return (
+                                    <div
+                                      key={st.id}
+                                      className={`p-3 rounded-xl border space-y-2 ${
+                                        isWinner
+                                          ? "bg-emerald-950/25 border-emerald-500/40"
+                                          : isArrTrap
+                                          ? "bg-amber-950/20 border-amber-500/35"
+                                          : "bg-rose-950/20 border-rose-500/35"
+                                      }`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <div className="font-bold text-white text-xs">
+                                            {st.code.replace("_", " ")}: {st.name}
+                                          </div>
+                                          <div className="text-[10px] text-slate-400">
+                                            {st.sector} • Ask: {st.askAmountINR} ({st.proposedValuationINR})
+                                          </div>
+                                        </div>
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
+                                            isWinner
+                                              ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                                              : isArrTrap
+                                              ? "bg-amber-500/25 text-amber-300 border border-amber-500/40"
+                                              : "bg-rose-500/25 text-rose-300 border border-rose-500/40"
+                                          }`}
+                                        >
+                                          {isWinner
+                                            ? "✓ True ₹1Cr Winner"
+                                            : isArrTrap
+                                            ? "⚠️ Inflated ARR Trap"
+                                            : "🚨 Unit Econ Trap"}
+                                        </span>
+                                      </div>
+
+                                      <div className="p-2 rounded bg-slate-950/80 border border-slate-800/80 text-[11px]">
+                                        <span className="text-slate-400 font-semibold">
+                                          Founder Pitch Claim:{" "}
+                                        </span>
+                                        <span className="text-slate-200 italic">
+                                          {st.founderHeadlineClaim}
+                                        </span>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <div className="text-[10px] font-semibold uppercase text-slate-400">
+                                          Verified Data Room Ledger vs. Deck Claim:
+                                        </div>
+                                        {st.financialMetricsTable.map((m, mIdx) => (
+                                          <div
+                                            key={mIdx}
+                                            className="p-1.5 rounded bg-slate-950/60 border border-slate-800/60 text-[10px] space-y-0.5"
+                                          >
+                                            <div className="font-semibold text-slate-300">
+                                              {m.metric}
+                                            </div>
+                                            <div className="text-slate-400">
+                                              Deck: <span className="line-through">{m.founderDeckValue}</span>{" "}
+                                              →{" "}
+                                              <strong className="text-white">
+                                                Actual: {m.dataRoomVerifiedValue}
+                                              </strong>
+                                            </div>
+                                            <div className="text-amber-300/90">
+                                              Footnote: {m.auditFootnote}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+
+                                      <div className="pt-1 border-t border-slate-800/70 text-[10px]">
+                                        <span className="font-semibold text-rose-300">
+                                          Hidden Red Flags to Spot:{" "}
+                                        </span>
+                                        <span className="text-slate-300">
+                                          {st.hiddenRedFlags.join(" • ")}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* CANDIDATE SUBMISSION VS MODEL ANSWERS */}
+                            {sub ? (
+                              <div className="space-y-3 pt-2 border-t border-blue-500/20">
+                                {/* CAPITAL ALLOCATION PICKS BAR */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                                    <div className="text-[10px] uppercase font-semibold text-slate-400">
+                                      Candidate&apos;s ₹1 Crore Investment Pick
+                                    </div>
+                                    <div className="font-bold text-white mt-0.5">
+                                      {resolveStartupLabel(sub.selectedStartupFor1CrId)}
+                                    </div>
+                                    <div
+                                      className={`text-[10px] font-semibold mt-0.5 ${
+                                        pickedWinnerCorrect ? "text-emerald-400" : "text-rose-400"
+                                      }`}
+                                    >
+                                      {pickedWinnerCorrect
+                                        ? `✓ Matches Model Winner (${startupA?.name})`
+                                        : `✗ Model Winner is ${startupA?.code}: ${startupA?.name}`}
+                                    </div>
+                                  </div>
+                                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                                    <div className="text-[10px] uppercase font-semibold text-slate-400">
+                                      Candidate&apos;s Watchlist Pick
+                                    </div>
+                                    <div className="font-bold text-slate-200 mt-0.5">
+                                      {resolveStartupLabel(sub.watchlistedStartupId)}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Model Reference: {startupB?.code} ({startupB?.name})
+                                    </div>
+                                  </div>
+                                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                                    <div className="text-[10px] uppercase font-semibold text-slate-400">
+                                      Candidate&apos;s Pass / Reject Pick
+                                    </div>
+                                    <div className="font-bold text-slate-200 mt-0.5">
+                                      {resolveStartupLabel(sub.passedStartupId)}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Model Reference: {startupC?.code} ({startupC?.name})
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 1. STARTUP B DISCREPANCY AUDIT */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-blue-300 uppercase text-[11px]">
+                                        1. Candidate&apos;s Startup B Discrepancy Audit ({startupB?.name})
+                                      </span>
+                                      {sb && (
+                                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold text-[10px]">
+                                          Task 1 Score: {sb.phase3Task1RedFlagAuditScore}/100
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-100 leading-relaxed whitespace-pre-line">
+                                      {sub.startupBTrueMetricAnalysis || "No response submitted."}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5 p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30">
+                                    <div className="font-bold text-emerald-300 uppercase text-[10px] tracking-wider">
+                                      ✓ Model Answer & Data Room Reference — {startupB?.code} ({startupB?.name})
+                                    </div>
+                                    <div className="text-slate-200 leading-relaxed space-y-1 text-[11px]">
+                                      <div>
+                                        <strong className="text-white">True vs. Claimed Metric: </strong>
+                                        Founder claimed{" "}
+                                        <span className="text-amber-300">
+                                          {startupB?.financialMetricsTable[0]?.founderDeckValue}
+                                        </span>
+                                        , whereas verified Data Room revenue is only{" "}
+                                        <strong className="text-emerald-300">
+                                          {startupB?.financialMetricsTable[0]?.dataRoomVerifiedValue}
+                                        </strong>
+                                        .
+                                      </div>
+                                      <div>
+                                        <strong className="text-white">Audit Trap Explained: </strong>
+                                        {startupB?.financialMetricsTable[0]?.auditFootnote}
+                                      </div>
+                                      <div>
+                                        <strong className="text-white">Additional Red Flags: </strong>
+                                        {startupB?.hiddenRedFlags.join("; ")}.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 2. STARTUP C UNIT ECONOMICS AUDIT */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                                  <div className="space-y-1.5">
+                                    <span className="font-bold text-blue-300 uppercase text-[11px] block">
+                                      2. Candidate&apos;s Startup C Unit Economics Audit ({startupC?.name})
+                                    </span>
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-100 leading-relaxed whitespace-pre-line">
+                                      {sub.startupCTrueMetricAnalysis || "No response submitted."}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5 p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30">
+                                    <div className="font-bold text-emerald-300 uppercase text-[10px] tracking-wider">
+                                      ✓ Model Answer & Data Room Reference — {startupC?.code} ({startupC?.name})
+                                    </div>
+                                    <div className="text-slate-200 leading-relaxed space-y-1 text-[11px]">
+                                      <div>
+                                        <strong className="text-white">True Unit Economics: </strong>
+                                        Founder claimed{" "}
+                                        <span className="text-amber-300">
+                                          {startupC?.financialMetricsTable[1]?.founderDeckValue}
+                                        </span>
+                                        , but verified Data Room unit economics is{" "}
+                                        <strong className="text-rose-300">
+                                          {startupC?.financialMetricsTable[1]?.dataRoomVerifiedValue}
+                                        </strong>{" "}
+                                        (and {startupC?.financialMetricsTable[0]?.dataRoomVerifiedValue}).
+                                      </div>
+                                      <div>
+                                        <strong className="text-white">Unit Economics Trap Explained: </strong>
+                                        {startupC?.financialMetricsTable[1]?.auditFootnote}{" "}
+                                        {startupC?.financialMetricsTable[0]?.auditFootnote}
+                                      </div>
+                                      <div>
+                                        <strong className="text-white">Key Takeaways: </strong>
+                                        {startupC?.hiddenRedFlags.join("; ")}.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 3. ₹1 CRORE ALLOCATION THESIS */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-emerald-400 uppercase text-[11px]">
+                                        3. Candidate&apos;s ₹1 Crore Allocation Thesis
+                                      </span>
+                                      {sb && (
+                                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
+                                          Task 2 Score: {sb.phase3Task2CapitalAllocationScore}/100
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-100 leading-relaxed whitespace-pre-line">
+                                      {sub.investmentThesisAndNumbers || "No response submitted."}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5 p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30">
+                                    <div className="font-bold text-emerald-300 uppercase text-[10px] tracking-wider">
+                                      ✓ Model ₹1 Crore Investment Thesis — Invest in {startupA?.code} ({startupA?.name})
+                                    </div>
+                                    <div className="text-slate-200 leading-relaxed space-y-1 text-[11px]">
+                                      <div>
+                                        <strong className="text-white">Why {startupA?.name} Wins: </strong>
+                                        Only startup with GST/bank-verified revenue (
+                                        <strong className="text-emerald-300">
+                                          {startupA?.financialMetricsTable[0]?.dataRoomVerifiedValue}
+                                        </strong>
+                                        ) that matches the founder&apos;s deck claim ({startupA?.financialMetricsTable[0]?.founderDeckValue}), plus verified positive unit economics (
+                                        <strong className="text-emerald-300">
+                                          {startupA?.financialMetricsTable[1]?.dataRoomVerifiedValue}
+                                        </strong>
+                                        ).
+                                      </div>
+                                      <div>
+                                        <strong className="text-white">Why Reject B & C: </strong>
+                                        {startupB?.name} overstated ARR via non-paying free trials/LOIs/ISAs ({startupB?.financialMetricsTable[0]?.dataRoomVerifiedValue}), while {startupC?.name} has negative contribution margins ({startupC?.financialMetricsTable[1]?.dataRoomVerifiedValue}) where scaling increases cash burn.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 4. WINNING STARTUP #1 RISK & 5. 3 FOUNDER DILIGENCE QUESTIONS */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+                                  <div className="space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-amber-300 uppercase text-[11px]">
+                                        4. Candidate&apos;s Winning Startup #1 Risk & 3 Founder Questions
+                                      </span>
+                                      {sb && (
+                                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px]">
+                                          Task 3 Score: {sb.phase3Task3RiskAndFounderQuestionsScore}/100
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                                      <div className="text-[10px] font-semibold uppercase text-amber-300">
+                                        Winning Startup #1 Risk Identified by Candidate:
+                                      </div>
+                                      <div className="text-slate-100 leading-relaxed whitespace-pre-line">
+                                        {sub.winningStartupPrimaryRisk || "No response submitted."}
+                                      </div>
+                                    </div>
+                                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                                      <div className="text-[10px] font-semibold uppercase text-indigo-300">
+                                        3 Founder Diligence Questions Written by Candidate:
+                                      </div>
+                                      <div className="text-slate-100 leading-relaxed whitespace-pre-line">
+                                        {sub.threeFounderDiligenceQuestions || "No response submitted."}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2 p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30">
+                                    <div className="font-bold text-emerald-300 uppercase text-[10px] tracking-wider">
+                                      ✓ Model #1 Risk & Benchmark IC Questions for {startupA?.name}
+                                    </div>
+                                    <div className="text-slate-200 leading-relaxed space-y-1.5 text-[11px]">
+                                      <div>
+                                        <strong className="text-amber-300">Model #1 Structural Risk: </strong>
+                                        {startupA?.primaryDiligenceRisk} Specifically:{" "}
+                                        <span className="text-white">
+                                          {startupA?.financialMetricsTable[2]?.dataRoomVerifiedValue}
+                                        </span>{" "}
+                                        and{" "}
+                                        <span className="text-white">
+                                          {startupA?.financialMetricsTable[3]?.dataRoomVerifiedValue}
+                                        </span>{" "}
+                                        ({startupA?.financialMetricsTable[3]?.auditFootnote}).
+                                      </div>
+                                      <div>
+                                        <strong className="text-indigo-300 block mb-0.5">
+                                          Model 3 Founder Diligence Questions (IC Benchmark):
+                                        </strong>
+                                        <ol className="list-decimal list-inside space-y-1 text-slate-200">
+                                          <li>
+                                            <strong>Customer / Contract Concentration:</strong> Given that{" "}
+                                            {startupA?.financialMetricsTable[2]?.dataRoomVerifiedValue}, what are the exact renewal terms, lock-in clauses, and pipeline plans to reduce top-account concentration below 35% over the next 12 months?
+                                          </li>
+                                          <li>
+                                            <strong>Working Capital & Receivables Cycle:</strong> With{" "}
+                                            {startupA?.financialMetricsTable[3]?.dataRoomVerifiedValue} ({startupA?.financialMetricsTable[3]?.auditFootnote}), how will you finance working capital as you scale without diluting equity on receivables?
+                                          </li>
+                                          <li>
+                                            <strong>Unit Economics & Capacity Expansion:</strong> As you deploy the {startupA?.askAmountINR} seed round, how will you protect your{" "}
+                                            {startupA?.financialMetricsTable[1]?.dataRoomVerifiedValue} against input cost inflation or seasonal supply bottlenecks?
+                                          </li>
+                                        </ol>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 text-xs">
+                                Candidate has not submitted the Phase 3 Startup Data Room worksheet yet. The 3-Startup Data Room Reference above shows the exact case set assigned to this candidate ({assignedCaseSet.title}).
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* PHASE 1 & 2 TRANSCRIPT WITH EXPECTED RUBRIC SIGNALS */}
                       <div className="space-y-2.5">
                         <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                          Phase 1 (Resume Probe) & Phase 2 (Startup Thinking) Verbatim Transcript
+                          Phase 1 (Resume Probe) & Phase 2 (Startup Thinking) Verbatim Transcript & Rubric Guide
                         </div>
                         {sess.turns.map((t) => (
                           <div
                             key={t.id}
-                            className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5"
+                            className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-2"
                           >
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-semibold text-blue-400">
-                                Q{t.questionIndex} ({t.phaseLabel})
-                              </span>
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-blue-400">
+                                  Q{t.questionIndex} ({t.phaseLabel})
+                                </span>
+                                {t.resumeContextCited && (
+                                  <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 text-[10px]">
+                                    Context: {t.resumeContextCited}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-emerald-400 font-bold">
                                 Turn Score: {t.turnScore ?? "—"}/100
                               </span>
@@ -2802,8 +3190,35 @@ export default function RecruitmentModuleViews({
                             <div className="text-slate-300 font-medium">
                               &ldquo;{t.questionPrompt}&rdquo;
                             </div>
-                            <div className="p-2.5 rounded-lg bg-slate-900 text-slate-100 leading-relaxed">
-                              {t.candidateAnswer || "No answer recorded."}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+                              <div className="lg:col-span-8 p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 text-slate-100 leading-relaxed whitespace-pre-line">
+                                <div className="text-[10px] font-semibold uppercase text-slate-400 mb-1">
+                                  Candidate&apos;s Verbatim Response ({t.wordCount || 0} words):
+                                </div>
+                                {t.candidateAnswer || "No answer recorded."}
+                              </div>
+                              <div className="lg:col-span-4 p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/25 space-y-1.5 text-[11px]">
+                                <div className="text-[10px] font-bold uppercase text-indigo-300">
+                                  Interviewer Rubric / Expected Signals:
+                                </div>
+                                {t.expectedSignals && t.expectedSignals.length > 0 && (
+                                  <ul className="list-disc list-inside space-y-0.5 text-slate-300">
+                                    {t.expectedSignals.map((sig, idx) => (
+                                      <li key={idx}>{sig}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {t.turnStrengths && t.turnStrengths.length > 0 && (
+                                  <div className="text-emerald-300 text-[10px] pt-1 border-t border-indigo-500/20">
+                                    <strong>✓ Spotted:</strong> {t.turnStrengths.join(" • ")}
+                                  </div>
+                                )}
+                                {t.turnConcerns && t.turnConcerns.length > 0 && (
+                                  <div className="text-amber-300 text-[10px]">
+                                    <strong>⚠️ Gap:</strong> {t.turnConcerns.join(" • ")}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
