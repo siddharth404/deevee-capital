@@ -1241,7 +1241,7 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
     opCount += 1;
 
     if (db.recruitment) {
-      // 0. Non-destructively merge with any concurrent sessions/candidates in Firestore before saving
+      // 0. Non-destructively merge with any concurrent sessions in Firestore before saving
       try {
         const existingSessSnap = await firestore.collection("ai_interview_sessions").get();
         if (!existingSessSnap.empty) {
@@ -1260,7 +1260,6 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
             if (deletedCandIds.has(cloudSess.candidateId)) continue;
             const localSess = byCandId.get(cloudSess.candidateId);
             if (!localSess) {
-              // Preserve concurrent session created on another container (unless sample was just reset)
               if (cloudSess.candidateCode !== "DVC-SAMPLE-001" && cloudSess.candidateId !== "cand-sample-demo") {
                 byCandId.set(cloudSess.candidateId, cloudSess);
               }
@@ -1290,9 +1289,9 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
           if (c.applicationStatus === "In Assessment Funnel" || c.applicationStatus === "Pending Screening") {
             c.applicationStatus = "Assessment Submitted";
           }
-          if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
-            c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
-          }
+        }
+        if (s.scoringBreakdown?.overallAiInterviewScore != null && c.aiInterviewScore == null) {
+          c.aiInterviewScore = s.scoringBreakdown.overallAiInterviewScore;
         }
         if (s.proctoring) {
           c.proctoringIntegrityScore = s.proctoring.integrityScore;
@@ -1304,21 +1303,18 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
       const chunkSize = 40;
       const chunkCount = Math.ceil(candidates.length / chunkSize);
       const sessions = db.recruitment.aiInterviewSessions || [];
-      // Keep chunk size small (3 sessions per chunk doc ~ 180KB) so no chunk ever approaches Firestore's 1MB limit
-      const sessionChunkSize = 3;
-      const sessionChunkCount = Math.ceil(sessions.length / sessionChunkSize);
 
       const recruitmentMeta = {
         settings: db.recruitment.settings,
         questions: db.recruitment.questions || [],
         submissions: db.recruitment.submissions || [],
         aiInterviewSessions: [],
-        sessionChunkCount,
+        sessionChunkCount: 0,
         startupCaseSets: db.recruitment.startupCaseSets || [],
         interviews: db.recruitment.interviews || [],
         emailTemplates: db.recruitment.emailTemplates || [],
-        emailLogs: (db.recruitment.emailLogs || []).slice(0, 200),
-        scoreAuditLogs: (db.recruitment.scoreAuditLogs || []).slice(0, 200),
+        emailLogs: (db.recruitment.emailLogs || []).slice(0, 120),
+        scoreAuditLogs: (db.recruitment.scoreAuditLogs || []).slice(0, 120),
         candidateChunkCount: chunkCount,
         updatedAt: new Date().toISOString(),
       };
@@ -1333,31 +1329,18 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
           .doc(`recruitment_candidates_${i}`);
         batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
         opCount += 1;
-        if (opCount >= 400) {
+        if (opCount >= 200) {
           await commitAndReset();
         }
       }
 
-      // 1. Write each session as an isolated per-candidate document in ai_interview_sessions
+      // Write each session as an isolated per-candidate document in ai_interview_sessions
       for (const sess of sessions) {
         if (!sess?.candidateId) continue;
         const sessRef = firestore.collection("ai_interview_sessions").doc(String(sess.candidateId));
         batch.set(sessRef, JSON.parse(JSON.stringify(sess)));
         opCount += 1;
-        if (opCount >= 400) {
-          await commitAndReset();
-        }
-      }
-
-      // 2. Also write small 3-session chunks for backward compatibility
-      for (let i = 0; i < sessionChunkCount; i++) {
-        const chunk = sessions.slice(i * sessionChunkSize, (i + 1) * sessionChunkSize);
-        const chunkRef = firestore
-          .collection("workspace_settings")
-          .doc(`recruitment_sessions_${i}`);
-        batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
-        opCount += 1;
-        if (opCount >= 400) {
+        if (opCount >= 40) {
           await commitAndReset();
         }
       }
@@ -1366,14 +1349,14 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
     for (const colName of FIRESTORE_ARRAY_COLLECTIONS) {
       const items = (db[colName] as unknown as Array<{ id: string }>) || [];
       const slice =
-        colName === "activity_logs" || colName === "audit_logs" ? items.slice(0, 150) : items;
+        colName === "activity_logs" || colName === "audit_logs" ? items.slice(0, 40) : items;
 
       for (const item of slice) {
         if (!item?.id) continue;
         const docRef = firestore.collection(colName).doc(String(item.id));
         batch.set(docRef, JSON.parse(JSON.stringify(item)), { merge: true });
         opCount += 1;
-        if (opCount >= 400) {
+        if (opCount >= 200) {
           await commitAndReset();
         }
       }
@@ -1385,17 +1368,91 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
   }
 }
 
+/**
+ * Fast, low-memory single-candidate session persistence for Candidate Portal actions.
+ * Writes ONLY the active candidate's session document (`ai_interview_sessions/{candidateId}`)
+ * and optionally their candidate chunk (`recruitment_candidates_0` or `1`), avoiding full-DB rewrites.
+ */
+export async function saveSingleCandidateSessionToFirestore(
+  db: WorkspaceDatabaseSchema,
+  candidateId: string,
+  syncCandidateRecord = true
+): Promise<void> {
+  cachedDb = db;
+  cachedDbLoadedAt = Date.now();
+
+  if (!isFirebaseAdminConfigured()) {
+    try {
+      await fs.mkdir(DB_DIR, { recursive: true });
+      await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), {
+        encoding: "utf-8",
+        mode: 0o600,
+      });
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore || !db.recruitment) return;
+
+  try {
+    const sessions = db.recruitment.aiInterviewSessions || [];
+    const sessIdx = sessions.findIndex(
+      (s) => s.candidateId === candidateId
+    );
+    if (sessIdx >= 0) {
+      let localSess = sessions[sessIdx]!;
+      const sessRef = firestore.collection("ai_interview_sessions").doc(String(candidateId));
+      try {
+        const cloudDoc = await sessRef.get();
+        if (cloudDoc.exists) {
+          const cloudSess = cloudDoc.data() as AIInterviewSessionRecord;
+          if (cloudSess?.candidateId && localSess.candidateCode !== "DVC-SAMPLE-001") {
+            localSess = mergeSessionMonotonically(cloudSess, localSess);
+            sessions[sessIdx] = localSess;
+          }
+        }
+      } catch {
+        // non-blocking read before write
+      }
+      await sessRef.set(JSON.parse(JSON.stringify(localSess)));
+    }
+
+    if (syncCandidateRecord) {
+      const candidates = db.recruitment.candidates || [];
+      const candIdx = candidates.findIndex((c) => c.id === candidateId);
+      const chunkSize = 40;
+      if (candIdx >= 0) {
+        const chunkIndex = Math.floor(candIdx / chunkSize);
+        const chunk = candidates.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize);
+        const chunkRef = firestore
+          .collection("workspace_settings")
+          .doc(`recruitment_candidates_${chunkIndex}`);
+        await chunkRef.set(JSON.parse(JSON.stringify({ chunkIndex, items: chunk })));
+      }
+    }
+  } catch (err) {
+    console.warn("[Workspace DB] Single candidate session save warning:", err);
+  }
+}
+
 async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | null> {
   if (!isFirebaseAdminConfigured()) return null;
   const firestore = getFirebaseAdminFirestore();
   if (!firestore) return null;
 
   try {
-    const usersSnap = await firestore.collection("users").get();
+    const [usersSnap, settingsDoc, recMetaDoc, perCandSnap] = await Promise.all([
+      firestore.collection("users").get(),
+      firestore.collection("workspace_settings").doc("default").get(),
+      firestore.collection("workspace_settings").doc("recruitment_meta").get(),
+      firestore.collection("ai_interview_sessions").get().catch(() => null),
+    ]);
     if (usersSnap.empty) return null;
 
     const base = buildInitialDatabase();
-    const settingsDoc = await firestore.collection("workspace_settings").doc("default").get();
     if (settingsDoc.exists) {
       base.workspace_settings = {
         ...base.workspace_settings,
@@ -1403,19 +1460,19 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       };
     }
 
-    const recMetaDoc = await firestore.collection("workspace_settings").doc("recruitment_meta").get();
     if (recMetaDoc.exists) {
       const meta = recMetaDoc.data() as Partial<RecruitmentModuleState> & {
         candidateChunkCount?: number;
         sessionChunkCount?: number;
       };
       const chunkCount = Number(meta.candidateChunkCount || 0);
+      const candChunkDocs = await Promise.all(
+        Array.from({ length: chunkCount }, (_, i) =>
+          firestore.collection("workspace_settings").doc(`recruitment_candidates_${i}`).get()
+        )
+      );
       const loadedCandidates: ApplicantCandidateRecord[] = [];
-      for (let i = 0; i < chunkCount; i++) {
-        const chunkDoc = await firestore
-          .collection("workspace_settings")
-          .doc(`recruitment_candidates_${i}`)
-          .get();
+      for (const chunkDoc of candChunkDocs) {
         if (chunkDoc.exists) {
           const data = chunkDoc.data() as { items?: ApplicantCandidateRecord[] };
           if (Array.isArray(data?.items)) {
@@ -1425,44 +1482,44 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       }
 
       const sessionByCandidateId = new Map<string, AIInterviewSessionRecord>();
-      const sessionChunkCount = Number(meta.sessionChunkCount || 0);
-      if (sessionChunkCount > 0) {
-        for (let i = 0; i < sessionChunkCount; i++) {
-          const chunkDoc = await firestore
-            .collection("workspace_settings")
-            .doc(`recruitment_sessions_${i}`)
-            .get();
-          if (chunkDoc.exists) {
-            const data = chunkDoc.data() as { items?: AIInterviewSessionRecord[] };
-            if (Array.isArray(data?.items)) {
-              for (const s of data.items) {
-                if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
-              }
-            }
-          }
-        }
-      } else if (Array.isArray(meta.aiInterviewSessions)) {
-        for (const s of meta.aiInterviewSessions) {
-          if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
+
+      // Primary source: isolated per-candidate session docs in ai_interview_sessions
+      if (perCandSnap && !perCandSnap.empty) {
+        for (const docSnap of perCandSnap.docs) {
+          const s = docSnap.data() as AIInterviewSessionRecord;
+          if (!s?.candidateId) continue;
+          const prev = sessionByCandidateId.get(s.candidateId);
+          sessionByCandidateId.set(
+            s.candidateId,
+            prev ? mergeSessionMonotonically(prev, s) : s
+          );
         }
       }
 
-      // Also load isolated per-candidate session docs from ai_interview_sessions and monotonically merge
-      try {
-        const perCandSnap = await firestore.collection("ai_interview_sessions").get();
-        if (!perCandSnap.empty) {
-          for (const docSnap of perCandSnap.docs) {
-            const s = docSnap.data() as AIInterviewSessionRecord;
-            if (!s?.candidateId) continue;
-            const prev = sessionByCandidateId.get(s.candidateId);
-            sessionByCandidateId.set(
-              s.candidateId,
-              prev ? mergeSessionMonotonically(prev, s) : s
-            );
+      // Fallback only if ai_interview_sessions is empty
+      if (sessionByCandidateId.size === 0) {
+        const sessionChunkCount = Number(meta.sessionChunkCount || 0);
+        if (sessionChunkCount > 0) {
+          const sessChunkDocs = await Promise.all(
+            Array.from({ length: sessionChunkCount }, (_, i) =>
+              firestore.collection("workspace_settings").doc(`recruitment_sessions_${i}`).get()
+            )
+          );
+          for (const chunkDoc of sessChunkDocs) {
+            if (chunkDoc.exists) {
+              const data = chunkDoc.data() as { items?: AIInterviewSessionRecord[] };
+              if (Array.isArray(data?.items)) {
+                for (const s of data.items) {
+                  if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
+                }
+              }
+            }
+          }
+        } else if (Array.isArray(meta.aiInterviewSessions)) {
+          for (const s of meta.aiInterviewSessions) {
+            if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
           }
         }
-      } catch {
-        // Ignore if collection does not exist yet
       }
 
       const deletedCandIds = new Set(
@@ -1521,8 +1578,10 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       };
     }
 
+    base.users = usersSnap.docs.map((d) => d.data() as WorkspaceUser);
+
     await Promise.all(
-      FIRESTORE_ARRAY_COLLECTIONS.map(async (colName) => {
+      FIRESTORE_ARRAY_COLLECTIONS.filter((c) => c !== "users").map(async (colName) => {
         const snap = await firestore.collection(colName).get();
         if (!snap.empty) {
           (base as unknown as Record<string, unknown[]>)[colName] = snap.docs.map((d) => d.data());
@@ -1532,7 +1591,6 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       })
     );
 
-    // Ensure structural defaults if empty
     if (base.pipeline_stages.length === 0) base.pipeline_stages = DEFAULT_PIPELINE_STAGES;
     if (base.saved_views.length === 0) base.saved_views = DEFAULT_SAVED_VIEWS;
     if (base.research_templates.length === 0) base.research_templates = DEFAULT_RESEARCH_TEMPLATES;
@@ -1542,40 +1600,6 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
       base.recruitment = buildInitialRecruitmentState();
     }
 
-    // Prune duplicate or obsolete invitations for the same email
-    if (Array.isArray(base.invitations) && base.invitations.length > 1) {
-      const activeEmails = new Set(
-        base.users
-          .filter((u) => u.status === "active")
-          .map((u) => u.email.toLowerCase())
-      );
-      const acceptedEmails = new Set(
-        base.invitations
-          .filter((i) => i.status === "accepted")
-          .map((i) => i.email.toLowerCase())
-      );
-
-      const pruned: typeof base.invitations = [];
-      const seenPendingEmails = new Set<string>();
-
-      for (const inv of base.invitations) {
-        const em = (inv.email || "").toLowerCase();
-        if (inv.status === "pending" && (acceptedEmails.has(em) || activeEmails.has(em))) {
-          deleteInvitationFromFirestore(inv.id);
-          continue;
-        }
-        if (inv.status === "pending") {
-          if (seenPendingEmails.has(em)) {
-            deleteInvitationFromFirestore(inv.id);
-            continue;
-          }
-          seenPendingEmails.add(em);
-        }
-        pruned.push(inv);
-      }
-      base.invitations = pruned;
-    }
-
     return base;
   } catch (err) {
     console.warn("[Workspace DB] Failed to load from Cloud Firestore:", err);
@@ -1583,14 +1607,20 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
   }
 }
 
+let inFlightLoadPromise: Promise<WorkspaceDatabaseSchema | null> | null = null;
+
 export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
-  const isStale = Date.now() - cachedDbLoadedAt > 2000;
+  const isStale = Date.now() - cachedDbLoadedAt > 6000;
   if (!cachedDb || (isFirebaseAdminConfigured() && isStale)) {
     if (isFirebaseAdminConfigured()) {
-      const fromCloud = await loadDatabaseFromFirestore();
+      if (!inFlightLoadPromise) {
+        inFlightLoadPromise = loadDatabaseFromFirestore().finally(() => {
+          inFlightLoadPromise = null;
+        });
+      }
+      const fromCloud = await inFlightLoadPromise;
       if (fromCloud) {
         if (cachedDb?.recruitment && fromCloud.recruitment) {
-          // Monotonically merge any in-memory sessions with freshly loaded cloud sessions
           const mergedSess = new Map<string, AIInterviewSessionRecord>();
           for (const s of fromCloud.recruitment.aiInterviewSessions || []) {
             mergedSess.set(s.candidateId, s);
@@ -1649,7 +1679,6 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
     }
   }
 
-  // Always check if new submissions were added to data/submissions.jsonl
   const jsonlRows = await readSubmissionsJsonl();
   const migrated = syncJsonlSubmissionsIntoDb(cachedDb, jsonlRows);
   if (migrated || recruitmentInitialized) {
@@ -1662,6 +1691,12 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
 export async function saveWorkspaceDb(db: WorkspaceDatabaseSchema): Promise<void> {
   cachedDb = db;
   cachedDbLoadedAt = Date.now();
+
+  if (isFirebaseAdminConfigured()) {
+    await syncAllCollectionsToFirestore(db);
+    return;
+  }
+
   try {
     await fs.mkdir(DB_DIR, { recursive: true });
     await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), {
@@ -1670,11 +1705,6 @@ export async function saveWorkspaceDb(db: WorkspaceDatabaseSchema): Promise<void
     });
   } catch {
     // Ignore local filesystem write errors on read-only serverless runtimes
-  }
-
-  // Mirror all collections to Cloud Firestore when configured
-  if (isFirebaseAdminConfigured()) {
-    await syncAllCollectionsToFirestore(db);
   }
 }
 

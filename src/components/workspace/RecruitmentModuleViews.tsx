@@ -226,21 +226,49 @@ export default function RecruitmentModuleViews({
   const fetchRecruitmentData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/workspace/recruitment");
-      const data = await res.json();
-      if (data.recruitment) {
-        setRecruitment(data.recruitment);
-        const firstCand = data.recruitment.candidates?.[0];
-        if (firstCand) {
-          setSelectedCandidateId((prev) => prev || firstCand.id);
-        }
-        const firstSess = data.recruitment.aiInterviewSessions?.[0];
-        if (firstSess) {
-          setSelectedSessionId((prev) => prev || firstSess.id);
+      let lastErr = "";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch("/api/workspace/recruitment");
+          const rawText = await res.text();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let data: any = null;
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = null;
+          }
+          if (!res.ok || !data) {
+            if ((res.status >= 500 || !data) && attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1200));
+              continue;
+            }
+            lastErr = data?.error || `Server temporarily busy (HTTP ${res.status}). Retrying...`;
+            break;
+          }
+          if (data.recruitment) {
+            setRecruitment(data.recruitment);
+            setErrorMsg("");
+            const firstCand = data.recruitment.candidates?.[0];
+            if (firstCand) {
+              setSelectedCandidateId((prev) => prev || firstCand.id);
+            }
+            const firstSess = data.recruitment.aiInterviewSessions?.[0];
+            if (firstSess) {
+              setSelectedSessionId((prev) => prev || firstSess.id);
+            }
+            return;
+          }
+        } catch (netErr) {
+          lastErr = (netErr as Error).message || "Network request interrupted.";
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1200));
+          }
         }
       }
-    } catch (err) {
-      setErrorMsg((err as Error).message || "Failed to load recruitment state.");
+      if (lastErr) {
+        setErrorMsg(lastErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -254,23 +282,48 @@ export default function RecruitmentModuleViews({
     setBusyAction(String(payload.action || "working"));
     setErrorMsg("");
     try {
-      const res = await fetch("/api/workspace/recruitment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || "Operation failed.");
-        return null;
+      let lastErr = "Operation failed.";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch("/api/workspace/recruitment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const rawText = await res.text();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let data: any = null;
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = null;
+          }
+          if (!res.ok || !data) {
+            lastErr =
+              data?.error ||
+              (res.status === 503
+                ? "Server is syncing live candidate sessions — retrying automatically..."
+                : `Request failed (HTTP ${res.status}).`);
+            if ((res.status >= 500 || !data) && attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1400));
+              continue;
+            }
+            setErrorMsg(lastErr);
+            return null;
+          }
+          if (data.recruitment) {
+            setRecruitment(data.recruitment);
+          }
+          if (successToast) showToast(successToast);
+          return data;
+        } catch (netErr) {
+          lastErr = (netErr as Error).message || "Network connection interrupted.";
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1400));
+          }
+        }
       }
-      if (data.recruitment) {
-        setRecruitment(data.recruitment);
-      }
-      if (successToast) showToast(successToast);
-      return data;
-    } catch (err) {
-      setErrorMsg((err as Error).message);
+      setErrorMsg(lastErr);
       return null;
     } finally {
       setBusyAction("");

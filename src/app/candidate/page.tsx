@@ -331,7 +331,14 @@ function CandidatePortalInner() {
           clearTimeout(timer);
         }
 
-        const data = await res.json();
+        const rawText = await res.text();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let data: any = {};
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+          throw new Error("Server is syncing live assessment progress. Please refresh (F5 / Cmd+R) to continue.");
+        }
 
         if (data.sessionToken) {
           setSessionToken(data.sessionToken);
@@ -488,8 +495,11 @@ function CandidatePortalInner() {
         body: JSON.stringify({
           action: "ai_interview.save_draft",
           candidateId: candidate.id,
+          candidateCode: candidate.candidateCode,
+          email: candidate.email,
           turnIndex: aiSession.currentTurnIndex,
           draftAnswer: currentAnswer,
+          clientTurns: aiSession.turns,
           startupTaskDraft:
             aiSession.status === "Phase 3: Startup Case Task"
               ? {
@@ -1100,9 +1110,18 @@ function CandidatePortalInner() {
           token: tokenParam,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || "Authentication failed.");
+      const rawText = await res.text();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data) {
+        setErrorMsg(
+          data?.error || "Server is momentarily busy. Please click Sign In again."
+        );
         return;
       }
       if (data.sessionToken) {
@@ -1149,6 +1168,8 @@ function CandidatePortalInner() {
       body: JSON.stringify({
         action: "ai_interview.start",
         candidateId: candidate.id,
+        candidateCode: candidate.candidateCode,
+        email: candidate.email,
         forceRestart: true,
         webcamEnabled: webcamActive,
         micEnabled: micActive,
@@ -1156,9 +1177,18 @@ function CandidatePortalInner() {
         fullscreenEntered: Boolean(document.fullscreenElement),
       }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      setErrorMsg(data.error || "Failed to start proctored interview.");
+    const rawText = await res.text();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = null;
+    }
+    if (!res.ok || !data) {
+      setErrorMsg(
+        data?.error || "Server is momentarily busy. Please click Start Proctored Assessment again."
+      );
       return;
     }
 
@@ -1227,7 +1257,8 @@ function CandidatePortalInner() {
           candidateId: candidate.id,
         }),
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      const data = rawText ? JSON.parse(rawText) : {};
       if (data.session) {
         setAiSession(data.session);
       }
@@ -1264,16 +1295,26 @@ function CandidatePortalInner() {
             body: JSON.stringify({
               action: "ai_interview.submit_turn",
               candidateId: candidate.id,
+              candidateCode: candidate.candidateCode,
+              email: candidate.email,
               turnIndex: aiSession.currentTurnIndex,
               candidateAnswer: currentAnswer.trim(),
               inputMethod: turnInputMethod,
               timeTakenSeconds: Math.max(12, turnElapsedSec),
+              clientTurns: aiSession.turns,
             }),
           });
-          const data = await res.json();
-          if (!res.ok) {
-            lastErr = data.error || "Failed to save response.";
-            if (res.status >= 500 && attempt < 3) {
+          const rawText = await res.text();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let data: any = null;
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = null;
+          }
+          if (!res.ok || !data) {
+            lastErr = data?.error || "Server is syncing live responses.";
+            if ((res.status >= 500 || !data) && attempt < 3) {
               await new Promise((r) => setTimeout(r, 1200));
               continue;
             }
@@ -1336,6 +1377,9 @@ function CandidatePortalInner() {
             body: JSON.stringify({
               action: "ai_interview.submit_complete",
               candidateId: candidate.id,
+              candidateCode: candidate.candidateCode,
+              email: candidate.email,
+              clientTurns: aiSession.turns,
               startupTaskSubmission: {
                 startupBTrueMetricAnalysis: startupBAnalysis,
                 startupCTrueMetricAnalysis: startupCAnalysis,
@@ -1351,10 +1395,17 @@ function CandidatePortalInner() {
               },
             }),
           });
-          const data = await res.json();
-          if (!res.ok) {
-            lastErr = data.error || "Failed to submit Startup Simulation Task.";
-            if (res.status >= 500 && attempt < 3) {
+          const rawText = await res.text();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let data: any = null;
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = null;
+          }
+          if (!res.ok || !data) {
+            lastErr = data?.error || "Server is syncing live responses.";
+            if ((res.status >= 500 || !data) && attempt < 3) {
               await new Promise((r) => setTimeout(r, 1200));
               continue;
             }
