@@ -2158,6 +2158,222 @@ export const RAW_IIM_AMRITSAR_WORKBOOK_ROWS: Array<Record<string, string>> = [
     "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "",
     "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python, Data Analysis, Machine Learning, AI, Microsoft Office, Tableau",
     "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "No"
+  },
+  {
+    "S. No.": "80",
+    "Name": "Yashu Singh",
+    "Email address": "yashus.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "94.6",
+    "Class XII Percentage (Rounded off to two decimal places)": "83.2",
+    "UG Degree Name": "B.Sc. (Mathematics)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Mathematics & Science",
+    "UG Percentage (Rounded off to two decimal places)": "67.8",
+    "Internship 1 - Designation": "",
+    "Internship 1 - Organization": "",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Google Data Analytics Professional Certificate (Coursera), Excel for Data Analytics (IBM, Coursera), Apply MySQL Skills Through a Real-World Database Project (EDUCBA)",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "Qualified NDA Written Exam (twice), CDS Written Exam, and AFCAT Written Exam (thrice) conducted by UPSC / Indian Air Force; Section Topper in Class X (94.6%)",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "M&A Target Screening & Valuation Analytics (IIT Ropar, 2026), Branding in the Age of Social Media (IIM Amritsar), AttriSense People Analytics",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python, SQL, DBMS (MySQL, PostgreSQL), Excel, Statistics, Power BI, MS PowerPoint, Data Analysis, Big Data & ML",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "Yes - Conducted market research and cultural analysis for Branding in the Age of Social Media at IIM Amritsar, alongside M&A Target Screening and Valuation Analytics modeling at IIT Ropar."
+  },
+  {
+    "S. No.": "81",
+    "Name": "Gaurav Tiwari",
+    "Email address": "gauravt.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "95.0",
+    "Class XII Percentage (Rounded off to two decimal places)": "80.2",
+    "UG Degree Name": "B.Tech (Information Technology)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Information Technology",
+    "UG Percentage (Rounded off to two decimal places)": "74.7",
+    "Internship 1 - Designation": "",
+    "Internship 1 - Organization": "",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "7",
+    "Work experience 1 - Designation": "Associate Analyst (AI Data Annotation & QA)",
+    "Work experience 1 - Organization Name": "GlobalLogic",
+    "Work experience 1 - Duration (in months)": "7",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Data Analytics Certification (Trainity), Bootathon - REC Banda (IIT Bombay & IIT Kanpur), Soft Skills & Personality Development",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "ITHO Silver Zone Olympiad; Winner of multiple district-level General Awareness and Aptitude competitions",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "People Analytics & AttriSense ($1.2M Net Benefit Business Case), IMDB Movie Analytics (5000+ records in Tableau), Instagram User Analytics (SQL)",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python, SQL, C, MySQL, MongoDB, Power BI, Tableau, Advanced Excel, MS PowerPoint, Generative AI Tools, Dashboards & KPI Reporting, Business Analysis, React.js, Node.js, Git & GitHub, Data Annotation & QA",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "Yes. In my media research role, I conducted systematic quantitative and qualitative content analysis on short-form video across Instagram, YouTube, and Facebook. Using an objective measurement codebook, I audited over 100 variables per video—including opening retention hooks, edit pacing, claim credibility signals, and audience discourse. I tracked platform engagement metrics (views, saves, shares) and used Python, Excel, and SQL for data entry and quality control. This work gave me hands-on experience structuring messy competitive media trends into clean, reliable market data."
+  },
+  {
+    "S. No.": "82",
+    "Name": "Anurag Bhattacharya",
+    "Email address": "anuragb.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "91.0",
+    "Class XII Percentage (Rounded off to two decimal places)": "95.83",
+    "UG Degree Name": "5 Year BS-MS Dual Degree Programme",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Chemical Sciences",
+    "UG Percentage (Rounded off to two decimal places)": "86.3",
+    "Internship 1 - Designation": "Research Intern (Polymer Chemistry)",
+    "Internship 1 - Organization": "Indian Institute of Science (IISc) Bangalore",
+    "Internship 2 - Designation": "Teaching Assistant (200 UG Students)",
+    "Internship 2 - Organization": "IISER Kolkata",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "TOEFL 108/120 (Advanced Business Communication & Writing), Cleared CAT Examination",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "DST-INSPIRE Scholarship (Government of India nationally competitive science research scholarship); Ranked 2nd in entire state in Class XII CBSE (95.83%); Poster presenter at International Conference on Emerging Trends in Organometallics",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "Computational Research: DFT Simulation Data Analysis for Organochalcogenides; Statistical modeling of polymer dynamics at IISc Bangalore",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python (Matplotlib, NumPy), SQL (PostgreSQL 18), Power BI, MS Office (Advanced Excel, PowerPoint, Word), MATLAB, C, Linux, Origin, LaTeX",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "No formal startup research, but extensive academic and experimental research experience at IISc Bangalore and IISER Kolkata modeling physical systems, analyzing large empirical datasets, and applying rigorous scientific hypothesis testing."
+  },
+  {
+    "S. No.": "83",
+    "Name": "Vani Garg",
+    "Email address": "vanig.msdsm04@iimamritsar.ac.in",
+    "Gender": "Female",
+    "Class X Percentage (Rounded off to two decimal places)": "89.6",
+    "Class XII Percentage (Rounded off to two decimal places)": "83.4",
+    "UG Degree Name": "B.Tech (CSE)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Computer Science and Engineering",
+    "UG Percentage (Rounded off to two decimal places)": "87.5",
+    "Internship 1 - Designation": "Frontend Developer Intern",
+    "Internship 1 - Organization": "Veersa Technologies",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "AI Essentials Course (Saïd Business School, University of Oxford, 2026), Summer Training in Java (Technophilia-B Club, IIT Kharagpur)",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "School Captain; Silver Medalist in Maths Olympiad; Techfest Club Coordinator & Organizing Committee Member (Punjabi University)",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "Built internal employee appraisal system in React.js/CSS/JS (digitizing manual paper appraisal process); Real-Time Social Media Chatting App (Java/Firebase); University Management System (MySQL/JDBC)",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Java, Python, SQL, React.js, CSS, JavaScript, Firebase, MySQL, JDBC",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "No formal startup research, but practical software development experience at Veersa Technologies building enterprise appraisal workflows and analyzing user requirements in tech applications."
+  },
+  {
+    "S. No.": "84",
+    "Name": "Monish Khan",
+    "Email address": "monishk.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "87.5",
+    "Class XII Percentage (Rounded off to two decimal places)": "73.0",
+    "UG Degree Name": "Bachelor of Commerce (B.Com)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Commerce, Accounting & Financial Management",
+    "UG Percentage (Rounded off to two decimal places)": "62.64",
+    "Internship 1 - Designation": "Marketing & Business Development Intern",
+    "Internship 1 - Organization": "24 Happy Pots",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "12",
+    "Work experience 1 - Designation": "Customer Service Associate (Apprentice)",
+    "Work experience 1 - Organization Name": "Central Bank of India",
+    "Work experience 1 - Duration (in months)": "12",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Course on Computer Concepts (CCC)",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "Award Winner: Banaras Lit Fest (Poetry) & Open Mic Contest (Poetry)",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities (Python, SQL, Power BI); ML Employee Turnover Analytics; Core banking operations and daily ledger reconciliations at Central Bank of India",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python, SQL, Power BI, Advanced Excel, Financial Accounting, Core Banking Systems, Ledger Reconciliation",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "I have been developing my research and analytical skills through my academic projects, particularly my project titled “ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities.” The project involves studying the Indian equity market, analysing stock performance, evaluating risk and return parameters, comparing investment strategies, and exploring the application of machine learning in portfolio decision-making. Through this project, I am learning to approach market-related problems systematically, interpret financial data, identify trends, and derive insights that can support business and investment decisions. While I have not yet had formal professional experience in startup research, I am keen to apply these analytical and research skills to understand startup business models, industry trends, competitors, and market opportunities."
+  },
+  {
+    "S. No.": "85",
+    "Name": "Binote Biju",
+    "Email address": "binoteb.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "81.91",
+    "Class XII Percentage (Rounded off to two decimal places)": "90.92",
+    "UG Degree Name": "Bachelor of Computer Applications (BCA)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Computer Applications",
+    "UG Percentage (Rounded off to two decimal places)": "67.9",
+    "Internship 1 - Designation": "Department Event & AI Workshop Coordinator",
+    "Internship 1 - Organization": "Mar Elias College, Kottappady",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Coordinated and organized Artificial Intelligence (AI) Workshop at Mar Elias College",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "State-Level Sports Championship — 2nd Place; Coordinated inter-college events and AI workshop",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "MEDNOVA MERN-Stack Hospital Management Application; End-to-End SQL Data Warehouse (IIT Ropar, 2026 - Bronze/Silver/Gold Star Schema); Customer Churn Prediction (IIM Amritsar - Random Forest, 85% Accuracy)",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Power BI, PostgreSQL, Microsoft SQL Server, Python, Artificial Intelligence, Machine Learning, HTML, CSS, JavaScript, Excel",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "No formal startup research, but extensive technical project experience designing data warehouse pipelines, ETL transformations, and customer churn machine learning models in SQL and Python."
+  },
+  {
+    "S. No.": "86",
+    "Name": "Anika Bhatnagar",
+    "Email address": "anikab.msdsm04@iimamritsar.ac.in",
+    "Gender": "Female",
+    "Class X Percentage (Rounded off to two decimal places)": "86.4",
+    "Class XII Percentage (Rounded off to two decimal places)": "92.4",
+    "UG Degree Name": "B.A. (Hons with Research) Business Economics",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Business Economics & Financial Markets",
+    "UG Percentage (Rounded off to two decimal places)": "73.0",
+    "Internship 1 - Designation": "Finance Intern (GL & Reconciliations)",
+    "Internship 1 - Organization": "Microtek Infrastructures Pvt Ltd",
+    "Internship 2 - Designation": "Financial Advisory Intern",
+    "Internship 2 - Organization": "Basic Financial Services Pvt Ltd",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Financial Markets (Yale University), Cost and Economics in Pricing Strategy (Univ of Virginia & BCG), Trading Basics (Indian School of Business), Corporate Strategy (Univ of London), Introduction to Marketing (Wharton UPenn)",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "Published Book Author: \"Emerging Economic and Digital Trends: Perspectives of Young Researchers\" (Research: \"Generational Perceptions of AI in India\"); Team Lead in Wharton Global High School Investment Competition (competing against 6,000+ teams); State-level Taekwondo Silver Medalist; College Volleyball Team Captain; Coordinator at IIT Ropar Data Science & Management Club (Stratify)",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "Finlatics Financial Markets Experience Program (Fincrux); Fundraising Intern at Muskurahat Foundation",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "RStudio, Spyder IDE, IBM SPSS, Microsoft Excel, Tally ERP, Python, Financial Statement Analysis, Financial Modelling, Statistical Analysis & Interpretation",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "Yes. I have experience in academic research, financial analysis, and understanding market and consumer behaviour. During my undergraduate degree in Business Economics at Gargi College, Delhi University, I conducted a year-long research project titled \"Generational Perceptions of AI in India\". The research involved studying how different generations perceive and interact with AI, analysing consumer attitudes, identifying behavioural patterns, and interpreting survey-based data. The research was subsequently published as a book titled Emerging Economic and Digital Trends: Perspectives of Young Researchers. Additionally, during my internship at Basic Financial Services, I analysed financial statements, evaluated client portfolios, and identified financial performance trends. This gave me exposure to financial analysis and understanding business performance. While I have not worked actively with a startup, I am comfortable with research-driven analysis and am keen to apply these skills."
+  },
+  {
+    "S. No.": "87",
+    "Name": "Anshul Sharma",
+    "Email address": "anshuls.msdsm04@iimamritsar.ac.in",
+    "Gender": "Male",
+    "Class X Percentage (Rounded off to two decimal places)": "79.6",
+    "Class XII Percentage (Rounded off to two decimal places)": "81.2",
+    "UG Degree Name": "B.Sc. (Mathematics)",
+    "UG Branch / Specialization (General Management/Accounting/Mechanical Engineering, etc.)": "Mathematics, Physics & Computer Science",
+    "UG Percentage (Rounded off to two decimal places)": "65.0",
+    "Internship 1 - Designation": "Business Excellence & TQM Intern",
+    "Internship 1 - Organization": "TATA Power DDL",
+    "Internship 2 - Designation": "",
+    "Internship 2 - Organization": "",
+    "Total Full-Time Work Experience in months \n(Write 0 in case of no work experience)": "0",
+    "Work experience 1 - Designation": "",
+    "Work experience 1 - Organization Name": "",
+    "Work experience 1 - Duration (in months)": "",
+    "Work experience 2 - Designation": "",
+    "Work experience 2 - Organization Name": "",
+    "Work experience 2 - Duration (in months)": "",
+    "Certifications\n(Mention 3-4 major certifications)": "Business Fundamentals for Entrepreneurs (NPTEL, IIT Bombay - Elite 83%), Foundations of Digital Marketing and E-Commerce (Google, Coursera), Discover the Art of Prompting (Google, Coursera)",
+    "Achievements \n(Mention 1-2 major achievements. You can mention case competitions as well, only if you have been a semi-finalist/finalist/winner)": "2nd Prize in Model Presentation Competition on Mathematics Day; 2nd Place in Extempore Competition organized by Akashwani Dharamsala",
+    "Other Qualifications (CA/CFA/CS, etc.) \n(If you are currently pursuing/completed any other qualification, mention the same)": "Ride-Sharing App Analytics Dashboard (IIT Ropar, 2026 - Relational DBMS & SQL KPI Reporting); Customer Churn Analysis (IIM Amritsar, 2026 - Random Forest ML Model & Power BI)",
+    "Google Form response 1 - Mention any technical skills or tools that you are familiar with": "Python, SQL, MS Excel, C programming, Power BI, Exploratory Data Analysis (EDA), Statistical Analysis, Predictive Analytics, Microsoft PowerPoint, Database Management, Business Analytics",
+    "Google Form Respone 2 - Do you have prior experience working on Startup research or in general any market Research, If yes please elaborate?": "No formal startup research, but solid project experience in Business Fundamentals for Entrepreneurs (IIT Bombay), predictive churn modeling, ride-sharing SQL KPI dashboard development, and business excellence at TATA Power DDL."
   }
 ];
 
@@ -2171,16 +2387,24 @@ function parseCleanNumber(val: string | undefined): number | null {
   return Math.round(num * 100) / 100;
 }
 
-function getField(row: Record<string, string>, prefixOrExact: string): string {
-  if (row[prefixOrExact] !== undefined) return String(row[prefixOrExact]).trim();
-  const key = Object.keys(row).find((k) =>
-    k.toLowerCase().startsWith(prefixOrExact.toLowerCase())
-  );
-  return key ? String(row[key] || "").trim() : "";
+function getField(row: Record<string, string>, prefixOrExact: string, ...aliases: string[]): string {
+  const queries = [prefixOrExact, ...aliases];
+  for (const q of queries) {
+    if (row[q] !== undefined && String(row[q]).trim() !== "") return String(row[q]).trim();
+    const key = Object.keys(row).find((k) =>
+      k.toLowerCase().startsWith(q.toLowerCase()) ||
+      k.toLowerCase() === q.toLowerCase()
+    );
+    if (key && row[key] !== undefined && String(row[key]).trim() !== "") {
+      return String(row[key]).trim();
+    }
+  }
+  return "";
 }
 
 export function inferCohortProgramFromEmail(email: string): string {
   const lower = email.toLowerCase();
+  if (lower.includes(".msdsm")) return "MSc Data Science and Management (MSDSM)";
   if (lower.includes(".mbaba")) return "MBA – Business Analytics (MBA-BA)";
   if (lower.includes(".mbahr")) return "MBA – Human Resources (MBA-HR)";
   return "MBA – Flagship General Management";
@@ -2874,7 +3098,10 @@ export function buildCandidatesFromWorkbookRows(
       serialNo,
       fullName,
       email,
-      institution: "IIM Amritsar",
+      institution:
+        inferCohortProgramFromEmail(email).includes("MSDSM") || email.toLowerCase().includes(".msdsm")
+          ? "IIM Amritsar & IIT Ropar"
+          : "IIM Amritsar",
       cohortProgram: inferCohortProgramFromEmail(email),
       gender,
       classXPercentage,

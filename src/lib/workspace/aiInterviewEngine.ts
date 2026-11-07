@@ -572,9 +572,2081 @@ export function selectCaseSetForCandidate(candidate: CandidateRecord): StartupCa
   return DEFAULT_STARTUP_CASE_SETS[index] || DEFAULT_STARTUP_CASE_SETS[0]!;
 }
 
+/**
+ * Pre-generated tailored interview question banks crafted specifically for the 8
+ * MSc Data Science and Management (MSDSM) candidates based on their verified resumes,
+ * technical data analytics projects, and previous internships/roles.
+ */
+export const MSDSM_TAILORED_INTERVIEW_TURNS: Record<string, AIInterviewQuestionTurn[]> = {
+  // Candidate: Yashu Singh (DVC-IIMA-080)
+  "DVC-IIMA-080": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: M&A Target Screening & Valuation Analytics (Python, Excel, Financial Modelling)",
+    "questionPrompt": "Welcome Yashu. I'm looking at your M&A Target Screening & Valuation Analytics project at IIT Ropar. Beyond theoretical DCF assumptions, walk me through how you screened potential acquisition targets: what screening criteria or financial health metrics did you filter by in Python and Excel, how did you quantify potential operational synergies, and how would you adapt this model for early-stage Indian startups with zero EBITDA?",
+    "expectedSignals": [
+      "Explains screening filters (revenue growth, gross margin profile, debt/equity, working capital cycle, valuation multiples)",
+      "Articulates synergy quantification and sensitivity analysis",
+      "Recognizes how early-stage diligence shifts from EBITDA multiples to unit economics, cohort retention, and forward revenue multiples"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "IIM Amritsar Project: Branding in the Age of Social Media & AttriSense People Analytics",
+    "questionPrompt": "In your IIM Amritsar project on 'Branding in the Age of Social Media', you analyzed market research, cultural context, and social media strategy. At Deevee Capital, founders frequently present viral social media follower counts as proof of brand moat. How would you objectively test whether a consumer or D2C startup's social traction is translating into sticky, repeat purchasing behavior versus unviable paid influencer hype?",
+    "expectedSignals": [
+      "Distinguishes vanity metrics (follower count, impressions) from commercial conversion (CAC, repeat purchase rate, organic vs paid split)",
+      "Outlines cohort analysis and customer lifetime value (LTV) verification",
+      "Proposes concrete verification checks (social listening sentiment, negative review velocity, repeat order frequency)"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Academic & Technical Foundation: B.Sc. Mathematics (Lucknow Univ), Google Data Analytics, SQL & Python",
+    "questionPrompt": "You have a strong quantitative background in Mathematics from University of Lucknow, combined with Google Data Analytics and database certifications. When auditing an early-stage startup's raw customer transaction database, what specific SQL queries or statistical tests would you run to uncover customer concentration risk and verify whether GMV is inflated by circular transactions or heavy discounting?",
+    "expectedSignals": [
+      "Identifies Pareto concentration (e.g., top 5% accounts driving 80% revenue)",
+      "Mentions SQL window functions/grouping for order frequency, returns/cancellations, and net realized revenue",
+      "Audits discount codes, promotional credits, and refund rates"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "yashus.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: M&A Target Screening & Valuation Analytics (Python, Excel, Financial Modelling)",
+    "questionPrompt": "Welcome Yashu. I'm looking at your M&A Target Screening & Valuation Analytics project at IIT Ropar. Beyond theoretical DCF assumptions, walk me through how you screened potential acquisition targets: what screening criteria or financial health metrics did you filter by in Python and Excel, how did you quantify potential operational synergies, and how would you adapt this model for early-stage Indian startups with zero EBITDA?",
+    "expectedSignals": [
+      "Explains screening filters (revenue growth, gross margin profile, debt/equity, working capital cycle, valuation multiples)",
+      "Articulates synergy quantification and sensitivity analysis",
+      "Recognizes how early-stage diligence shifts from EBITDA multiples to unit economics, cohort retention, and forward revenue multiples"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "IIM Amritsar Project: Branding in the Age of Social Media & AttriSense People Analytics",
+    "questionPrompt": "In your IIM Amritsar project on 'Branding in the Age of Social Media', you analyzed market research, cultural context, and social media strategy. At Deevee Capital, founders frequently present viral social media follower counts as proof of brand moat. How would you objectively test whether a consumer or D2C startup's social traction is translating into sticky, repeat purchasing behavior versus unviable paid influencer hype?",
+    "expectedSignals": [
+      "Distinguishes vanity metrics (follower count, impressions) from commercial conversion (CAC, repeat purchase rate, organic vs paid split)",
+      "Outlines cohort analysis and customer lifetime value (LTV) verification",
+      "Proposes concrete verification checks (social listening sentiment, negative review velocity, repeat order frequency)"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Academic & Technical Foundation: B.Sc. Mathematics (Lucknow Univ), Google Data Analytics, SQL & Python",
+    "questionPrompt": "You have a strong quantitative background in Mathematics from University of Lucknow, combined with Google Data Analytics and database certifications. When auditing an early-stage startup's raw customer transaction database, what specific SQL queries or statistical tests would you run to uncover customer concentration risk and verify whether GMV is inflated by circular transactions or heavy discounting?",
+    "expectedSignals": [
+      "Identifies Pareto concentration (e.g., top 5% accounts driving 80% revenue)",
+      "Mentions SQL window functions/grouping for order frequency, returns/cancellations, and net realized revenue",
+      "Audits discount codes, promotional credits, and refund rates"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Gaurav Tiwari (DVC-IIMA-081)
+  "DVC-IIMA-081": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Full-Time Work Experience (7 mos): Associate Analyst (AI Data Annotation & QA) @ GlobalLogic",
+    "questionPrompt": "Welcome Gaurav. You spent 7 months as an Associate Analyst at GlobalLogic focused on AI Data Annotation & QA, sustaining 98%+ accuracy across complex text and image datasets for AI/ML training. At Deevee Capital, we encounter numerous startups claiming to build 'proprietary AI.' Given your insider experience with data pipelines and annotation edge cases, how would you evaluate whether an AI startup actually possesses a defensible, proprietary training dataset, or if they are simply a commodity wrapper that any competitor can replicate in a weekend?",
+    "expectedSignals": [
+      "Distinguishes proprietary domain-specific labeled data from open-source web-scraped datasets",
+      "Identifies data flywheel effects, human-in-the-loop QA pipelines, and edge-case error handling",
+      "Evaluates model defensibility beyond prompt wrappers and off-the-shelf APIs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Application Form & Media Analytics: 100+ variable audit across short-form video (Instagram/YouTube/Facebook)",
+    "questionPrompt": "In your application and media analytics work, you described auditing over 100 variables per video across Instagram, YouTube, and Facebook\u2014including retention hooks, edit pacing, and claim credibility signals. If Deevee Capital asks you to evaluate a fast-growing consumer tech or creator-economy startup, how would you use your quantitative social analytics and SQL tracking to verify if their viral growth has true organic brand love or is driven by expensive, short-lived paid boosts?",
+    "expectedSignals": [
+      "Differentiates organic engagement (comments, shares, saves) from vanity views and paid traffic",
+      "Explains methodology for cohort retention and customer sentiment tracking",
+      "Calculates true blended CAC vs paid acquisition costs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "MSDSM Project: People Analytics & AttriSense ($1.2M Net Benefit Business Case)",
+    "questionPrompt": "In your People Analytics project, you modeled IBM HR data and built a business case showing that a 20% cut in attrition yields ~$1.2M net benefit. At Deevee Capital, founders frequently present aggressive financial return models. How do you stress-test a model's underlying sensitivity to changing assumptions, and what top 3 unit economic ratios would you demand to see before believing a founder's cash burn projection?",
+    "expectedSignals": [
+      "Explains multi-scenario sensitivity analysis (base/bull/bear)",
+      "Names key unit economics: Contribution Margin (CM2/CM3), Net Cash Burn Rate, Runway in Months, and CAC Payback Period",
+      "Identifies fixed vs variable cost scaling traps"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "gauravt.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Full-Time Work Experience (7 mos): Associate Analyst (AI Data Annotation & QA) @ GlobalLogic",
+    "questionPrompt": "Welcome Gaurav. You spent 7 months as an Associate Analyst at GlobalLogic focused on AI Data Annotation & QA, sustaining 98%+ accuracy across complex text and image datasets for AI/ML training. At Deevee Capital, we encounter numerous startups claiming to build 'proprietary AI.' Given your insider experience with data pipelines and annotation edge cases, how would you evaluate whether an AI startup actually possesses a defensible, proprietary training dataset, or if they are simply a commodity wrapper that any competitor can replicate in a weekend?",
+    "expectedSignals": [
+      "Distinguishes proprietary domain-specific labeled data from open-source web-scraped datasets",
+      "Identifies data flywheel effects, human-in-the-loop QA pipelines, and edge-case error handling",
+      "Evaluates model defensibility beyond prompt wrappers and off-the-shelf APIs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Application Form & Media Analytics: 100+ variable audit across short-form video (Instagram/YouTube/Facebook)",
+    "questionPrompt": "In your application and media analytics work, you described auditing over 100 variables per video across Instagram, YouTube, and Facebook\u2014including retention hooks, edit pacing, and claim credibility signals. If Deevee Capital asks you to evaluate a fast-growing consumer tech or creator-economy startup, how would you use your quantitative social analytics and SQL tracking to verify if their viral growth has true organic brand love or is driven by expensive, short-lived paid boosts?",
+    "expectedSignals": [
+      "Differentiates organic engagement (comments, shares, saves) from vanity views and paid traffic",
+      "Explains methodology for cohort retention and customer sentiment tracking",
+      "Calculates true blended CAC vs paid acquisition costs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "MSDSM Project: People Analytics & AttriSense ($1.2M Net Benefit Business Case)",
+    "questionPrompt": "In your People Analytics project, you modeled IBM HR data and built a business case showing that a 20% cut in attrition yields ~$1.2M net benefit. At Deevee Capital, founders frequently present aggressive financial return models. How do you stress-test a model's underlying sensitivity to changing assumptions, and what top 3 unit economic ratios would you demand to see before believing a founder's cash burn projection?",
+    "expectedSignals": [
+      "Explains multi-scenario sensitivity analysis (base/bull/bear)",
+      "Names key unit economics: Contribution Margin (CM2/CM3), Net Cash Burn Rate, Runway in Months, and CAC Payback Period",
+      "Identifies fixed vs variable cost scaling traps"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Anurag Bhattacharya (DVC-IIMA-082)
+  "DVC-IIMA-082": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IISER Kolkata & IISc Bangalore Research: DST-INSPIRE Scholar, 5-Year BS-MS Dual Degree, Polymer Dynamics",
+    "questionPrompt": "Welcome Anurag. You have an exceptional scientific background as a DST-INSPIRE Scholar with a 5-Year BS-MS from IISER Kolkata and research internships at IISc Bangalore modeling polymer chain collapse. Venture capital diligence on DeepTech, ClimateTech, and Advanced Materials startups requires rigorous scientific skepticism. Tell me how your training in hypothesis falsification and empirical data analysis shapes how you would evaluate an early-stage startup claiming a breakthrough in battery chemistry, bioplastics, or clean materials.",
+    "expectedSignals": [
+      "Applies first-principles scientific method: testing hypotheses, isolating control variables, and demanding peer-review or lab-bench data",
+      "Differentiates lab-scale proof-of-concept from commercial scale-up / unit economics",
+      "Identifies thermodynamic and manufacturing bottlenecks"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "IISER Kolkata Computational Research: DFT Simulation Data Analysis & PostgreSQL",
+    "questionPrompt": "In your computational research, you utilized DFT simulations, Python, and PostgreSQL to model organochalcogenide synthesis pathways and analyze complex datasets. In tech diligence, founders often use simulated computer models to show high efficiency before building hardware. What questions would you ask the engineering team to verify whether their computer simulations match real-world messy operating conditions?",
+    "expectedSignals": [
+      "Probes boundary conditions, edge cases, and noise in simulation parameters",
+      "Demands experimental validation data against simulated curves",
+      "Checks reproducibility and sensitivity to environmental variables"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Technical Toolkit: Python (NumPy, Matplotlib), PostgreSQL 18, Power BI & Advanced Excel",
+    "questionPrompt": "You possess high-level technical skills in Python, PostgreSQL, and Power BI. Suppose Deevee Capital provides you with 100,000 raw transaction records from a B2B marketplace startup. How would you structure your data pipeline in PostgreSQL and Python to identify gross margin leakage, payment delay trends, and customer churn before the IC meeting?",
+    "expectedSignals": [
+      "Structures data schema with clean fact and dimension tables",
+      "Calculates DSO (Days Sales Outstanding) and accounts receivable aging",
+      "Analyzes repeat buying cohorts and gross margin after logistics/discounts"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "anuragb.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IISER Kolkata & IISc Bangalore Research: DST-INSPIRE Scholar, 5-Year BS-MS Dual Degree, Polymer Dynamics",
+    "questionPrompt": "Welcome Anurag. You have an exceptional scientific background as a DST-INSPIRE Scholar with a 5-Year BS-MS from IISER Kolkata and research internships at IISc Bangalore modeling polymer chain collapse. Venture capital diligence on DeepTech, ClimateTech, and Advanced Materials startups requires rigorous scientific skepticism. Tell me how your training in hypothesis falsification and empirical data analysis shapes how you would evaluate an early-stage startup claiming a breakthrough in battery chemistry, bioplastics, or clean materials.",
+    "expectedSignals": [
+      "Applies first-principles scientific method: testing hypotheses, isolating control variables, and demanding peer-review or lab-bench data",
+      "Differentiates lab-scale proof-of-concept from commercial scale-up / unit economics",
+      "Identifies thermodynamic and manufacturing bottlenecks"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "IISER Kolkata Computational Research: DFT Simulation Data Analysis & PostgreSQL",
+    "questionPrompt": "In your computational research, you utilized DFT simulations, Python, and PostgreSQL to model organochalcogenide synthesis pathways and analyze complex datasets. In tech diligence, founders often use simulated computer models to show high efficiency before building hardware. What questions would you ask the engineering team to verify whether their computer simulations match real-world messy operating conditions?",
+    "expectedSignals": [
+      "Probes boundary conditions, edge cases, and noise in simulation parameters",
+      "Demands experimental validation data against simulated curves",
+      "Checks reproducibility and sensitivity to environmental variables"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Technical Toolkit: Python (NumPy, Matplotlib), PostgreSQL 18, Power BI & Advanced Excel",
+    "questionPrompt": "You possess high-level technical skills in Python, PostgreSQL, and Power BI. Suppose Deevee Capital provides you with 100,000 raw transaction records from a B2B marketplace startup. How would you structure your data pipeline in PostgreSQL and Python to identify gross margin leakage, payment delay trends, and customer churn before the IC meeting?",
+    "expectedSignals": [
+      "Structures data schema with clean fact and dimension tables",
+      "Calculates DSO (Days Sales Outstanding) and accounts receivable aging",
+      "Analyzes repeat buying cohorts and gross margin after logistics/discounts"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Vani Garg (DVC-IIMA-083)
+  "DVC-IIMA-083": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Veersa Technologies Internship (6 mos): Frontend Developer Intern (Employee Appraisal System in React.js)",
+    "questionPrompt": "Welcome Vani. During your 6-month software development internship at Veersa Technologies, you built the frontend architecture and interactive dashboards for an internal employee appraisal system in React.js. When evaluating a B2B SaaS startup, understanding software workflow adoption is crucial. From your developer perspective, what architectural or UI/UX bottlenecks cause enterprise software to fail user adoption, and what metrics prove users are actually deriving value rather than just logging in out of compliance?",
+    "expectedSignals": [
+      "Identifies workflow friction, latency, and confusing UX as drivers of low retention",
+      "Measures DAU/MAU ratio, feature adoption depth, session duration, and task completion velocity",
+      "Recognizes enterprise buy-in vs end-user delight dichotomy"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Projects: Real-Time Social Media Chatting App (Java, Firebase) & University Management System (MySQL, JDBC)",
+    "questionPrompt": "You developed a real-time social chatting application using Java and Firebase, managing real-time data sync, group chats, and authentication. Many early-stage mobile and consumer apps launch on Firebase or serverless cloud backends. From a tech diligence perspective, what are the hidden cloud cost escalations and database read/write bottlenecks when a startup scales from 1,000 to 100,000 daily active users?",
+    "expectedSignals": [
+      "Explains Firebase/cloud billing dynamics (document reads/writes, bandwidth, connection pooling)",
+      "Discusses database indexing, caching strategies (Redis), and when to migrate from NoSQL to relational/PostgreSQL",
+      "Audits gross margin impact of cloud hosting expenses"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Oxford Sa\u00efd AI Essentials Certification & B.Tech CSE (87.5%)",
+    "questionPrompt": "You completed the AI Essentials certification from Sa\u00efd Business School, University of Oxford, combined with your Computer Science degree. If a founder pitches an 'AI-driven automated workflow' SaaS startup asking for \u20b91 Crore from Deevee Capital, what 3 technical diligence tests would you conduct to determine whether their AI represents a defensible technical moat or is merely an API call to a third-party LLM with zero barrier to entry?",
+    "expectedSignals": [
+      "Checks for proprietary data feedback loops and fine-tuned models vs raw API calls",
+      "Evaluates token cost economics, latency, and switching costs for customers",
+      "Assesses IP ownership, workflow integration depth, and defensive moat"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "vanig.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Veersa Technologies Internship (6 mos): Frontend Developer Intern (Employee Appraisal System in React.js)",
+    "questionPrompt": "Welcome Vani. During your 6-month software development internship at Veersa Technologies, you built the frontend architecture and interactive dashboards for an internal employee appraisal system in React.js. When evaluating a B2B SaaS startup, understanding software workflow adoption is crucial. From your developer perspective, what architectural or UI/UX bottlenecks cause enterprise software to fail user adoption, and what metrics prove users are actually deriving value rather than just logging in out of compliance?",
+    "expectedSignals": [
+      "Identifies workflow friction, latency, and confusing UX as drivers of low retention",
+      "Measures DAU/MAU ratio, feature adoption depth, session duration, and task completion velocity",
+      "Recognizes enterprise buy-in vs end-user delight dichotomy"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Projects: Real-Time Social Media Chatting App (Java, Firebase) & University Management System (MySQL, JDBC)",
+    "questionPrompt": "You developed a real-time social chatting application using Java and Firebase, managing real-time data sync, group chats, and authentication. Many early-stage mobile and consumer apps launch on Firebase or serverless cloud backends. From a tech diligence perspective, what are the hidden cloud cost escalations and database read/write bottlenecks when a startup scales from 1,000 to 100,000 daily active users?",
+    "expectedSignals": [
+      "Explains Firebase/cloud billing dynamics (document reads/writes, bandwidth, connection pooling)",
+      "Discusses database indexing, caching strategies (Redis), and when to migrate from NoSQL to relational/PostgreSQL",
+      "Audits gross margin impact of cloud hosting expenses"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "Oxford Sa\u00efd AI Essentials Certification & B.Tech CSE (87.5%)",
+    "questionPrompt": "You completed the AI Essentials certification from Sa\u00efd Business School, University of Oxford, combined with your Computer Science degree. If a founder pitches an 'AI-driven automated workflow' SaaS startup asking for \u20b91 Crore from Deevee Capital, what 3 technical diligence tests would you conduct to determine whether their AI represents a defensible technical moat or is merely an API call to a third-party LLM with zero barrier to entry?",
+    "expectedSignals": [
+      "Checks for proprietary data feedback loops and fine-tuned models vs raw API calls",
+      "Evaluates token cost economics, latency, and switching costs for customers",
+      "Assesses IP ownership, workflow integration depth, and defensive moat"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Monish Khan (DVC-IIMA-084)
+  "DVC-IIMA-084": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Full-Time Work Experience (12 mos): Central Bank of India (Operations, Reconciliations & Banking Services)",
+    "questionPrompt": "Welcome Monish. You spent 12 months in full-time banking operations at Central Bank of India handling customer accounts, daily ledger reconciliations, and transactions. In venture capital, early-stage startups often exhibit sloppy financial accounting or even deliberate revenue inflation. Given your on-the-ground banking experience, what specific cross-checks between bank statements, GST filings, and MIS reports would you perform to verify a startup's reported cash balance and customer collections?",
+    "expectedSignals": [
+      "Cross-verifies GSTR-3B / GSTR-1 turnover against actual bank inflows",
+      "Audits contra entries, related-party round-tripping, and ledger reconciliations",
+      "Verifies unencumbered bank balances against founder pitch claims"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "MSDSM Project: ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities",
+    "questionPrompt": "In your project on 'ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities', you modeled risk and return parameters across Indian stocks using Python and Machine Learning. In early-stage venture capital, traditional variance and Sharpe ratios don't work because startup returns follow a power-law distribution. How do you think about portfolio construction and risk mitigation when 70% of seed-stage investments may return zero, and only 1 or 2 drive fund returns?",
+    "expectedSignals": [
+      "Articulates power-law dynamics in venture capital vs normal distribution in public equities",
+      "Discusses portfolio diversification (number of bets), check sizing, and follow-on capital reserve strategy",
+      "Focuses on upside optionality and market size rather than downside variance minimization"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "B.Com Accounting Foundation + Python/SQL Modeling Toolkit",
+    "questionPrompt": "Combining your B.Com accounting foundation with Python and SQL, imagine a FinTech or B2B payment startup reports \u20b920 Crore annual revenue, but upon examining their notes, it is Gross Disbursal Volume and they earn a 1.5% take rate with a 2% default loss rate. Walk me through how you reconstruct their true P&L and show the Investment Committee their real unit economics per transaction.",
+    "expectedSignals": [
+      "Distinguishes Gross Transaction Volume (GTV) from Net Realized Revenue / Take-Rate",
+      "Deducts credit default losses, payment gateway fees, and servicing costs to calculate Net Interest Margin / Net Take-Rate",
+      "Demonstrates how negative unit economics destroy equity capital with scale"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "monishk.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Full-Time Work Experience (12 mos): Central Bank of India (Operations, Reconciliations & Banking Services)",
+    "questionPrompt": "Welcome Monish. You spent 12 months in full-time banking operations at Central Bank of India handling customer accounts, daily ledger reconciliations, and transactions. In venture capital, early-stage startups often exhibit sloppy financial accounting or even deliberate revenue inflation. Given your on-the-ground banking experience, what specific cross-checks between bank statements, GST filings, and MIS reports would you perform to verify a startup's reported cash balance and customer collections?",
+    "expectedSignals": [
+      "Cross-verifies GSTR-3B / GSTR-1 turnover against actual bank inflows",
+      "Audits contra entries, related-party round-tripping, and ledger reconciliations",
+      "Verifies unencumbered bank balances against founder pitch claims"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "MSDSM Project: ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities",
+    "questionPrompt": "In your project on 'ML-Assisted Portfolio Risk & Performance Analytics for Indian Equities', you modeled risk and return parameters across Indian stocks using Python and Machine Learning. In early-stage venture capital, traditional variance and Sharpe ratios don't work because startup returns follow a power-law distribution. How do you think about portfolio construction and risk mitigation when 70% of seed-stage investments may return zero, and only 1 or 2 drive fund returns?",
+    "expectedSignals": [
+      "Articulates power-law dynamics in venture capital vs normal distribution in public equities",
+      "Discusses portfolio diversification (number of bets), check sizing, and follow-on capital reserve strategy",
+      "Focuses on upside optionality and market size rather than downside variance minimization"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "B.Com Accounting Foundation + Python/SQL Modeling Toolkit",
+    "questionPrompt": "Combining your B.Com accounting foundation with Python and SQL, imagine a FinTech or B2B payment startup reports \u20b920 Crore annual revenue, but upon examining their notes, it is Gross Disbursal Volume and they earn a 1.5% take rate with a 2% default loss rate. Walk me through how you reconstruct their true P&L and show the Investment Committee their real unit economics per transaction.",
+    "expectedSignals": [
+      "Distinguishes Gross Transaction Volume (GTV) from Net Realized Revenue / Take-Rate",
+      "Deducts credit default losses, payment gateway fees, and servicing costs to calculate Net Interest Margin / Net Take-Rate",
+      "Demonstrates how negative unit economics destroy equity capital with scale"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Binote Biju (DVC-IIMA-085)
+  "DVC-IIMA-085": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: End-to-End SQL Data Warehouse (Bronze/Silver/Gold Architecture & Star Schema)",
+    "questionPrompt": "Welcome Binote. At IIT Ropar, you designed and implemented an End-to-End SQL Data Warehouse integrating multi-source CRM and ERP data across Bronze, Silver, and Gold layers using ETL stored procedures and a star schema. At Deevee Capital, we frequently receive messy, inconsistent customer export files from startups. How would you use a medallion data pipeline architecture to clean, deduplicate, and model a startup's raw order data to calculate true monthly customer retention and cohort repeat purchase rates?",
+    "expectedSignals": [
+      "Explains Bronze (raw ingestion), Silver (cleaning, deduplication, schema validation), and Gold (business fact/dimension aggregation) pipeline",
+      "Builds customer retention cohorts based on first purchase date",
+      "Eliminates cancelled, refunded, and test orders from genuine customer metrics"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Major Project: MEDNOVA Full-Stack Hospital Management Web Application (MERN Stack)",
+    "questionPrompt": "You developed MEDNOVA, a full-stack hospital management web application using the MERN stack with role-based access control for Admins, Doctors, and Patients. If Deevee Capital is considering investing \u20b91 Crore in a HealthTech or clinic management SaaS startup, what key diligence checks would you run regarding their DPDP (Digital Personal Data Protection) compliance, medical record security, and hospital software integration hurdles?",
+    "expectedSignals": [
+      "Highlights patient data confidentiality, encryption in transit/rest, and DPDP / ABDM compliance",
+      "Identifies legacy software interoperability (EMR/EHR) and doctor adoption friction",
+      "Evaluates long hospital sales cycles and high switching barriers"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "IIM Amritsar Project: Telecom Customer Churn Prediction (Random Forest ML, 85% Accuracy, Power BI)",
+    "questionPrompt": "In your IIM Amritsar project, you built a Random Forest machine learning model achieving 85% accuracy in predicting customer churn, visualized via Power BI. In early-stage startups, high top-line customer acquisition often masks an underlying 'leaky bucket.' What feature importance indicators did your model reveal as the strongest predictors of churn, and how would you alert an investor that a startup's growth is unsustainable?",
+    "expectedSignals": [
+      "Cites key churn features (usage frequency decline, ticket/complaint escalation, price elasticity, contract duration)",
+      "Defines the 'leaky bucket' problem (CAC exceeding lifetime value when churn is high)",
+      "Uses net revenue retention (NRR) and logo churn to evaluate growth sustainability"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "binoteb.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: End-to-End SQL Data Warehouse (Bronze/Silver/Gold Architecture & Star Schema)",
+    "questionPrompt": "Welcome Binote. At IIT Ropar, you designed and implemented an End-to-End SQL Data Warehouse integrating multi-source CRM and ERP data across Bronze, Silver, and Gold layers using ETL stored procedures and a star schema. At Deevee Capital, we frequently receive messy, inconsistent customer export files from startups. How would you use a medallion data pipeline architecture to clean, deduplicate, and model a startup's raw order data to calculate true monthly customer retention and cohort repeat purchase rates?",
+    "expectedSignals": [
+      "Explains Bronze (raw ingestion), Silver (cleaning, deduplication, schema validation), and Gold (business fact/dimension aggregation) pipeline",
+      "Builds customer retention cohorts based on first purchase date",
+      "Eliminates cancelled, refunded, and test orders from genuine customer metrics"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Major Project: MEDNOVA Full-Stack Hospital Management Web Application (MERN Stack)",
+    "questionPrompt": "You developed MEDNOVA, a full-stack hospital management web application using the MERN stack with role-based access control for Admins, Doctors, and Patients. If Deevee Capital is considering investing \u20b91 Crore in a HealthTech or clinic management SaaS startup, what key diligence checks would you run regarding their DPDP (Digital Personal Data Protection) compliance, medical record security, and hospital software integration hurdles?",
+    "expectedSignals": [
+      "Highlights patient data confidentiality, encryption in transit/rest, and DPDP / ABDM compliance",
+      "Identifies legacy software interoperability (EMR/EHR) and doctor adoption friction",
+      "Evaluates long hospital sales cycles and high switching barriers"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "IIM Amritsar Project: Telecom Customer Churn Prediction (Random Forest ML, 85% Accuracy, Power BI)",
+    "questionPrompt": "In your IIM Amritsar project, you built a Random Forest machine learning model achieving 85% accuracy in predicting customer churn, visualized via Power BI. In early-stage startups, high top-line customer acquisition often masks an underlying 'leaky bucket.' What feature importance indicators did your model reveal as the strongest predictors of churn, and how would you alert an investor that a startup's growth is unsustainable?",
+    "expectedSignals": [
+      "Cites key churn features (usage frequency decline, ticket/complaint escalation, price elasticity, contract duration)",
+      "Defines the 'leaky bucket' problem (CAC exceeding lifetime value when churn is high)",
+      "Uses net revenue retention (NRR) and logo churn to evaluate growth sustainability"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Anika Bhatnagar (DVC-IIMA-086)
+  "DVC-IIMA-086": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Published Book Author: 'Generational Perceptions of AI in India' (B.A. Hons Business Economics, Gargi College DU)",
+    "questionPrompt": "Welcome Anika. You authored a year-long empirical study published in the book 'Emerging Economic and Digital Trends: Perspectives of Young Researchers', analyzing generational perceptions of AI across India. At Deevee Capital, we see dozens of AI startups pitching consumer and enterprise tools. Based on your published research, what are the primary behavioral and psychological barriers preventing mainstream Indian consumers and businesses from paying for AI products, and which demographic segments show genuine willingness-to-pay?",
+    "expectedSignals": [
+      "Draws on empirical survey findings: trust deficit, data privacy concerns, and willingness-to-pay friction",
+      "Distinguishes Gen Z/Millennial curiosity and trial from sustained commercial monetization",
+      "Pinpoints enterprise ROI vs consumer freemium conversion hurdles in India"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Finance Internships: Microtek Infrastructures (Tally GL & Bank Reconciliations) & Basic Financial Services",
+    "questionPrompt": "You completed finance internships at Microtek Infrastructures and Basic Financial Services, managing accounts payable/receivable, bank reconciliations in Tally ERP, and financial statement analysis. When auditing a high-growth startup's balance sheet, what are the subtle warning signs in trade payables, unbilled revenue, or capital work-in-progress that indicate a founder is disguising operational cash burn?",
+    "expectedSignals": [
+      "Examines aging of accounts payable and vendor dispute liabilities",
+      "Scrutinizes unbilled revenue and capitalization of normal operating expenses into CWIP or intangibles",
+      "Compares operating cash flow from bank statements against accrual profit"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "UVA & BCG Certification: Cost and Economics in Pricing Strategy + Wharton Investment Competition Team Lead",
+    "questionPrompt": "You completed advanced training in 'Cost and Economics in Pricing Strategy' from University of Virginia and BCG, and led a team in the Wharton Global Investment Competition. In the Indian market, many startups believe low prices create an insurmountable moat, only to bleed cash when discounts end. How would you evaluate whether an early-stage startup has true pricing power, and what gross margin floor would you insist upon before recommending an investment?",
+    "expectedSignals": [
+      "Differentiates cost-plus/predatory discount pricing from value-based pricing power",
+      "Analyzes customer price elasticity, switching costs, and churn when introductory pricing expires",
+      "Demands healthy gross margin thresholds (typically 50-70%+ for software, 40%+ for premium consumer) to absorb customer acquisition costs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "anikab.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "Published Book Author: 'Generational Perceptions of AI in India' (B.A. Hons Business Economics, Gargi College DU)",
+    "questionPrompt": "Welcome Anika. You authored a year-long empirical study published in the book 'Emerging Economic and Digital Trends: Perspectives of Young Researchers', analyzing generational perceptions of AI across India. At Deevee Capital, we see dozens of AI startups pitching consumer and enterprise tools. Based on your published research, what are the primary behavioral and psychological barriers preventing mainstream Indian consumers and businesses from paying for AI products, and which demographic segments show genuine willingness-to-pay?",
+    "expectedSignals": [
+      "Draws on empirical survey findings: trust deficit, data privacy concerns, and willingness-to-pay friction",
+      "Distinguishes Gen Z/Millennial curiosity and trial from sustained commercial monetization",
+      "Pinpoints enterprise ROI vs consumer freemium conversion hurdles in India"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "Finance Internships: Microtek Infrastructures (Tally GL & Bank Reconciliations) & Basic Financial Services",
+    "questionPrompt": "You completed finance internships at Microtek Infrastructures and Basic Financial Services, managing accounts payable/receivable, bank reconciliations in Tally ERP, and financial statement analysis. When auditing a high-growth startup's balance sheet, what are the subtle warning signs in trade payables, unbilled revenue, or capital work-in-progress that indicate a founder is disguising operational cash burn?",
+    "expectedSignals": [
+      "Examines aging of accounts payable and vendor dispute liabilities",
+      "Scrutinizes unbilled revenue and capitalization of normal operating expenses into CWIP or intangibles",
+      "Compares operating cash flow from bank statements against accrual profit"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "UVA & BCG Certification: Cost and Economics in Pricing Strategy + Wharton Investment Competition Team Lead",
+    "questionPrompt": "You completed advanced training in 'Cost and Economics in Pricing Strategy' from University of Virginia and BCG, and led a team in the Wharton Global Investment Competition. In the Indian market, many startups believe low prices create an insurmountable moat, only to bleed cash when discounts end. How would you evaluate whether an early-stage startup has true pricing power, and what gross margin floor would you insist upon before recommending an investment?",
+    "expectedSignals": [
+      "Differentiates cost-plus/predatory discount pricing from value-based pricing power",
+      "Analyzes customer price elasticity, switching costs, and churn when introductory pricing expires",
+      "Demands healthy gross margin thresholds (typically 50-70%+ for software, 40%+ for premium consumer) to absorb customer acquisition costs"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  // Candidate: Anshul Sharma (DVC-IIMA-087)
+  "DVC-IIMA-087": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: Ride-Sharing App Analytics Dashboard (Relational DBMS & SQL KPI Reporting)",
+    "questionPrompt": "Welcome Anshul. At IIT Ropar, you designed a relational database schema and built an operational analytics dashboard for a ride-sharing application. Two-sided marketplace and mobility businesses are notoriously tough in India due to driver churn, fuel inflation, and commission resistance. Using your schema and dashboard framework, what are the top 3 supply-demand KPIs you would monitor to see if a mobility or delivery startup has sustainable unit economics or is burning cash to subsidize rides?",
+    "expectedSignals": [
+      "Identifies driver utilization rate, deadhead miles, and fulfillment/cancellation rates",
+      "Analyzes net take rate after driver incentives and rider promotions",
+      "Monitors driver payback time and repeat trip frequency"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "TATA Power DDL Internship: Business Excellence & Total Quality Management (CENQUEx Curriculum)",
+    "questionPrompt": "You interned at TATA Power DDL in Business Excellence & Total Quality Management, working on process improvement and training frameworks. When evaluating early-stage ClimateTech, clean energy, or B2B logistics startups, operational efficiency and SLA compliance are critical. How do you apply TQM and process-mapping principles to detect whether a startup's operational workflow can scale 10x without quality collapse or exponential overhead?",
+    "expectedSignals": [
+      "Identifies process bottlenecks, single points of failure, and error rates",
+      "Applies standard operating procedures (SOPs) and Six Sigma/TQM root cause analysis",
+      "Assesses whether operating costs scale linearly or sub-linearly with volume"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "NPTEL IIT Bombay: Business Fundamentals for Entrepreneurs (Elite 83%) & Customer Churn ML Model",
+    "questionPrompt": "You achieved Elite 83% in NPTEL IIT Bombay's 'Business Fundamentals for Entrepreneurs' and built a customer churn prediction model in Python and Power BI. When a startup pitch deck boasts 'rapid 25% MoM top-line user acquisition,' what statistical tests and cohort metrics would you apply to verify whether they have genuine Product-Market Fit (PMF) or are merely masking a high-churn leaky bucket?",
+    "expectedSignals": [
+      "Evaluates cohort retention curves (flattening vs trending to zero)",
+      "Calculates Net Revenue Retention (NRR) and Quick Ratio ((New MRR + Expansion) / (Churn + Contraction))",
+      "Identifies true PMF signals: organic referrals, usage frequency, and negative net churn"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+  "anshuls.msdsm04@iimamritsar.ac.in": [
+  {
+    "id": "turn-1-resume-exp",
+    "questionIndex": 1,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Resume & Experience Deep-Dive",
+    "resumeContextCited": "IIT Ropar Project: Ride-Sharing App Analytics Dashboard (Relational DBMS & SQL KPI Reporting)",
+    "questionPrompt": "Welcome Anshul. At IIT Ropar, you designed a relational database schema and built an operational analytics dashboard for a ride-sharing application. Two-sided marketplace and mobility businesses are notoriously tough in India due to driver churn, fuel inflation, and commission resistance. Using your schema and dashboard framework, what are the top 3 supply-demand KPIs you would monitor to see if a mobility or delivery startup has sustainable unit economics or is burning cash to subsidize rides?",
+    "expectedSignals": [
+      "Identifies driver utilization rate, deadhead miles, and fulfillment/cancellation rates",
+      "Analyzes net take rate after driver incentives and rider promotions",
+      "Monitors driver payback time and repeat trip frequency"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-2-resume-research",
+    "questionIndex": 2,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Research Claim & Methodology Probe",
+    "resumeContextCited": "TATA Power DDL Internship: Business Excellence & Total Quality Management (CENQUEx Curriculum)",
+    "questionPrompt": "You interned at TATA Power DDL in Business Excellence & Total Quality Management, working on process improvement and training frameworks. When evaluating early-stage ClimateTech, clean energy, or B2B logistics startups, operational efficiency and SLA compliance are critical. How do you apply TQM and process-mapping principles to detect whether a startup's operational workflow can scale 10x without quality collapse or exponential overhead?",
+    "expectedSignals": [
+      "Identifies process bottlenecks, single points of failure, and error rates",
+      "Applies standard operating procedures (SOPs) and Six Sigma/TQM root cause analysis",
+      "Assesses whether operating costs scale linearly or sub-linearly with volume"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-3-resume-toolkit",
+    "questionIndex": 3,
+    "phase": "RESUME_PROBE",
+    "phaseLabel": "Phase 1 \u2022 Analytical Toolkit & Financial Rigour",
+    "resumeContextCited": "NPTEL IIT Bombay: Business Fundamentals for Entrepreneurs (Elite 83%) & Customer Churn ML Model",
+    "questionPrompt": "You achieved Elite 83% in NPTEL IIT Bombay's 'Business Fundamentals for Entrepreneurs' and built a customer churn prediction model in Python and Power BI. When a startup pitch deck boasts 'rapid 25% MoM top-line user acquisition,' what statistical tests and cohort metrics would you apply to verify whether they have genuine Product-Market Fit (PMF) or are merely masking a high-churn leaky bucket?",
+    "expectedSignals": [
+      "Evaluates cohort retention curves (flattening vs trending to zero)",
+      "Calculates Net Revenue Retention (NRR) and Quick Ratio ((New MRR + Expansion) / (Churn + Contraction))",
+      "Identifies true PMF signals: organic referrals, usage frequency, and negative net churn"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-4-startup-sourcing",
+    "questionIndex": 4,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Startup Discovery & Sourcing Strategy",
+    "resumeContextCited": "Deevee Capital Mandate: Sector-Agnostic Early-Stage Sourcing (Up to \u20b91 Cr)",
+    "questionPrompt": "Now let's shift to live startup sourcing at Deevee Capital. We are sector-agnostic and invest up to \u20b91 Crore in promising early-stage Indian startups\u2014often before they get covered in YourStory, Inc42, or TechCrunch. If we ask you this week to uncover 5 high-potential pre-seed or seed startups across India (including non-metro cities or B2B/manufacturing niches), what exact databases, public registries, incubator cohorts, or ground-up search workflows would you use to find them?",
+    "expectedSignals": [
+      "Names specific Indian sourcing channels (DPIIT Startup India, IIT/IIM incubator cohorts like SINE/CIIE/NSRCEL, Tracxn/Crunchbase, MCA/Zauba filings, LinkedIn stealth founder filters, B2B trade expos/IndiaMART)",
+      "Explains how to filter signal from noise",
+      "Avoids relying solely on mainstream news articles"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-5-startup-verification",
+    "questionIndex": 5,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Fact vs. Founder Hype Verification",
+    "resumeContextCited": "Deevee Capital Mandate: Independent Research Verification",
+    "questionPrompt": "Suppose a founder submits a pitch deck to Deevee Capital claiming: \"We are growing 30% month-on-month in a \u20b940,000 Crore Indian market and have zero direct competitors.\" Before we even get on a call with the founder, what 3 independent checks would you run in 45 minutes to verify (a) whether their TAM is realistic bottom-up, (b) whether their customer traction is genuine, and (c) who their real competitors or substitutes are?",
+    "expectedSignals": [
+      "Rejects top-down TAM; builds bottom-up TAM (# of target customers \u00d7 realistic annual spend)",
+      "Uses independent verification signals (MCA RoC filings, GST check, LinkedIn employee/headcount growth, Play Store/G2/Amazon review velocity, customer/distributor calls)",
+      "Identifies unorganised/status-quo alternatives when a founder claims 'zero competitors'"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  },
+  {
+    "id": "turn-6-startup-redflags",
+    "questionIndex": 6,
+    "phase": "STARTUP_THINKING",
+    "phaseLabel": "Phase 2 \u2022 Commercial Scepticism & Red-Flag Detection",
+    "resumeContextCited": "Deevee Capital Mandate: Disciplined Capital Allocation",
+    "questionPrompt": "Final question before your live Startup Data Room simulation: Junior analysts often fall in love with a charismatic founder's story. Tell me about a well-known Indian startup sector or business model that looks exciting on the surface, but where you would be very cautious deploying Deevee Capital's money today. What specific structural risk\u2014such as customer acquisition cost, regulatory dependency, or working-capital lock-up\u2014makes it dangerous?",
+    "expectedSignals": [
+      "Takes a clear, non-generic analytical stance on a specific Indian sector or business model",
+      "Pinpoints structural commercial risks (CAC > LTV, high COD RTO, low repeat frequency, working capital debtor days, regulatory binary risk, commodity margin compression)",
+      "Demonstrates independent investor judgement"
+    ],
+    "candidateAnswer": "",
+    "inputMethod": "hybrid",
+    "timeTakenSeconds": 0,
+    "wordCount": 0,
+    "answeredAt": null,
+    "turnScore": null,
+    "turnStrengths": [],
+    "turnConcerns": []
+  }
+],
+};
+
 export function generatePersonalizedInterviewTurns(
   candidate: CandidateRecord
 ): AIInterviewQuestionTurn[] {
+  const code = (candidate.candidateCode || "").toUpperCase();
+  const email = (candidate.email || "").toLowerCase();
+  const bespoke =
+    MSDSM_TAILORED_INTERVIEW_TURNS[code] ||
+    MSDSM_TAILORED_INTERVIEW_TURNS[email];
+  if (bespoke && bespoke.length > 0) {
+    return JSON.parse(JSON.stringify(bespoke));
+  }
   const firstName = candidate.fullName.split(/\s+/)[0] || candidate.fullName;
   const turns: AIInterviewQuestionTurn[] = [];
 
