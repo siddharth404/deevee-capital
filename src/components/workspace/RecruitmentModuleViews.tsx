@@ -79,6 +79,7 @@ interface RecruitmentModuleViewsProps {
   onChangeSubTab: (tab: RecruitmentSubTab) => void;
   currentUserEmail: string;
   currentUserName: string;
+  initialRecruitment?: RecruitmentModuleState | null;
 }
 
 export const RECRUITMENT_SUBMODULE_NAV: Array<{
@@ -106,16 +107,23 @@ export default function RecruitmentModuleViews({
   onChangeSubTab,
   currentUserEmail,
   currentUserName,
+  initialRecruitment,
 }: RecruitmentModuleViewsProps) {
-  const [recruitment, setRecruitment] = useState<RecruitmentModuleState | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [recruitment, setRecruitment] = useState<RecruitmentModuleState | null>(
+    initialRecruitment || null
+  );
+  const [loading, setLoading] = useState<boolean>(!initialRecruitment);
   const [busyAction, setBusyAction] = useState<string>("");
   const [toastMsg, setToastMsg] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   // Selected candidate for Profile / Evaluation / Email / Simulation
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string>("");
-  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string>(
+    initialRecruitment?.candidates?.[0]?.id || ""
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(
+    initialRecruitment?.aiInterviewSessions?.[0]?.id || ""
+  );
   const [selectedCaseSetId, setSelectedCaseSetId] = useState<string>("SET_1_AGRI_SAAS_D2C");
 
   // Search & Filters for Applicants Database
@@ -224,60 +232,104 @@ export default function RecruitmentModuleViews({
     setTimeout(() => setToastMsg(""), 5000);
   };
 
-  const fetchRecruitmentData = useCallback(async () => {
-    setLoading(true);
-    try {
-      let lastErr = "";
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const res = await fetch("/api/workspace/recruitment");
-          const rawText = await res.text();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let data: any = null;
-          try {
-            data = rawText ? JSON.parse(rawText) : {};
-          } catch {
-            data = null;
-          }
-          if (!res.ok || !data) {
-            if ((res.status >= 500 || !data) && attempt < 3) {
-              await new Promise((r) => setTimeout(r, 1200));
-              continue;
-            }
-            lastErr = data?.error || `Server temporarily busy (HTTP ${res.status}). Retrying...`;
-            break;
-          }
-          if (data.recruitment) {
-            setRecruitment(data.recruitment);
-            setErrorMsg("");
-            const firstCand = data.recruitment.candidates?.[0];
-            if (firstCand) {
-              setSelectedCandidateId((prev) => prev || firstCand.id);
-            }
-            const firstSess = data.recruitment.aiInterviewSessions?.[0];
-            if (firstSess) {
-              setSelectedSessionId((prev) => prev || firstSess.id);
-            }
-            return;
-          }
-        } catch (netErr) {
-          lastErr = (netErr as Error).message || "Network request interrupted.";
-          if (attempt < 3) {
-            await new Promise((r) => setTimeout(r, 1200));
-          }
+  const mergeSnapshotsFromPrev = useCallback(
+    (
+      prev: RecruitmentModuleState | null,
+      next: RecruitmentModuleState
+    ): RecruitmentModuleState => {
+      if (!prev?.aiInterviewSessions?.length || !next.aiInterviewSessions?.length) {
+        return next;
+      }
+      const prevSnapMap = new Map<string, typeof prev.aiInterviewSessions[0]["proctoring"]["snapshots"]>();
+      for (const s of prev.aiInterviewSessions) {
+        if (s.proctoring?.snapshots && s.proctoring.snapshots.length > 0) {
+          prevSnapMap.set(s.id, s.proctoring.snapshots);
         }
       }
-      if (lastErr) {
-        setErrorMsg(lastErr);
+      if (prevSnapMap.size === 0) return next;
+      return {
+        ...next,
+        aiInterviewSessions: next.aiInterviewSessions.map((s) => {
+          if (
+            (!s.proctoring?.snapshots || s.proctoring.snapshots.length === 0) &&
+            prevSnapMap.has(s.id)
+          ) {
+            return {
+              ...s,
+              proctoring: {
+                ...s.proctoring,
+                snapshots: prevSnapMap.get(s.id),
+              },
+            };
+          }
+          return s;
+        }),
+      };
+    },
+    []
+  );
+
+  const fetchRecruitmentData = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        let lastErr = "";
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch("/api/workspace/recruitment");
+            const rawText = await res.text();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let data: any = null;
+            try {
+              data = rawText ? JSON.parse(rawText) : {};
+            } catch {
+              data = null;
+            }
+            if (!res.ok || !data) {
+              if ((res.status >= 500 || !data) && attempt < 3) {
+                await new Promise((r) => setTimeout(r, 1200));
+                continue;
+              }
+              lastErr = data?.error || `Server temporarily busy (HTTP ${res.status}). Retrying...`;
+              break;
+            }
+            if (data.recruitment) {
+              setRecruitment((prev) => mergeSnapshotsFromPrev(prev, data.recruitment));
+              setErrorMsg("");
+              const firstCand = data.recruitment.candidates?.[0];
+              if (firstCand) {
+                setSelectedCandidateId((prev) => prev || firstCand.id);
+              }
+              const firstSess = data.recruitment.aiInterviewSessions?.[0];
+              if (firstSess) {
+                setSelectedSessionId((prev) => prev || firstSess.id);
+              }
+              return;
+            }
+          } catch (netErr) {
+            lastErr = (netErr as Error).message || "Network request interrupted.";
+            if (attempt < 3) {
+              await new Promise((r) => setTimeout(r, 1200));
+            }
+          }
+        }
+        if (lastErr && !silent) {
+          setErrorMsg(lastErr);
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [mergeSnapshotsFromPrev]
+  );
 
   useEffect(() => {
-    void fetchRecruitmentData();
-  }, [fetchRecruitmentData]);
+    void fetchRecruitmentData(Boolean(initialRecruitment));
+  }, [fetchRecruitmentData, initialRecruitment]);
 
   const postAction = async (payload: Record<string, unknown>, successToast?: string) => {
     setBusyAction(String(payload.action || "working"));
@@ -313,7 +365,7 @@ export default function RecruitmentModuleViews({
             return null;
           }
           if (data.recruitment) {
-            setRecruitment(data.recruitment);
+            setRecruitment((prev) => mergeSnapshotsFromPrev(prev, data.recruitment));
           }
           if (successToast) showToast(successToast);
           return data;

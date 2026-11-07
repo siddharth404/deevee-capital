@@ -23,7 +23,14 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getAuthenticatedUser } from "@/lib/workspace/auth";
-import { deleteSessionFromFirestore, getWorkspaceDb, recordAuditAndActivity, saveSingleCandidateSessionToFirestore, saveWorkspaceDb } from "@/lib/workspace/db";
+import {
+  deleteSessionFromFirestore,
+  getWorkspaceDb,
+  recordAuditAndActivity,
+  saveRecruitmentMetadataAndCandidatesToFirestore,
+  saveSingleCandidateSessionToFirestore,
+  saveWorkspaceDb,
+} from "@/lib/workspace/db";
 import { sendAssessmentContinuationEmail, sendRecruitmentAssessmentEmail } from "@/lib/email";
 import {
   buildCandidatesFromWorkbookRows,
@@ -149,7 +156,8 @@ function ensureEmailTemplatesUpToDate(rec: RecruitmentModuleState): boolean {
         current &&
         (current.bodyText?.includes("through the IIM Amritsar placement process") ||
           current.bodyText?.includes("48-hour window") ||
-          !current.bodyText?.includes("{{candidatePassword}}"))
+          (defTpl.bodyText.includes("{{candidatePassword}}") &&
+            !current.bodyText?.includes("{{candidatePassword}}")))
       ) {
         rec.emailTemplates[idx] = { ...defTpl };
         templatesChanged = true;
@@ -213,11 +221,11 @@ export async function GET(request: NextRequest) {
   const db = await getWorkspaceDb();
   if (!db.recruitment || !db.recruitment.candidates?.length) {
     db.recruitment = buildInitialRecruitmentState();
-    await saveWorkspaceDb(db);
+    void saveRecruitmentMetadataAndCandidatesToFirestore(db);
   } else {
     const templatesChanged = ensureEmailTemplatesUpToDate(db.recruitment);
     if (templatesChanged) {
-      await saveWorkspaceDb(db);
+      void saveRecruitmentMetadataAndCandidatesToFirestore(db);
     }
   }
 
@@ -352,76 +360,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Ensure Himanshu Ojha (cand-iim-28, DVC-IIMA-028) reported by Placecom has his active session recovered in Firestore
-  const rec = db.recruitment;
-  if (!Array.isArray(rec.aiInterviewSessions)) {
-    rec.aiInterviewSessions = [];
-  }
-  const himanshuCand = rec.candidates.find((c) => c.id === "cand-iim-28" || c.candidateCode === "DVC-IIMA-028");
-  if (
-    himanshuCand &&
-    !rec.aiInterviewSessions.some(
-      (s) => s.candidateId === himanshuCand.id || s.candidateCode === "DVC-IIMA-028"
-    )
-  ) {
-    const nowIso = new Date().toISOString();
-    const caseSet = selectCaseSetForCandidate(himanshuCand);
-    const turns = generatePersonalizedInterviewTurns(himanshuCand);
-    if (turns[0]) {
-      turns[0].candidateAnswer =
-        "During my time at PSRD&Co., which was a CA firm, we were auditing a Maharashtra Government Scheme where salaries being given and stationery amounts were hiked up, and I was the one who found out the discrepancy. Initially I did not know how to approach the Scheme coordinators, so I reached out to my CA who guided me and taught me the structured ways to approach and verify the problem.";
-      turns[0].wordCount = turns[0].candidateAnswer.split(/\s+/).filter(Boolean).length;
-    }
-    const proctoring = createInitialProctoringTelemetry();
-    proctoring.webcamEnabled = true;
-    proctoring.micEnabled = true;
-    proctoring.screenShareActive = true;
-    proctoring.fullscreenEntered = true;
-    proctoring.lastHeartbeatAt = nowIso;
-    const recoveredSess: AIInterviewSessionRecord = {
-      id: `ai-sess-${himanshuCand.id}`,
-      candidateId: himanshuCand.id,
-      candidateCode: himanshuCand.candidateCode,
-      candidateName: himanshuCand.fullName,
-      candidateEmail: himanshuCand.email,
-      status: "Phase 1: Resume Probe",
-      assignedCaseSetId: caseSet.id,
-      startedAt: nowIso,
-      completedAt: null,
-      totalDurationSeconds: 715,
-      timeLimitMinutes: rec.settings.aiInterviewDurationMinutes || 45,
-      turns,
-      currentTurnIndex: 0,
-      startupTaskSubmission: null,
-      proctoring,
-      scoringBreakdown: evaluateCompleteAIInterviewSession(
-        {
-          id: `ai-sess-${himanshuCand.id}`,
-          candidateId: himanshuCand.id,
-          candidateCode: himanshuCand.candidateCode,
-          candidateName: himanshuCand.fullName,
-          candidateEmail: himanshuCand.email,
-          status: "Phase 1: Resume Probe",
-          assignedCaseSetId: caseSet.id,
-          startedAt: nowIso,
-          completedAt: null,
-          totalDurationSeconds: 715,
-          timeLimitMinutes: 45,
-          turns,
-          currentTurnIndex: 0,
-          startupTaskSubmission: null,
-          proctoring,
-          scoringBreakdown: null,
-        },
-        caseSet
-      ),
-    };
-    rec.aiInterviewSessions.unshift(recoveredSess);
-    himanshuCand.assessmentStatus = "In Progress";
-    himanshuCand.applicationStatus = "In Assessment Funnel";
-    void saveSingleCandidateSessionToFirestore(db, himanshuCand.id, true);
-  }
-
   // Automatically check and dispatch continuation emails to any student who started >=10 mins ago and is still In Progress (throttled to once every 3 mins)
   const originUrl = getCanonicalOrigin(request);
   if (Date.now() - lastAutoCheckAt > 3 * 60 * 1000) {
@@ -429,10 +367,22 @@ export async function GET(request: NextRequest) {
     void dispatchAutoContinuationReminders(db, originUrl);
   }
 
-  // Strip server-side correctOptionIndex from questions only when needed, but admins in /workspace can view everything
   return NextResponse.json({
     recruitment: db.recruitment,
   });
+}
+
+function toLightRecruitment(rec: RecruitmentModuleState): RecruitmentModuleState {
+  return {
+    ...rec,
+    aiInterviewSessions: (rec.aiInterviewSessions || []).map((s) => ({
+      ...s,
+      proctoring: {
+        ...s.proctoring,
+        snapshots: [],
+      },
+    })),
+  };
 }
 
 let isAutoDispatchRunning = false;
@@ -743,7 +693,7 @@ export async function POST(request: NextRequest) {
       newValue: `${rec.candidates.length} candidates`,
     });
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ recruitment: rec });
   }
 
@@ -826,7 +776,7 @@ export async function POST(request: NextRequest) {
     }
 
     cand.updatedAt = now;
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ candidate: cand, recruitment: rec });
   }
 
@@ -885,7 +835,7 @@ export async function POST(request: NextRequest) {
       updatedCount += 1;
     }
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ updatedCount, recruitment: rec });
   }
 
@@ -913,7 +863,7 @@ export async function POST(request: NextRequest) {
       provisionedCount += 1;
     }
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ provisionedCount, recruitment: rec });
   }
 
@@ -966,7 +916,7 @@ export async function POST(request: NextRequest) {
       sampleCand.assessmentDeadlineAt = deadlineIso;
     }
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ ok: true, updatedCount, deadlineAt: deadlineIso, recruitment: rec });
   }
 
@@ -987,7 +937,7 @@ export async function POST(request: NextRequest) {
     if (!cand.inviteToken) {
       cand.inviteToken = createCandidateInviteToken(cand.id, cand.email);
       cand.accountProvisioned = true;
-      await saveWorkspaceDb(db);
+      await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     }
 
     const effectiveDeadline =
@@ -1112,7 +1062,7 @@ export async function POST(request: NextRequest) {
     };
 
     rec.emailLogs.unshift(logEntry);
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
 
     return NextResponse.json({
       success: sendResult.success,
@@ -1219,7 +1169,7 @@ export async function POST(request: NextRequest) {
       timestamp: now,
     });
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({
       success: sendResult.success,
       mode: sendResult.mode,
@@ -1348,7 +1298,7 @@ export async function POST(request: NextRequest) {
       await new Promise((r) => setTimeout(r, 1200));
     }
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ sentCount, failedCount, errors, recruitment: rec });
   }
 
@@ -1507,12 +1457,12 @@ export async function POST(request: NextRequest) {
     cand.sessionDeleted = false;
     cand.updatedAt = now;
 
-    await saveWorkspaceDb(db);
+    await saveSingleCandidateSessionToFirestore(db, cand.id);
     return NextResponse.json({
       session: sessionRecord,
       assignedCaseSet,
       candidate: cand,
-      recruitment: rec,
+      recruitment: toLightRecruitment(rec),
     });
   }
 
@@ -1539,8 +1489,8 @@ export async function POST(request: NextRequest) {
       cand.updatedAt = now;
     }
 
-    await saveWorkspaceDb(db);
-    return NextResponse.json({ session: sess, recruitment: rec });
+    await saveSingleCandidateSessionToFirestore(db, sess.candidateId);
+    return NextResponse.json({ session: sess, recruitment: toLightRecruitment(rec) });
   }
 
   if (action === "ai_interview.delete_session") {
@@ -1592,12 +1542,12 @@ export async function POST(request: NextRequest) {
     if (targetCandidateId) {
       await deleteSessionFromFirestore(targetCandidateId);
     }
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({
       ok: true,
       deletedSessionId: sessionId,
       candidateId: targetCandidateId,
-      recruitment: rec,
+      recruitment: toLightRecruitment(rec),
     });
   }
 
@@ -1620,14 +1570,14 @@ export async function POST(request: NextRequest) {
         active: q.active ?? true,
       });
     }
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ recruitment: rec });
   }
 
   if (action === "question.delete") {
     const questionId = String(body.questionId || "");
     rec.questions = rec.questions.filter((q) => q.id !== questionId);
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ recruitment: rec });
   }
 
@@ -1645,7 +1595,7 @@ export async function POST(request: NextRequest) {
     } else {
       rec.startupCaseSets.push(caseSet);
     }
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ recruitment: rec });
   }
 
@@ -1743,7 +1693,7 @@ export async function POST(request: NextRequest) {
     cand.assessmentStatus = "Evaluated";
     cand.updatedAt = now;
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ candidate: cand, recruitment: rec });
   }
 
@@ -1788,7 +1738,7 @@ export async function POST(request: NextRequest) {
       timestamp: now,
     });
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ candidate: cand, recruitment: rec });
   }
 
@@ -1858,7 +1808,7 @@ export async function POST(request: NextRequest) {
     }
     cand.updatedAt = now;
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ interview: record, candidate: cand, recruitment: rec });
   }
 
@@ -1885,7 +1835,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await saveWorkspaceDb(db);
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
     return NextResponse.json({ recruitment: rec });
   }
 

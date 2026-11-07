@@ -921,10 +921,17 @@ export function reconcileCandidatesAndSessions(
       s.status = "Completed";
     }
 
+    if (s.proctoring?.events && s.proctoring.events.length > 15) {
+      s.proctoring.events = s.proctoring.events.slice(0, 15);
+    }
+
     sessMap.set(s.candidateId, s);
   }
 
   for (const c of candidates) {
+    if (c.activityTimeline && c.activityTimeline.length > 15) {
+      c.activityTimeline = c.activityTimeline.slice(0, 15);
+    }
     if (c.sessionDeleted) continue;
     const s = sessMap.get(c.id);
     if (!s) continue;
@@ -1449,39 +1456,6 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
     opCount += 1;
 
     if (db.recruitment) {
-      // 0. Non-destructively merge with any concurrent sessions in Firestore before saving
-      try {
-        const existingSessSnap = await firestore.collection("ai_interview_sessions").get();
-        if (!existingSessSnap.empty) {
-          const byCandId = new Map<string, AIInterviewSessionRecord>();
-          for (const s of db.recruitment.aiInterviewSessions || []) {
-            byCandId.set(s.candidateId, s);
-          }
-          const deletedCandIds = new Set(
-            (db.recruitment.candidates || [])
-              .filter((c) => c.sessionDeleted)
-              .map((c) => c.id)
-          );
-          for (const docSnap of existingSessSnap.docs) {
-            const cloudSess = docSnap.data() as AIInterviewSessionRecord;
-            if (!cloudSess?.candidateId) continue;
-            if (deletedCandIds.has(cloudSess.candidateId)) continue;
-            const localSess = byCandId.get(cloudSess.candidateId);
-            if (!localSess) {
-              if (cloudSess.candidateCode !== "DVC-SAMPLE-001" && cloudSess.candidateId !== "cand-sample-demo") {
-                byCandId.set(cloudSess.candidateId, cloudSess);
-              }
-            } else {
-              byCandId.set(cloudSess.candidateId, mergeSessionMonotonically(cloudSess, localSess));
-            }
-          }
-          db.recruitment.aiInterviewSessions = Array.from(byCandId.values());
-        }
-      } catch (mergeErr) {
-        console.warn("[Workspace DB] Pre-save session merge warning:", mergeErr);
-      }
-
-      // Ensure candidate records and scoring breakdowns stay in sync with their merged sessions
       reconcileCandidatesAndSessions(
         db.recruitment.candidates || [],
         db.recruitment.aiInterviewSessions || [],
@@ -1491,7 +1465,6 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
       const candidates = db.recruitment.candidates || [];
       const chunkSize = 40;
       const chunkCount = Math.ceil(candidates.length / chunkSize);
-      const sessions = db.recruitment.aiInterviewSessions || [];
 
       const recruitmentMeta = {
         settings: db.recruitment.settings,
@@ -1519,17 +1492,6 @@ export async function syncAllCollectionsToFirestore(db: WorkspaceDatabaseSchema)
         batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
         opCount += 1;
         if (opCount >= 200) {
-          await commitAndReset();
-        }
-      }
-
-      // Write each session as an isolated per-candidate document in ai_interview_sessions
-      for (const sess of sessions) {
-        if (!sess?.candidateId) continue;
-        const sessRef = firestore.collection("ai_interview_sessions").doc(String(sess.candidateId));
-        batch.set(sessRef, JSON.parse(JSON.stringify(sess)));
-        opCount += 1;
-        if (opCount >= 40) {
           await commitAndReset();
         }
       }
@@ -1726,17 +1688,108 @@ async function refreshRecruitmentFromFirestore(
   }
 }
 
+/**
+ * Fast persistence for Recruitment Admin mutations (settings, candidate statuses, evaluations, email logs).
+ * Writes ONLY recruitment_meta and recruitment_candidates_0..N (~80ms) instead of rewriting all 28 sessions + 21 collections.
+ */
+export async function saveRecruitmentMetadataAndCandidatesToFirestore(
+  db: WorkspaceDatabaseSchema
+): Promise<void> {
+  cachedDb = db;
+  cachedDbLoadedAt = Date.now();
+
+  if (!isFirebaseAdminConfigured()) {
+    try {
+      await fs.mkdir(DB_DIR, { recursive: true });
+      await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), {
+        encoding: "utf-8",
+        mode: 0o600,
+      });
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  const firestore = getFirebaseAdminFirestore();
+  if (!firestore || !db.recruitment) return;
+
+  try {
+    reconcileCandidatesAndSessions(
+      db.recruitment.candidates || [],
+      db.recruitment.aiInterviewSessions || [],
+      db.recruitment
+    );
+
+    const candidates = db.recruitment.candidates || [];
+    const chunkSize = 40;
+    const chunkCount = Math.ceil(candidates.length / chunkSize);
+
+    const recruitmentMeta = {
+      settings: db.recruitment.settings,
+      questions: db.recruitment.questions || [],
+      submissions: db.recruitment.submissions || [],
+      aiInterviewSessions: [],
+      sessionChunkCount: 0,
+      startupCaseSets: db.recruitment.startupCaseSets || [],
+      interviews: db.recruitment.interviews || [],
+      emailTemplates: db.recruitment.emailTemplates || [],
+      emailLogs: (db.recruitment.emailLogs || []).slice(0, 120),
+      scoreAuditLogs: (db.recruitment.scoreAuditLogs || []).slice(0, 120),
+      candidateChunkCount: chunkCount,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const batch = firestore.batch();
+    const recMetaRef = firestore.collection("workspace_settings").doc("recruitment_meta");
+    batch.set(recMetaRef, JSON.parse(JSON.stringify(recruitmentMeta)));
+
+    for (let i = 0; i < chunkCount; i++) {
+      const chunk = candidates.slice(i * chunkSize, (i + 1) * chunkSize);
+      const chunkRef = firestore
+        .collection("workspace_settings")
+        .doc(`recruitment_candidates_${i}`);
+      batch.set(chunkRef, JSON.parse(JSON.stringify({ chunkIndex: i, items: chunk })));
+    }
+
+    await batch.commit();
+  } catch (err) {
+    console.warn("[Workspace DB] Fast recruitment metadata save warning:", err);
+  }
+}
+
 async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | null> {
   if (!isFirebaseAdminConfigured()) return null;
   const firestore = getFirebaseAdminFirestore();
   if (!firestore) return null;
 
   try {
-    const [usersSnap, settingsDoc, recMetaDoc, perCandSnap] = await Promise.all([
+    const nonUserCollections = FIRESTORE_ARRAY_COLLECTIONS.filter((c) => c !== "users");
+    const [
+      usersSnap,
+      settingsDoc,
+      recMetaDoc,
+      perCandSnap,
+      candChunk0,
+      candChunk1,
+      candChunk2,
+      ...collectionSnaps
+    ] = await Promise.all([
       firestore.collection("users").get(),
       firestore.collection("workspace_settings").doc("default").get(),
       firestore.collection("workspace_settings").doc("recruitment_meta").get(),
       firestore.collection("ai_interview_sessions").get().catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_0").get().catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_1").get().catch(() => null),
+      firestore.collection("workspace_settings").doc("recruitment_candidates_2").get().catch(() => null),
+      ...nonUserCollections.map((colName) => {
+        const ref = firestore.collection(colName);
+        return (
+          colName === "activity_logs" || colName === "audit_logs"
+            ? ref.limit(40).get()
+            : ref.get()
+        ).catch(() => null);
+      }),
     ]);
     if (usersSnap.empty) return null;
 
@@ -1753,15 +1806,23 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
         candidateChunkCount?: number;
         sessionChunkCount?: number;
       };
-      const chunkCount = Number(meta.candidateChunkCount || 0);
-      const candChunkDocs = await Promise.all(
-        Array.from({ length: chunkCount }, (_, i) =>
-          firestore.collection("workspace_settings").doc(`recruitment_candidates_${i}`).get()
-        )
-      );
+      const chunkCount = Number(meta.candidateChunkCount || 2);
+      const preloadedChunks = [candChunk0, candChunk1, candChunk2];
+      const extraChunkDocs =
+        chunkCount > 3
+          ? await Promise.all(
+              Array.from({ length: chunkCount - 3 }, (_, idx) =>
+                firestore
+                  .collection("workspace_settings")
+                  .doc(`recruitment_candidates_${idx + 3}`)
+                  .get()
+              )
+            )
+          : [];
+      const allCandChunks = [...preloadedChunks.slice(0, chunkCount), ...extraChunkDocs];
       const loadedCandidates: ApplicantCandidateRecord[] = [];
-      for (const chunkDoc of candChunkDocs) {
-        if (chunkDoc.exists) {
+      for (const chunkDoc of allCandChunks) {
+        if (chunkDoc && chunkDoc.exists) {
           const data = chunkDoc.data() as { items?: ApplicantCandidateRecord[] };
           if (Array.isArray(data?.items)) {
             loadedCandidates.push(...data.items);
@@ -1781,32 +1842,6 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
             s.candidateId,
             prev ? mergeSessionMonotonically(prev, s) : s
           );
-        }
-      }
-
-      // Fallback only if ai_interview_sessions is empty
-      if (sessionByCandidateId.size === 0) {
-        const sessionChunkCount = Number(meta.sessionChunkCount || 0);
-        if (sessionChunkCount > 0) {
-          const sessChunkDocs = await Promise.all(
-            Array.from({ length: sessionChunkCount }, (_, i) =>
-              firestore.collection("workspace_settings").doc(`recruitment_sessions_${i}`).get()
-            )
-          );
-          for (const chunkDoc of sessChunkDocs) {
-            if (chunkDoc.exists) {
-              const data = chunkDoc.data() as { items?: AIInterviewSessionRecord[] };
-              if (Array.isArray(data?.items)) {
-                for (const s of data.items) {
-                  if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
-                }
-              }
-            }
-          }
-        } else if (Array.isArray(meta.aiInterviewSessions)) {
-          for (const s of meta.aiInterviewSessions) {
-            if (s?.candidateId) sessionByCandidateId.set(s.candidateId, s);
-          }
         }
       }
 
@@ -1846,16 +1881,14 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
 
     base.users = usersSnap.docs.map((d) => d.data() as WorkspaceUser);
 
-    await Promise.all(
-      FIRESTORE_ARRAY_COLLECTIONS.filter((c) => c !== "users").map(async (colName) => {
-        const snap = await firestore.collection(colName).get();
-        if (!snap.empty) {
-          (base as unknown as Record<string, unknown[]>)[colName] = snap.docs.map((d) => d.data());
-        } else {
-          (base as unknown as Record<string, unknown[]>)[colName] = [];
-        }
-      })
-    );
+    nonUserCollections.forEach((colName, idx) => {
+      const snap = collectionSnaps[idx];
+      if (snap && !snap.empty) {
+        (base as unknown as Record<string, unknown[]>)[colName] = snap.docs.map((d) => d.data());
+      } else {
+        (base as unknown as Record<string, unknown[]>)[colName] = [];
+      }
+    });
 
     if (base.pipeline_stages.length === 0) base.pipeline_stages = DEFAULT_PIPELINE_STAGES;
     if (base.saved_views.length === 0) base.saved_views = DEFAULT_SAVED_VIEWS;
@@ -1875,31 +1908,21 @@ async function loadDatabaseFromFirestore(): Promise<WorkspaceDatabaseSchema | nu
 
 let inFlightLoadPromise: Promise<WorkspaceDatabaseSchema | null> | null = null;
 let inFlightRefreshPromise: Promise<boolean> | null = null;
+let jsonlMigratedOnce = false;
 
 export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
-  const isStale = Date.now() - cachedDbLoadedAt > 8000;
-  if (!cachedDb || (isFirebaseAdminConfigured() && isStale)) {
+  const isStale = Date.now() - cachedDbLoadedAt > 15000;
+  if (!cachedDb) {
     if (isFirebaseAdminConfigured()) {
-      if (cachedDb) {
-        // Fast, low-memory refresh of recruitment docs only (avoids querying 21 non-recruitment collections)
-        if (!inFlightRefreshPromise) {
-          inFlightRefreshPromise = refreshRecruitmentFromFirestore(cachedDb).finally(() => {
-            inFlightRefreshPromise = null;
-          });
-        }
-        await inFlightRefreshPromise;
+      if (!inFlightLoadPromise) {
+        inFlightLoadPromise = loadDatabaseFromFirestore().finally(() => {
+          inFlightLoadPromise = null;
+        });
+      }
+      const fromCloud = await inFlightLoadPromise;
+      if (fromCloud) {
+        cachedDb = fromCloud;
         cachedDbLoadedAt = Date.now();
-      } else {
-        if (!inFlightLoadPromise) {
-          inFlightLoadPromise = loadDatabaseFromFirestore().finally(() => {
-            inFlightLoadPromise = null;
-          });
-        }
-        const fromCloud = await inFlightLoadPromise;
-        if (fromCloud) {
-          cachedDb = fromCloud;
-          cachedDbLoadedAt = Date.now();
-        }
       }
     }
 
@@ -1916,6 +1939,14 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
           await syncAllCollectionsToFirestore(cachedDb);
         }
       }
+    }
+  } else if (isFirebaseAdminConfigured() && isStale) {
+    // Stale-While-Revalidate: return cachedDb immediately in 0ms while refreshing recruitment docs in background
+    cachedDbLoadedAt = Date.now();
+    if (!inFlightRefreshPromise) {
+      inFlightRefreshPromise = refreshRecruitmentFromFirestore(cachedDb).finally(() => {
+        inFlightRefreshPromise = null;
+      });
     }
   }
 
@@ -1934,10 +1965,13 @@ export async function getWorkspaceDb(): Promise<WorkspaceDatabaseSchema> {
     }
   }
 
-  const jsonlRows = await readSubmissionsJsonl();
-  const migrated = syncJsonlSubmissionsIntoDb(cachedDb, jsonlRows);
-  if (migrated || recruitmentInitialized) {
-    await saveWorkspaceDb(cachedDb);
+  if (!jsonlMigratedOnce) {
+    jsonlMigratedOnce = true;
+    const jsonlRows = await readSubmissionsJsonl();
+    const migrated = syncJsonlSubmissionsIntoDb(cachedDb, jsonlRows);
+    if (migrated || recruitmentInitialized) {
+      void saveWorkspaceDb(cachedDb);
+    }
   }
 
   return cachedDb;

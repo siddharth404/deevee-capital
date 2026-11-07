@@ -136,21 +136,16 @@ function WorkspaceInner() {
       const jwt = typeof window !== "undefined" ? localStorage.getItem("dvc_workspace_jwt") : null;
       const headers: HeadersInit = jwt ? { Authorization: `Bearer ${jwt}` } : {};
 
-      const authRes = await fetch("/api/workspace/auth", { headers });
+      const [authRes, stateRes] = await Promise.all([
+        fetch("/api/workspace/auth", { headers }),
+        fetch("/api/workspace/state", { headers }),
+      ]);
       const authJson = await authRes.json();
       setAvailableAccounts(authJson.availableAccounts || []);
       setPendingInvitations(authJson.pendingInvitations || []);
       setFirebaseStatus(authJson.firebaseStatus || null);
 
-      if (!authJson.authenticated || !authJson.user) {
-        setAuthenticated(false);
-        setCurrentUser(null);
-        setLoading(false);
-        return;
-      }
-
-      const stateRes = await fetch("/api/workspace/state", { headers });
-      if (!stateRes.ok) {
+      if (!authJson.authenticated || !authJson.user || !stateRes.ok) {
         setAuthenticated(false);
         setCurrentUser(null);
         setLoading(false);
@@ -1818,6 +1813,7 @@ function WorkspaceInner() {
                   onChangeSubTab={(tab) => setActiveNav(tab)}
                   currentUserEmail={currentUser.email}
                   currentUserName={currentUser.name}
+                  initialRecruitment={dbData.recruitment}
                 />
               )}
             </>

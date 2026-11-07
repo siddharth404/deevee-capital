@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         entityName: user.name,
         summary: `${user.name} (${user.role}) signed in to the workspace`,
       });
-      await saveWorkspaceDb(db);
+      void saveWorkspaceDb(db);
 
       const token = createSignedSessionToken(user.id);
       const res = NextResponse.json({
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       }
 
       targetUser.lastLoginAt = new Date().toISOString();
-      await saveWorkspaceDb(db);
+      void saveWorkspaceDb(db);
 
       const token = createSignedSessionToken(targetUser.id);
       const res = NextResponse.json({

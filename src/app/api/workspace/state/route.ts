@@ -140,6 +140,20 @@ export async function GET(request: NextRequest) {
   const visibleAuditLogs =
     user.role === "SUPER_ADMIN" ? db.audit_logs.slice(0, 300) : [];
 
+  const lightRecruitment = db.recruitment
+    ? {
+        ...db.recruitment,
+        aiInterviewSessions: (db.recruitment.aiInterviewSessions || []).map((s) => ({
+          ...s,
+          proctoring: {
+            ...s.proctoring,
+            events: (s.proctoring?.events || []).slice(0, 10),
+            snapshots: [],
+          },
+        })),
+      }
+    : undefined;
+
   return NextResponse.json({
     ok: true,
     currentUser: sanitizeUserForClient(user),
@@ -171,6 +185,7 @@ export async function GET(request: NextRequest) {
       activity_logs: visibleActivityLogs,
       audit_logs: visibleAuditLogs,
       workspace_settings: db.workspace_settings,
+      recruitment: lightRecruitment,
     },
   });
 }
