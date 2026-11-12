@@ -961,3 +961,307 @@ https://deeveecapital.com
   return { success: true, mode: "logged_only" };
 }
 
+export interface InterviewScheduleEmailData {
+  to: string;
+  subject?: string;
+  candidateName: string;
+  candidateCode: string;
+  candidateEmail: string;
+  scheduledAtIso: string;
+  durationMinutes: number;
+  interviewerName: string;
+  roundLabel?: string;
+  meetingLink: string;
+  portalLink?: string;
+  customNote?: string;
+  isReschedule?: boolean;
+}
+
+export function formatInterviewSlotIST(
+  scheduledAtIso: string,
+  durationMinutes = 30
+): { dateLabel: string; timeRangeLabel: string; fullSlotLabel: string } {
+  const start = new Date(scheduledAtIso);
+  if (Number.isNaN(start.getTime())) {
+    return {
+      dateLabel: "To Be Confirmed",
+      timeRangeLabel: "Slot TBD",
+      fullSlotLabel: "To Be Confirmed",
+    };
+  }
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const dateLabel = start.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const startTime = start.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const endTime = end.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const timeRangeLabel = `${startTime} – ${endTime} IST`;
+  return {
+    dateLabel,
+    timeRangeLabel,
+    fullSlotLabel: `${dateLabel} • ${timeRangeLabel}`,
+  };
+}
+
+function toIcsUtcTimestamp(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function escapeIcsText(val: string): string {
+  return val
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
+export function generateInterviewIcs(data: InterviewScheduleEmailData): string {
+  const start = new Date(data.scheduledAtIso);
+  const duration = Math.max(15, data.durationMinutes || 30);
+  const end = new Date(start.getTime() + duration * 60 * 1000);
+  const nowUtc = toIcsUtcTimestamp(new Date());
+  const round = data.roundLabel || "Final Partner & Research Defence";
+  const safeMeet = sanitizeOriginLink(data.meetingLink, "https://meet.google.com/dvc-iima-defence");
+  const uid = `dvc-interview-${data.candidateCode.toLowerCase()}@deeveecapital.com`;
+
+  const descriptionLines = [
+    `Deevee Capital — ${round}`,
+    `Candidate: ${data.candidateName} (${data.candidateCode})`,
+    `Panelist: ${data.interviewerName}`,
+    `Join Meeting: ${safeMeet}`,
+    data.customNote ? `Note: ${data.customNote}` : "",
+  ].filter(Boolean);
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Deevee Capital//Recruitment OS//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${nowUtc}`,
+    `DTSTART:${toIcsUtcTimestamp(start)}`,
+    `DTEND:${toIcsUtcTimestamp(end)}`,
+    `SUMMARY:${escapeIcsText(`Deevee Capital Interview: ${data.candidateName} (${round})`)}`,
+    `DESCRIPTION:${escapeIcsText(descriptionLines.join("\n"))}`,
+    `LOCATION:${escapeIcsText(safeMeet)}`,
+    `URL:${safeMeet}`,
+    `ORGANIZER;CN=Siddharth Kaushik (Deevee Capital):mailto:siddharth@deeveecapital.com`,
+    `ATTENDEE;CN=${escapeIcsText(data.candidateName)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${data.candidateEmail}`,
+    "STATUS:CONFIRMED",
+    `SEQUENCE:${data.isReschedule ? 1 : 0}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+export async function sendInterviewScheduleEmail(
+  data: InterviewScheduleEmailData
+): Promise<{
+  success: boolean;
+  mode: "smtp" | "logged_only";
+  messageId?: string;
+  error?: string;
+}> {
+  const transporter = createSmtpTransporter();
+  const fromAddress =
+    process.env.SMTP_FROM ||
+    `"Siddharth Kaushik (Deevee Capital)" <siddharth@deeveecapital.com>`;
+
+  const safeMeet = sanitizeOriginLink(data.meetingLink, "https://meet.google.com/dvc-iima-defence");
+  const portalLink = sanitizeOriginLink(
+    data.portalLink,
+    `https://deeveecapital.com/candidate?code=${encodeURIComponent(data.candidateCode)}&email=${encodeURIComponent(data.candidateEmail)}`
+  );
+  const round = data.roundLabel || "Stage 5: Final Partner & Research Defence";
+  const duration = Math.max(15, data.durationMinutes || 30);
+  const slot = formatInterviewSlotIST(data.scheduledAtIso, duration);
+  const prefix = data.isReschedule ? "Updated Schedule: " : "";
+  const subject =
+    data.subject ||
+    `${prefix}Interview Invitation: Deevee Capital Final Partner Defence – ${data.candidateName} (${data.candidateCode})`;
+
+  const textContent = `
+Dear ${data.candidateName},
+
+${data.isReschedule ? "Your upcoming interview slot with Deevee Capital has been updated." : "Congratulations! Based on your performance in the Deevee Capital Investment Assessment, you have been shortlisted for the Final Partner & Research Defence Interview."}
+
+============================================================
+INTERVIEW SCHEDULE & JOIN DETAILS
+============================================================
+Round:       ${round}
+Date:        ${slot.dateLabel}
+Time:        ${slot.timeRangeLabel} (${duration} mins)
+Panelist:    ${data.interviewerName}
+Meeting Link: ${safeMeet}
+${data.customNote ? `\nNote from Panel: ${data.customNote}\n` : ""}
+What We Will Discuss:
+- Your Phase 3 startup investment thesis, risk trade-offs, and key diligence questions
+- How you evaluate unit economics, capital efficiency, and founder execution
+- Practical deal-sourcing curiosity & ownership for the role
+
+A calendar invite (.ics) is attached to this email so you can add it directly to Google Calendar or Outlook.
+You can also review your interview details in the Candidate Portal:
+${portalLink}
+
+Warm regards,
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+siddharth@deeveecapital.com
+https://deeveecapital.com
+`.trim();
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#070B14; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#E2E8F0;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#070B14; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width:620px; background-color:#0D1527; border:1px solid #1E293B; border-radius:16px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+          <tr>
+            <td style="padding:26px 32px 20px 32px; background:linear-gradient(180deg, #10203A 0%, #0D1527 100%); border-bottom:1px solid #1E293B;">
+              <div style="font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#34D399;">
+                Deevee Capital &bull; Final Interview Shortlist
+              </div>
+              <h1 style="margin:6px 0 0 0; font-size:20px; font-weight:700; color:#FFFFFF;">
+                ${data.isReschedule ? "Updated Interview Schedule" : round}
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px; font-size:14px; line-height:1.6; color:#CBD5E1;">
+              <p style="margin-top:0;">Dear <strong style="color:#FFFFFF;">${data.candidateName}</strong>,</p>
+              <p>
+                ${
+                  data.isReschedule
+                    ? "Please note the updated date and time for your live interview with the Deevee Capital investment team:"
+                    : "Congratulations! We were impressed by your assessment submission and would like to invite you to the <strong style=\"color:#FFFFFF;\">Final Partner &amp; Research Defence Interview</strong>."
+                }
+              </p>
+
+              <div style="margin:22px 0; padding:20px; background-color:#070B14; border:1px solid #10B981; border-radius:12px;">
+                <div style="font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#34D399; margin-bottom:12px;">
+                  Confirmed Interview Slot (${data.candidateCode})
+                </div>
+                <table role="presentation" width="100%" style="font-size:13px; line-height:1.85;">
+                  <tr>
+                    <td style="color:#94A3B8; width:130px;">Date:</td>
+                    <td style="color:#FFFFFF; font-weight:700;">${slot.dateLabel}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Time:</td>
+                    <td style="color:#38BDF8; font-weight:700;">${slot.timeRangeLabel} (${duration} mins)</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Panelist:</td>
+                    <td style="color:#FFFFFF;">${data.interviewerName}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#94A3B8;">Meeting Link:</td>
+                    <td><a href="${safeMeet}" target="_blank" style="color:#60A5FA; font-weight:600; word-break:break-all;">${safeMeet}</a></td>
+                  </tr>
+                </table>
+              </div>
+
+              ${
+                data.customNote
+                  ? `<div style="margin:16px 0; padding:12px 16px; background-color:#0F172A; border-left:3px solid #38BDF8; border-radius:6px; font-size:13px; color:#E2E8F0;"><strong>Note:</strong> ${data.customNote}</div>`
+                  : ""
+              }
+
+              <div style="text-align:center; margin:26px 0;">
+                <a href="${safeMeet}" target="_blank" style="display:inline-block; padding:14px 32px; background-color:#10B981; color:#042F2E; font-weight:800; font-size:14px; text-decoration:none; border-radius:10px;">
+                  Join Interview Call &rarr;
+                </a>
+                <div style="font-size:11px; color:#94A3B8; margin-top:10px;">
+                  A calendar invite (<code>.ics</code>) is attached &bull; <a href="${portalLink}" style="color:#60A5FA; text-decoration:none;">Open Candidate Portal</a>
+                </div>
+              </div>
+
+              <div style="margin-top:24px; padding-top:16px; border-top:1px solid #1E293B; font-size:12px; color:#94A3B8;">
+                <strong style="color:#FFFFFF;">What to Expect:</strong> Come ready to defend your Phase 3 deal choice, walk through financial &amp; operational red flags, and share how you source high-signal early-stage startups.
+              </div>
+
+              <div style="margin-top:24px; padding-top:16px; border-top:1px solid #1E293B; font-size:13px; color:#94A3B8;">
+                <strong style="color:#FFFFFF;">Siddharth Kaushik</strong><br/>
+                Managing Partner &bull; Deevee Capital<br/>
+                <a href="mailto:siddharth@deeveecapital.com" style="color:#38BDF8; text-decoration:none;">siddharth@deeveecapital.com</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`.trim();
+
+  const icsContent = generateInterviewIcs(data);
+
+  if (transporter) {
+    let activeTransporter: Transporter | null = transporter;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const info = await activeTransporter.sendMail({
+          from: fromAddress,
+          to: data.to,
+          replyTo: "siddharth@deeveecapital.com",
+          subject,
+          text: textContent,
+          html: htmlContent,
+          icalEvent: {
+            filename: `Deevee-Interview-${data.candidateCode}.ics`,
+            method: "request",
+            content: icsContent,
+          },
+        });
+        console.log(
+          `[Email] Interview schedule invite sent via SMTP to ${data.to} (${data.candidateCode}) [MessageId: ${info.messageId}]`
+        );
+        return {
+          success: true,
+          mode: "smtp",
+          messageId: info.messageId,
+        };
+      } catch (err: unknown) {
+        lastErr = err;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Email] Interview SMTP attempt ${attempt} to ${data.to} failed: ${errMsg}`);
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 2500));
+          activeTransporter = getSmtpTransporter(true);
+          if (!activeTransporter) break;
+        }
+      }
+    }
+    const errMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    return { success: false, mode: "smtp", error: errMsg };
+  }
+
+  console.log(`[Email] SMTP transporter unavailable. Logged interview invite to ${data.to}.`);
+  return { success: true, mode: "logged_only" };
+}
+
+

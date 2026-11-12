@@ -10,7 +10,10 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Copy,
   Download,
@@ -23,6 +26,8 @@ import {
   Filter,
   GraduationCap,
   HelpCircle,
+  LayoutGrid,
+  ListFilter,
   Lock,
   Mail,
   Mic,
@@ -58,6 +63,8 @@ import {
   generatePersonalizedInterviewTurns,
   selectCaseSetForCandidate,
 } from "@/lib/workspace/aiInterviewEngine";
+import InterviewScheduleModal from "./InterviewScheduleModal";
+import PartnerCallsSection from "./PartnerCallsSection";
 
 export type RecruitmentSubTab =
   | "rec-dashboard"
@@ -216,9 +223,37 @@ export default function RecruitmentModuleViews({
   const [promptInspectorCandidateId, setPromptInspectorCandidateId] = useState<string>("");
   const [copiedPromptId, setCopiedPromptId] = useState<string>("");
 
-  // Submissions & Test Sessions Filter State
-  const [submissionFilter, setSubmissionFilter] = useState<"ALL" | "REAL" | "SAMPLE">("ALL");
+  // Submissions & Test Sessions Filter / Triage State
+  const [submissionFilter, setSubmissionFilter] = useState<"ALL" | "REAL" | "SAMPLE">("REAL");
+  const [submissionCompletionFilter, setSubmissionCompletionFilter] = useState<
+    "COMPLETED" | "IN_PROGRESS" | "ALL"
+  >("COMPLETED");
+  const [submissionCohortFilter, setSubmissionCohortFilter] = useState<
+    "ALL" | "MBA" | "MSDSM"
+  >("ALL");
+  const [submissionStatusFilter, setSubmissionStatusFilter] = useState<
+    "ALL" | "PENDING_REVIEW" | "SHORTLISTED" | "SCHEDULED" | "WAITLISTED" | "REJECTED"
+  >("ALL");
+  const [submissionIntegrityFilter, setSubmissionIntegrityFilter] = useState<
+    "ALL" | "CLEAN" | "MEDIUM" | "FLAGGED"
+  >("ALL");
+  const [submissionOnlyWinner, setSubmissionOnlyWinner] = useState<boolean>(false);
+  const [submissionSort, setSubmissionSort] = useState<
+    "score_desc" | "composite_desc" | "phase3_desc" | "integrity_desc" | "recent"
+  >("score_desc");
+  const [submissionViewMode, setSubmissionViewMode] = useState<"audit" | "table">("audit");
   const [submissionSearch, setSubmissionSearch] = useState<string>("");
+  const [selectedSubmissionCandidateIds, setSelectedSubmissionCandidateIds] = useState<
+    string[]
+  >([]);
+  const [topNSelectInput, setTopNSelectInput] = useState<string>("10");
+  const [showSubmissionsSnapshots, setShowSubmissionsSnapshots] = useState<boolean>(false);
+  const [showPhase3CheatSheet, setShowPhase3CheatSheet] = useState<boolean>(false);
+  const [reviewerOverrideInput, setReviewerOverrideInput] = useState<string>("");
+  const [reviewerNotesInput, setReviewerNotesInput] = useState<string>("");
+  const [scheduleModalCandidateIds, setScheduleModalCandidateIds] = useState<
+    string[] | null
+  >(null);
 
   // Shortlisting Leaderboard Filter State
   const [shortlistingFilter, setShortlistingFilter] = useState<
@@ -431,22 +466,267 @@ export default function RecruitmentModuleViews({
     return selectCaseSetForCandidate(promptInspectorCandidate);
   }, [promptInspectorCandidate]);
 
+  const candidateByIdMap = useMemo(() => {
+    const map = new Map<string, CandidateRecord>();
+    for (const c of candidates) {
+      map.set(c.id, c);
+      map.set(c.candidateCode, c);
+    }
+    return map;
+  }, [candidates]);
+
+  const interviewByCandidateMap = useMemo(() => {
+    const map = new Map<string, RecruitmentModuleState["interviews"][number]>();
+    for (const inv of recruitment?.interviews || []) {
+      map.set(inv.candidateId, inv);
+    }
+    return map;
+  }, [recruitment?.interviews]);
+
+  const getCandidateCohort = useCallback((cand?: CandidateRecord, code?: string) => {
+    const hay = `${cand?.cohortProgram || ""} ${cand?.institution || ""} ${code || ""}`.toLowerCase();
+    return hay.includes("msdsm") || hay.includes("data science") ? "MSDSM" : "MBA";
+  }, []);
+
+  const getEffectiveSessionScore = useCallback(
+    (s: AIInterviewSessionRecord) =>
+      s.reviewerOverrideScore ?? s.scoringBreakdown?.overallAiInterviewScore ?? 0,
+    []
+  );
+
+  const getPhase3Score = useCallback((s: AIInterviewSessionRecord) => {
+    const sb = s.scoringBreakdown;
+    if (!sb) return 0;
+    return Math.round(
+      (sb.phase3Task1RedFlagAuditScore +
+        sb.phase3Task2CapitalAllocationScore +
+        sb.phase3Task3RiskAndFounderQuestionsScore) /
+        3
+    );
+  }, []);
+
   const filteredSessions = useMemo(() => {
-    return aiSessions.filter((s) => {
+    const list = aiSessions.filter((s) => {
       const isSample =
         s.candidateCode === "DVC-SAMPLE-001" ||
         s.id.includes("sample") ||
         s.candidateEmail.includes("sample");
       if (submissionFilter === "SAMPLE" && !isSample) return false;
       if (submissionFilter === "REAL" && isSample) return false;
+
+      if (submissionCompletionFilter === "COMPLETED" && s.status !== "Completed") {
+        return false;
+      }
+      if (submissionCompletionFilter === "IN_PROGRESS" && s.status === "Completed") {
+        return false;
+      }
+
+      const cand = candidateByIdMap.get(s.candidateId) || candidateByIdMap.get(s.candidateCode);
+      const cohort = getCandidateCohort(cand, s.candidateCode);
+      if (submissionCohortFilter !== "ALL" && cohort !== submissionCohortFilter) {
+        return false;
+      }
+
+      const appStatus = cand?.applicationStatus || "";
+      const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
+      if (submissionStatusFilter === "SHORTLISTED") {
+        if (
+          appStatus !== "Shortlisted for Final Interview" &&
+          appStatus !== "Interview Stage" &&
+          appStatus !== "Recommended" &&
+          appStatus !== "Selected"
+        ) {
+          return false;
+        }
+      } else if (submissionStatusFilter === "SCHEDULED") {
+        if (!inv || (inv.status !== "Scheduled" && inv.status !== "Rescheduled")) {
+          return false;
+        }
+      } else if (submissionStatusFilter === "WAITLISTED") {
+        if (appStatus !== "Waitlisted") return false;
+      } else if (submissionStatusFilter === "REJECTED") {
+        if (appStatus !== "Rejected") return false;
+      } else if (submissionStatusFilter === "PENDING_REVIEW") {
+        if (
+          appStatus === "Shortlisted for Final Interview" ||
+          appStatus === "Interview Stage" ||
+          appStatus === "Recommended" ||
+          appStatus === "Selected" ||
+          appStatus === "Waitlisted" ||
+          appStatus === "Rejected"
+        ) {
+          return false;
+        }
+      }
+
+      const integ = s.proctoring?.integrityScore ?? 0;
+      if (submissionIntegrityFilter === "CLEAN" && integ < 80) return false;
+      if (submissionIntegrityFilter === "MEDIUM" && (integ < 50 || integ >= 80)) return false;
+      if (submissionIntegrityFilter === "FLAGGED" && integ >= 50) return false;
+
+      if (submissionOnlyWinner && !s.scoringBreakdown?.pickedCorrectWinningStartup) {
+        return false;
+      }
+
       if (submissionSearch.trim()) {
         const q = submissionSearch.trim().toLowerCase();
-        const hay = `${s.candidateCode} ${s.candidateName} ${s.candidateEmail} ${s.assignedCaseSetId}`.toLowerCase();
+        const hay = `${s.candidateCode} ${s.candidateName} ${s.candidateEmail} ${s.assignedCaseSetId} ${cand?.ugDegree || ""} ${cand?.cohortProgram || ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [aiSessions, submissionFilter, submissionSearch]);
+
+    return [...list].sort((a, b) => {
+      if (submissionSort === "phase3_desc") {
+        return getPhase3Score(b) - getPhase3Score(a);
+      }
+      if (submissionSort === "integrity_desc") {
+        return (b.proctoring?.integrityScore ?? 0) - (a.proctoring?.integrityScore ?? 0);
+      }
+      if (submissionSort === "composite_desc") {
+        const ca = candidateByIdMap.get(a.candidateId) || candidateByIdMap.get(a.candidateCode);
+        const cb = candidateByIdMap.get(b.candidateId) || candidateByIdMap.get(b.candidateCode);
+        const compA = Math.round(((ca?.profileScore ?? 0) * 0.3) + (getEffectiveSessionScore(a) * 0.7));
+        const compB = Math.round(((cb?.profileScore ?? 0) * 0.3) + (getEffectiveSessionScore(b) * 0.7));
+        return compB - compA;
+      }
+      if (submissionSort === "recent") {
+        const ta = new Date(a.completedAt || a.startedAt || 0).getTime();
+        const tb = new Date(b.completedAt || b.startedAt || 0).getTime();
+        return tb - ta;
+      }
+      return getEffectiveSessionScore(b) - getEffectiveSessionScore(a);
+    });
+  }, [
+    aiSessions,
+    submissionFilter,
+    submissionCompletionFilter,
+    submissionCohortFilter,
+    submissionStatusFilter,
+    submissionIntegrityFilter,
+    submissionOnlyWinner,
+    submissionSearch,
+    submissionSort,
+    candidateByIdMap,
+    interviewByCandidateMap,
+    getCandidateCohort,
+    getEffectiveSessionScore,
+    getPhase3Score,
+  ]);
+
+  const activeAuditSession = useMemo(
+    () =>
+      filteredSessions.find((s) => s.id === selectedSessionId) ||
+      filteredSessions[0] ||
+      aiSessions.find((s) => s.id === selectedSessionId) ||
+      null,
+    [filteredSessions, aiSessions, selectedSessionId]
+  );
+
+  useEffect(() => {
+    if (!activeAuditSession) return;
+    setReviewerOverrideInput(
+      activeAuditSession.reviewerOverrideScore !== null &&
+        activeAuditSession.reviewerOverrideScore !== undefined
+        ? String(activeAuditSession.reviewerOverrideScore)
+        : ""
+    );
+    setReviewerNotesInput(activeAuditSession.reviewerNotes || "");
+  }, [activeAuditSession]);
+
+  // Keyboard navigation (J / K or ArrowDown / ArrowUp) when auditing submissions
+  useEffect(() => {
+    if (activeSubTab !== "rec-submissions" || filteredSessions.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) {
+        return;
+      }
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const curIdx = filteredSessions.findIndex((s) => s.id === (activeAuditSession?.id || ""));
+        const nextIdx = curIdx < 0 ? 0 : Math.min(filteredSessions.length - 1, curIdx + 1);
+        setSelectedSessionId(filteredSessions[nextIdx]!.id);
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const curIdx = filteredSessions.findIndex((s) => s.id === (activeAuditSession?.id || ""));
+        const prevIdx = curIdx <= 0 ? 0 : curIdx - 1;
+        setSelectedSessionId(filteredSessions[prevIdx]!.id);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeSubTab, filteredSessions, activeAuditSession]);
+
+  const exportSubmissionsCsv = (sessionsToExport: AIInterviewSessionRecord[], filePrefix = "deevee-shortlist") => {
+    const headers = [
+      "Candidate Code",
+      "Full Name",
+      "Email",
+      "Cohort",
+      "Submission Status",
+      "Decision Status",
+      "Stage 1 Profile Score",
+      "Overall AI Score",
+      "Partner Override Score",
+      "Phase 1 Resume Score",
+      "Phase 2 Startup Score",
+      "Phase 3 Task 1 Red Flags",
+      "Phase 3 Task 2 Capital Allocation",
+      "Phase 3 Task 3 Diligence",
+      "Picked Correct Winner",
+      "Integrity %",
+      "Integrity Status",
+      "Case Set",
+      "Reviewer Notes",
+      "Scheduled Interview Slot (IST)",
+      "Meeting Link",
+    ];
+    const escapeCsv = (v: unknown) => {
+      const s = String(v ?? "").replace(/"/g, '""');
+      return `"${s}"`;
+    };
+    const rows = sessionsToExport.map((s) => {
+      const cand = candidateByIdMap.get(s.candidateId) || candidateByIdMap.get(s.candidateCode);
+      const sb = s.scoringBreakdown;
+      const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
+      return [
+        s.candidateCode,
+        s.candidateName,
+        s.candidateEmail,
+        getCandidateCohort(cand, s.candidateCode),
+        s.status,
+        cand?.applicationStatus || "",
+        cand?.profileScore ?? "",
+        sb?.overallAiInterviewScore ?? "",
+        s.reviewerOverrideScore ?? "",
+        sb?.phase1ResumeProbeScore ?? "",
+        sb?.phase2StartupThinkingScore ?? "",
+        sb?.phase3Task1RedFlagAuditScore ?? "",
+        sb?.phase3Task2CapitalAllocationScore ?? "",
+        sb?.phase3Task3RiskAndFounderQuestionsScore ?? "",
+        sb?.pickedCorrectWinningStartup ? "YES" : "NO",
+        s.proctoring?.integrityScore ?? "",
+        s.proctoring?.integrityStatus ?? "",
+        s.assignedCaseSetId,
+        s.reviewerNotes || "",
+        inv?.scheduledAt ? new Date(inv.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "",
+        inv?.meetingLink || "",
+      ]
+        .map(escapeCsv)
+        .join(",");
+    });
+    const csv = [headers.map(escapeCsv).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filePrefix}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${sessionsToExport.length} candidate row(s) to CSV.`);
+  };
 
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
@@ -2398,47 +2678,336 @@ export default function RecruitmentModuleViews({
               </div>
             </div>
 
-            {/* FILTER PILLS & SEARCH */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
-              <div className="flex flex-wrap items-center gap-2">
-                {[
-                  { key: "ALL", label: `All Submissions (${aiSessions.length})` },
-                  {
-                    key: "REAL",
-                    label: `Real Candidates (${aiSessions.filter((s) => s.candidateCode !== "DVC-SAMPLE-001" && !s.id.includes("sample")).length})`,
-                  },
-                  {
-                    key: "SAMPLE",
-                    label: `Sample & Test Sessions (${aiSessions.filter((s) => s.candidateCode === "DVC-SAMPLE-001" || s.id.includes("sample")).length})`,
-                  },
-                ].map((f) => (
-                  <button
-                    key={f.key}
-                    type="button"
-                    onClick={() => setSubmissionFilter(f.key as "ALL" | "REAL" | "SAMPLE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                      submissionFilter === f.key
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
+            {/* FILTER PILLS, FACETS, SORT & VIEW TOGGLE */}
+            <div className="space-y-3 pt-2 border-t border-slate-800/80">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Completion & Cohort Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    {
+                      key: "COMPLETED",
+                      label: `Completed (${aiSessions.filter((s) => s.status === "Completed" && (submissionFilter === "ALL" || (submissionFilter === "SAMPLE" ? s.candidateCode === "DVC-SAMPLE-001" || s.id.includes("sample") : s.candidateCode !== "DVC-SAMPLE-001" && !s.id.includes("sample")))).length})`,
+                    },
+                    {
+                      key: "IN_PROGRESS",
+                      label: `In Progress (${aiSessions.filter((s) => s.status !== "Completed" && (submissionFilter === "ALL" || (submissionFilter === "SAMPLE" ? s.candidateCode === "DVC-SAMPLE-001" || s.id.includes("sample") : s.candidateCode !== "DVC-SAMPLE-001" && !s.id.includes("sample")))).length})`,
+                    },
+                    {
+                      key: "ALL",
+                      label: `All Status (${aiSessions.length})`,
+                    },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() =>
+                        setSubmissionCompletionFilter(
+                          f.key as "COMPLETED" | "IN_PROGRESS" | "ALL"
+                        )
+                      }
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        submissionCompletionFilter === f.key
+                          ? "bg-emerald-600 text-white"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+
+                  <span className="text-slate-700 px-1">|</span>
+
+                  {[
+                    { key: "REAL", label: "Real Candidates" },
+                    { key: "SAMPLE", label: "Sandbox" },
+                    { key: "ALL", label: "All Types" },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() =>
+                        setSubmissionFilter(f.key as "ALL" | "REAL" | "SAMPLE")
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        submissionFilter === f.key
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search + View Mode Toggle */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={submissionSearch}
+                      onChange={(e) => setSubmissionSearch(e.target.value)}
+                      placeholder="Search name, code, case set..."
+                      className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="inline-flex rounded-lg bg-slate-950 border border-slate-800 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSubmissionViewMode("audit")}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
+                        submissionViewMode === "audit"
+                          ? "bg-blue-600 text-white"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Split Audit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubmissionViewMode("table")}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition ${
+                        submissionViewMode === "table"
+                          ? "bg-blue-600 text-white"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <LayoutGrid className="w-3 h-3" />
+                      <span>Comparison Table</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={submissionSearch}
-                  onChange={(e) => setSubmissionSearch(e.target.value)}
-                  placeholder="Search name, code, case set..."
-                  className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-blue-500 outline-none"
-                />
+              {/* FACETED FILTERS & SORT ROW */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-800/60 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={submissionSort}
+                    onChange={(e) =>
+                      setSubmissionSort(
+                        e.target.value as
+                          | "score_desc"
+                          | "composite_desc"
+                          | "phase3_desc"
+                          | "integrity_desc"
+                          | "recent"
+                      )
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs font-medium"
+                  >
+                    <option value="score_desc">Sort: AI / Override Score (High → Low)</option>
+                    <option value="composite_desc">Sort: Composite (70% AI + 30% Stage 1)</option>
+                    <option value="phase3_desc">Sort: Phase 3 Deal Triage Score</option>
+                    <option value="integrity_desc">Sort: Proctoring Integrity %</option>
+                    <option value="recent">Sort: Most Recent Submission</option>
+                  </select>
+
+                  <select
+                    value={submissionCohortFilter}
+                    onChange={(e) =>
+                      setSubmissionCohortFilter(e.target.value as "ALL" | "MBA" | "MSDSM")
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                  >
+                    <option value="ALL">Cohort: All (MBA + MSDSM)</option>
+                    <option value="MBA">Cohort: MBA Only</option>
+                    <option value="MSDSM">Cohort: MSDSM Only</option>
+                  </select>
+
+                  <select
+                    value={submissionStatusFilter}
+                    onChange={(e) =>
+                      setSubmissionStatusFilter(
+                        e.target.value as
+                          | "ALL"
+                          | "PENDING_REVIEW"
+                          | "SHORTLISTED"
+                          | "SCHEDULED"
+                          | "WAITLISTED"
+                          | "REJECTED"
+                      )
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                  >
+                    <option value="ALL">Decision: All Statuses</option>
+                    <option value="PENDING_REVIEW">Decision: Pending Review Only</option>
+                    <option value="SHORTLISTED">Decision: Shortlisted / Interviewing</option>
+                    <option value="SCHEDULED">Decision: Interview Scheduled</option>
+                    <option value="WAITLISTED">Decision: Waitlisted</option>
+                    <option value="REJECTED">Decision: Rejected</option>
+                  </select>
+
+                  <select
+                    value={submissionIntegrityFilter}
+                    onChange={(e) =>
+                      setSubmissionIntegrityFilter(
+                        e.target.value as "ALL" | "CLEAN" | "MEDIUM" | "FLAGGED"
+                      )
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                  >
+                    <option value="ALL">Proctoring: All Integrity</option>
+                    <option value="CLEAN">Clean Only (&ge; 80%)</option>
+                    <option value="MEDIUM">Moderate (50–79%)</option>
+                    <option value="FLAGGED">Flagged (&lt; 50%)</option>
+                  </select>
+
+                  <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={submissionOnlyWinner}
+                      onChange={(e) => setSubmissionOnlyWinner(e.target.checked)}
+                      className="rounded border-slate-700 text-emerald-500 focus:ring-0"
+                    />
+                    <span>Winner Picked ✓ Only</span>
+                  </label>
+                </div>
+
+                {/* QUICK SELECTION & CSV EXPORT HELPERS */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                    <span className="text-[11px] text-slate-400">Select Top</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={topNSelectInput}
+                      onChange={(e) => setTopNSelectInput(e.target.value)}
+                      className="w-10 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-center text-white text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const n = Math.max(1, Number(topNSelectInput) || 10);
+                        const ids = filteredSessions
+                          .slice(0, n)
+                          .map((s) => s.candidateId);
+                        setSelectedSubmissionCandidateIds(ids);
+                        showToast(`Selected top ${ids.length} filtered candidates.`);
+                      }}
+                      className="px-2 py-0.5 rounded bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-[11px] font-semibold"
+                    >
+                      Go
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      exportSubmissionsCsv(filteredSessions, "deevee-filtered-submissions")
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1"
+                  >
+                    <Download className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Export CSV ({filteredSessions.length})</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* STICKY BULK ACTION BAR WHEN CANDIDATES ARE CHECKED */}
+          {selectedSubmissionCandidateIds.length > 0 && (
+            <div className="sticky top-2 z-30 p-3.5 rounded-2xl bg-slate-950/95 backdrop-blur border border-emerald-500/40 shadow-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  {selectedSubmissionCandidateIds.length} Selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubmissionCandidateIds([])}
+                  className="text-slate-400 hover:text-white underline text-[11px]"
+                >
+                  Clear selection
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await postAction(
+                      {
+                        action: "candidate.bulk_action",
+                        bulkType: "set_selection_status",
+                        candidateIds: selectedSubmissionCandidateIds,
+                        applicationStatus: "Shortlisted for Final Interview",
+                      },
+                      `Shortlisted ${selectedSubmissionCandidateIds.length} candidate(s) for Final Interview!`
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Bulk Shortlist</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setScheduleModalCandidateIds(selectedSubmissionCandidateIds)
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Batch Schedule Interviews &amp; Email ({selectedSubmissionCandidateIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await postAction(
+                      {
+                        action: "candidate.bulk_action",
+                        bulkType: "set_selection_status",
+                        candidateIds: selectedSubmissionCandidateIds,
+                        applicationStatus: "Waitlisted",
+                      },
+                      `Waitlisted ${selectedSubmissionCandidateIds.length} candidate(s).`
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 font-semibold"
+                >
+                  Waitlist
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await postAction(
+                      {
+                        action: "candidate.bulk_action",
+                        bulkType: "set_selection_status",
+                        candidateIds: selectedSubmissionCandidateIds,
+                        applicationStatus: "Rejected",
+                      },
+                      `Marked ${selectedSubmissionCandidateIds.length} candidate(s) as Rejected.`
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-semibold"
+                >
+                  Reject
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selectedSet = new Set(selectedSubmissionCandidateIds);
+                    exportSubmissionsCsv(
+                      filteredSessions.filter((s) => selectedSet.has(s.candidateId)),
+                      "deevee-selected-candidates"
+                    );
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>CSV</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {filteredSessions.length === 0 ? (
             <div className="p-8 rounded-2xl bg-slate-900/90 border border-slate-800 text-center space-y-3">
@@ -2447,44 +3016,281 @@ export default function RecruitmentModuleViews({
                 No Submissions Match Current Filter
               </h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                No completed interview sessions match your search or filter. You can switch to All Submissions or inspect the Sample Test Submission.
+                No sessions match your current status, cohort, integrity, or search filters.
               </p>
               <button
                 type="button"
                 onClick={() => {
                   setSubmissionFilter("ALL");
+                  setSubmissionCompletionFilter("ALL");
+                  setSubmissionCohortFilter("ALL");
+                  setSubmissionStatusFilter("ALL");
+                  setSubmissionIntegrityFilter("ALL");
+                  setSubmissionOnlyWinner(false);
                   setSubmissionSearch("");
                 }}
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold"
               >
-                Reset Filters
+                Reset All Filters
               </button>
+            </div>
+          ) : submissionViewMode === "table" ? (
+            <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 overflow-x-auto">
+              <div className="flex items-center justify-between mb-3 text-xs">
+                <span className="font-bold text-white">
+                  Side-by-Side Comparison ({filteredSessions.length} candidates)
+                </span>
+                <span className="text-slate-400">
+                  Click any candidate name to open full transcript &amp; Phase 3 response audit
+                </span>
+              </div>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                    <th className="py-2 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredSessions.length > 0 &&
+                          filteredSessions.every((s) =>
+                            selectedSubmissionCandidateIds.includes(s.candidateId)
+                          )
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSubmissionCandidateIds(
+                              filteredSessions.map((s) => s.candidateId)
+                            );
+                          } else {
+                            setSelectedSubmissionCandidateIds([]);
+                          }
+                        }}
+                        className="rounded border-slate-700 bg-slate-950"
+                      />
+                    </th>
+                    <th className="py-2 px-2">Rank</th>
+                    <th className="py-2 px-2">Candidate</th>
+                    <th className="py-2 px-2">Cohort</th>
+                    <th className="py-2 px-2">Stg 1</th>
+                    <th className="py-2 px-2">Ph 1 / 2</th>
+                    <th className="py-2 px-2">Ph 3 Tasks</th>
+                    <th className="py-2 px-2">AI Score</th>
+                    <th className="py-2 px-2">Winner</th>
+                    <th className="py-2 px-2">Integrity</th>
+                    <th className="py-2 px-2">Decision</th>
+                    <th className="py-2 pl-2 text-right">Quick Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70">
+                  {filteredSessions.map((s, idx) => {
+                    const cand =
+                      candidateByIdMap.get(s.candidateId) ||
+                      candidateByIdMap.get(s.candidateCode);
+                    const cohort = getCandidateCohort(cand, s.candidateCode);
+                    const sb = s.scoringBreakdown;
+                    const effScore = getEffectiveSessionScore(s);
+                    const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
+                    const checked = selectedSubmissionCandidateIds.includes(s.candidateId);
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-800/40 transition">
+                        <td className="py-2.5 pr-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedSubmissionCandidateIds((prev) =>
+                                e.target.checked
+                                  ? [...new Set([...prev, s.candidateId])]
+                                  : prev.filter((id) => id !== s.candidateId)
+                              );
+                            }}
+                            className="rounded border-slate-700 bg-slate-950"
+                          />
+                        </td>
+                        <td className="py-2.5 px-2 font-mono font-bold text-slate-400">
+                          #{idx + 1}
+                        </td>
+                        <td className="py-2.5 px-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSessionId(s.id);
+                              setSubmissionViewMode("audit");
+                            }}
+                            className="text-left group"
+                          >
+                            <div className="font-bold text-white group-hover:text-blue-400 transition">
+                              {s.candidateName}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {s.candidateCode}
+                            </div>
+                          </button>
+                        </td>
+                        <td className="py-2.5 px-2">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              cohort === "MSDSM"
+                                ? "bg-purple-500/20 text-purple-300"
+                                : "bg-blue-500/20 text-blue-300"
+                            }`}
+                          >
+                            {cohort}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-2 font-mono text-slate-300">
+                          {cand?.profileScore ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-2 font-mono text-slate-300">
+                          {sb ? `${sb.phase1ResumeProbeScore} / ${sb.phase2StartupThinkingScore}` : "—"}
+                        </td>
+                        <td className="py-2.5 px-2 font-mono text-cyan-300">
+                          {sb
+                            ? `${sb.phase3Task1RedFlagAuditScore}/${sb.phase3Task2CapitalAllocationScore}/${sb.phase3Task3RiskAndFounderQuestionsScore}`
+                            : "—"}
+                        </td>
+                        <td className="py-2.5 px-2 font-bold text-emerald-400 font-mono">
+                          {effScore}/100
+                          {s.reviewerOverrideScore !== null &&
+                            s.reviewerOverrideScore !== undefined && (
+                              <span className="ml-1 text-[9px] text-amber-300">(Ed)</span>
+                            )}
+                        </td>
+                        <td className="py-2.5 px-2">
+                          {sb?.pickedCorrectWinningStartup ? (
+                            <span className="text-emerald-400 font-bold">YES ✓</span>
+                          ) : (
+                            <span className="text-rose-400">NO ✗</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-2 font-mono">
+                          <span
+                            className={
+                              (s.proctoring?.integrityScore ?? 0) >= 80
+                                ? "text-emerald-400"
+                                : (s.proctoring?.integrityScore ?? 0) >= 50
+                                ? "text-amber-300"
+                                : "text-rose-400"
+                            }
+                          >
+                            {s.proctoring?.integrityScore ?? 0}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              cand?.applicationStatus === "Shortlisted for Final Interview" ||
+                              cand?.applicationStatus === "Interview Stage"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : cand?.applicationStatus === "Waitlisted"
+                                ? "bg-amber-500/20 text-amber-300"
+                                : cand?.applicationStatus === "Rejected"
+                                ? "bg-rose-500/20 text-rose-300"
+                                : "bg-slate-800 text-slate-300"
+                            }`}
+                          >
+                            {inv?.status === "Scheduled"
+                              ? "Slot Booked"
+                              : cand?.applicationStatus || s.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-2 text-right whitespace-nowrap space-x-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await postAction(
+                                {
+                                  action: "candidate.update",
+                                  candidateId: s.candidateId,
+                                  updates: { applicationStatus: "Shortlisted for Final Interview" },
+                                },
+                                `Shortlisted ${s.candidateName} for Final Interview!`
+                              );
+                            }}
+                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px]"
+                          >
+                            Shortlist
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setScheduleModalCandidateIds([s.candidateId])}
+                            className="px-2 py-1 rounded bg-blue-600/25 hover:bg-blue-600/40 text-blue-200 border border-blue-500/30 font-semibold text-[11px]"
+                          >
+                            Schedule
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSessionId(s.id);
+                              setSubmissionViewMode("audit");
+                            }}
+                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px]"
+                          >
+                            Audit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* LEFT 4 COLS: SESSION LIST */}
-              <div className="lg:col-span-4 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  <span>Submissions ({filteredSessions.length})</span>
-                  <span className="text-[11px] text-slate-500 font-normal">Select to inspect</span>
+              {/* LEFT 4 COLS: COMPACT TRIAGE SESSION LIST */}
+              <div className="lg:col-span-4 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5 max-h-[82vh] overflow-y-auto">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-800">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredSessions.length > 0 &&
+                        filteredSessions.every((s) =>
+                          selectedSubmissionCandidateIds.includes(s.candidateId)
+                        )
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSubmissionCandidateIds(
+                            filteredSessions.map((s) => s.candidateId)
+                          );
+                        } else {
+                          setSelectedSubmissionCandidateIds([]);
+                        }
+                      }}
+                      className="rounded border-slate-700 bg-slate-950"
+                    />
+                    <span>Queue ({filteredSessions.length})</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-normal normal-case">
+                    Use J/K or ↑/↓ keys
+                  </span>
                 </div>
-                {filteredSessions.map((s) => {
+                {filteredSessions.map((s, idx) => {
                   const isSample =
                     s.candidateCode === "DVC-SAMPLE-001" ||
                     s.id.includes("sample") ||
                     s.candidateEmail.includes("sample");
-                  const isSelected = s.id === (selectedSessionId || filteredSessions[0]?.id);
+                  const isSelected = s.id === (activeAuditSession?.id || "");
                   const answeredCount = (s.turns || []).filter(
                     (t) => t.candidateAnswer && t.candidateAnswer.trim().length > 0
                   ).length;
-                  const liveScore = s.scoringBreakdown?.overallAiInterviewScore;
+                  const liveScore =
+                    s.reviewerOverrideScore ?? s.scoringBreakdown?.overallAiInterviewScore;
+                  const cand =
+                    candidateByIdMap.get(s.candidateId) ||
+                    candidateByIdMap.get(s.candidateCode);
+                  const cohort = getCandidateCohort(cand, s.candidateCode);
+                  const appStatus = cand?.applicationStatus || "";
+                  const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
+                  const isChecked = selectedSubmissionCandidateIds.includes(s.candidateId);
 
                   return (
-                    <button
+                    <div
                       key={s.id}
-                      type="button"
                       onClick={() => setSelectedSessionId(s.id)}
-                      className={`w-full text-left p-3 rounded-xl border text-xs transition space-y-1.5 ${
+                      className={`w-full text-left p-3 rounded-xl border text-xs transition space-y-1.5 cursor-pointer ${
                         isSelected
                           ? isSample
                             ? "bg-cyan-950/40 border-cyan-500/60 text-white"
@@ -2492,19 +3298,37 @@ export default function RecruitmentModuleViews({
                           : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] text-blue-400 font-bold">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              setSelectedSubmissionCandidateIds((prev) =>
+                                e.target.checked
+                                  ? [...new Set([...prev, s.candidateId])]
+                                  : prev.filter((id) => id !== s.candidateId)
+                              );
+                            }}
+                            className="rounded border-slate-700 bg-slate-900 shrink-0"
+                          />
+                          <span className="font-mono text-[10px] text-slate-500">#{idx + 1}</span>
+                          <span className="font-mono text-[11px] text-blue-400 font-bold truncate">
                             {s.candidateCode}
                           </span>
-                          {isSample && (
-                            <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-sans font-semibold border border-cyan-500/30">
-                              Sandbox
-                            </span>
-                          )}
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 ${
+                              cohort === "MSDSM"
+                                ? "bg-purple-500/20 text-purple-300"
+                                : "bg-slate-800 text-slate-300"
+                            }`}
+                          >
+                            {cohort}
+                          </span>
                         </div>
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
                             s.status === "Completed"
                               ? "bg-emerald-500/15 text-emerald-300"
                               : liveScore !== undefined
@@ -2513,13 +3337,14 @@ export default function RecruitmentModuleViews({
                           }`}
                         >
                           {s.status === "Completed"
-                            ? `Score: ${liveScore ?? "—"}/100`
+                            ? `${liveScore ?? "—"}/100`
                             : liveScore !== undefined
-                            ? `Score: ${liveScore}/100 (${answeredCount}/6 Qs)`
-                            : `Started (${answeredCount}/6 Qs)`}
+                            ? `${liveScore}/100 (${answeredCount}/6)`
+                            : `In Prog (${answeredCount}/6)`}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between">
+
+                      <div className="flex items-center justify-between gap-1">
                         <div className="font-bold text-sm text-white truncate">{s.candidateName}</div>
                         <button
                           type="button"
@@ -2534,21 +3359,62 @@ export default function RecruitmentModuleViews({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-                        <span className="truncate max-w-[130px]">{s.assignedCaseSetId}</span>
-                        <span className="font-mono text-emerald-400">
+
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] pt-0.5">
+                        <div className="flex items-center gap-1">
+                          {appStatus === "Shortlisted for Final Interview" ||
+                          appStatus === "Interview Stage" ||
+                          appStatus === "Selected" ? (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
+                              {inv?.status === "Scheduled" ? "Interview Scheduled ✓" : "Shortlisted ✓"}
+                            </span>
+                          ) : appStatus === "Waitlisted" ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold">
+                              Waitlisted
+                            </span>
+                          ) : appStatus === "Rejected" ? (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-semibold">
+                              Rejected
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                              Pending Decision
+                            </span>
+                          )}
+
+                          {s.scoringBreakdown && (
+                            <span
+                              className={`px-1.5 py-0.5 rounded font-semibold ${
+                                s.scoringBreakdown.pickedCorrectWinningStartup
+                                  ? "bg-emerald-950/60 text-emerald-400"
+                                  : "bg-rose-950/60 text-rose-400"
+                              }`}
+                            >
+                              {s.scoringBreakdown.pickedCorrectWinningStartup ? "Winner ✓" : "Winner ✗"}
+                            </span>
+                          )}
+                        </div>
+
+                        <span
+                          className={`font-mono ${
+                            (s.proctoring?.integrityScore ?? 0) >= 80
+                              ? "text-emerald-400"
+                              : (s.proctoring?.integrityScore ?? 0) >= 50
+                              ? "text-amber-300"
+                              : "text-rose-400"
+                          }`}
+                        >
                           🛡️ {s.proctoring.integrityScore}%
                         </span>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
               {/* RIGHT 8 COLS: FULL TRANSCRIPT, STARTUP TASK SCORECARD & PROCTORING LOG */}
               {(() => {
-                const sess =
-                  aiSessions.find((s) => s.id === selectedSessionId) || filteredSessions[0] || aiSessions[0];
+                const sess = activeAuditSession;
                 if (!sess) return null;
                 const sb = sess.scoringBreakdown;
                 const isSampleSess =
@@ -2558,6 +3424,10 @@ export default function RecruitmentModuleViews({
                 const targetCand = candidates.find(
                   (c) => c.id === sess.candidateId || c.candidateCode === sess.candidateCode
                 );
+                const curListIdx = filteredSessions.findIndex((x) => x.id === sess.id);
+                const activeInterview = targetCand
+                  ? interviewByCandidateMap.get(targetCand.id)
+                  : undefined;
 
                 return (
                   <div className="lg:col-span-8 space-y-5">
@@ -2639,6 +3509,212 @@ export default function RecruitmentModuleViews({
                             <span>{deletingSessionId === sess.id ? "Deleting..." : "Delete Response"}</span>
                           </button>
                         </div>
+                      </div>
+
+                      {/* STICKY TOP TRIAGE & DECISION BAR (ALWAYS ABOVE THE FOLD) */}
+                      <div className="sticky top-2 z-20 p-3.5 rounded-xl bg-slate-950/95 backdrop-blur border border-slate-700/80 shadow-lg space-y-2.5 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          {/* Quick Decision Buttons */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await postAction(
+                                  {
+                                    action: "candidate.update",
+                                    candidateId: sess.candidateId,
+                                    updates: {
+                                      applicationStatus: "Shortlisted for Final Interview",
+                                    },
+                                  },
+                                  `Shortlisted ${sess.candidateName} for Final Interview!`
+                                );
+                              }}
+                              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
+                                targetCand?.applicationStatus === "Shortlisted for Final Interview" ||
+                                targetCand?.applicationStatus === "Interview Stage"
+                                  ? "bg-emerald-600 text-white ring-2 ring-emerald-400/50"
+                                  : "bg-emerald-600/85 hover:bg-emerald-500 text-white"
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>
+                                {targetCand?.applicationStatus === "Shortlisted for Final Interview" ||
+                                targetCand?.applicationStatus === "Interview Stage"
+                                  ? "Shortlisted ✓"
+                                  : "Shortlist"}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setScheduleModalCandidateIds([
+                                  targetCand?.id || sess.candidateId,
+                                ]);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5 transition"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                              <span>
+                                {activeInterview?.status === "Scheduled"
+                                  ? "Edit Slot"
+                                  : "Schedule Interview"}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await postAction(
+                                  {
+                                    action: "candidate.update",
+                                    candidateId: sess.candidateId,
+                                    updates: { applicationStatus: "Waitlisted" },
+                                  },
+                                  `Moved ${sess.candidateName} to Waitlist`
+                                );
+                              }}
+                              className={`px-2.5 py-1.5 rounded-lg font-semibold border transition ${
+                                targetCand?.applicationStatus === "Waitlisted"
+                                  ? "bg-amber-600 text-white border-amber-400"
+                                  : "bg-amber-600/15 hover:bg-amber-600/30 text-amber-300 border-amber-500/30"
+                              }`}
+                            >
+                              Waitlist
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await postAction(
+                                  {
+                                    action: "candidate.update",
+                                    candidateId: sess.candidateId,
+                                    updates: { applicationStatus: "Rejected" },
+                                  },
+                                  `Marked ${sess.candidateName} as Rejected`
+                                );
+                              }}
+                              className={`px-2.5 py-1.5 rounded-lg font-semibold border transition ${
+                                targetCand?.applicationStatus === "Rejected"
+                                  ? "bg-rose-600 text-white border-rose-400"
+                                  : "bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 border-rose-500/30"
+                              }`}
+                            >
+                              Reject
+                            </button>
+                          </div>
+
+                          {/* Prev / Next Queue Navigator */}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={curListIdx <= 0}
+                              onClick={() => {
+                                if (curListIdx > 0) {
+                                  setSelectedSessionId(filteredSessions[curListIdx - 1]!.id);
+                                }
+                              }}
+                              className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 flex items-center gap-0.5"
+                              title="Previous candidate (K or ↑)"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                              <span>Prev</span>
+                            </button>
+                            <span className="text-[11px] font-mono text-slate-400 px-1">
+                              {curListIdx >= 0 ? curListIdx + 1 : 1}/{filteredSessions.length}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={curListIdx < 0 || curListIdx >= filteredSessions.length - 1}
+                              onClick={() => {
+                                if (curListIdx >= 0 && curListIdx < filteredSessions.length - 1) {
+                                  setSelectedSessionId(filteredSessions[curListIdx + 1]!.id);
+                                }
+                              }}
+                              className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 flex items-center gap-0.5"
+                              title="Next candidate (J or ↓)"
+                            >
+                              <span>Next</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Partner Override Score & Reviewer Notes (ai_interview.review) */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
+                              Override Score:
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              placeholder={String(sb?.overallAiInterviewScore ?? "")}
+                              value={reviewerOverrideInput}
+                              onChange={(e) => setReviewerOverrideInput(e.target.value)}
+                              className="w-16 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs font-mono"
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            value={reviewerNotesInput}
+                            onChange={(e) => setReviewerNotesInput(e.target.value)}
+                            placeholder="Partner triage note (why shortlist / waitlist / key probe for call)..."
+                            className="flex-1 min-w-[200px] px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-white text-xs placeholder:text-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const parsedOverride =
+                                reviewerOverrideInput.trim() === ""
+                                  ? null
+                                  : Math.max(0, Math.min(100, Number(reviewerOverrideInput)));
+                              await postAction(
+                                {
+                                  action: "ai_interview.review",
+                                  sessionId: sess.id,
+                                  reviewerOverrideScore: parsedOverride,
+                                  reviewerNotes: reviewerNotesInput.trim(),
+                                },
+                                `Saved review score & note for ${sess.candidateName}`
+                              );
+                            }}
+                            className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 text-[11px] font-semibold shrink-0"
+                          >
+                            Save Review
+                          </button>
+                        </div>
+
+                        {activeInterview && (
+                          <div className="text-[11px] text-emerald-300 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                            <span>
+                              📅 Scheduled:{" "}
+                              <strong>
+                                {new Date(activeInterview.scheduledAt).toLocaleString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  weekday: "short",
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </strong>{" "}
+                              ({activeInterview.durationMinutes || 30} mins) • Panel:{" "}
+                              {activeInterview.interviewerName}
+                            </span>
+                            <a
+                              href={activeInterview.meetingLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-400 hover:underline font-semibold"
+                            >
+                              Join Meet ↗
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       {/* SAMPLE SANDBOX BANNER */}
@@ -2770,32 +3846,48 @@ export default function RecruitmentModuleViews({
 
                         {sess.proctoring.snapshots && sess.proctoring.snapshots.length > 0 && (
                           <div className="pt-2 border-t border-slate-800/80">
-                            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                              Recorded Proctoring Snapshots ({sess.proctoring.snapshots.length})
-                            </div>
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                              {sess.proctoring.snapshots.map((snap, sIdx) => (
-                                <div
-                                  key={snap.id || sIdx}
-                                  className="shrink-0 rounded-lg border border-slate-800 overflow-hidden bg-black text-[10px]"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={snap.dataUrl}
-                                    alt={`Snapshot ${sIdx + 1}`}
-                                    className="w-28 h-16 object-cover"
-                                  />
-                                  <div className="p-1 text-slate-400 truncate w-28 text-[9px]">
-                                    {snap.type === "screen" ? "🖥️ Screen" : "📷 Camera"} •{" "}
-                                    {new Date(snap.timestamp).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                    })}
+                            <button
+                              type="button"
+                              onClick={() => setShowSubmissionsSnapshots((v) => !v)}
+                              className="w-full flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition"
+                            >
+                              <span>
+                                Recorded Proctoring Snapshots ({sess.proctoring.snapshots.length})
+                              </span>
+                              <span className="flex items-center gap-1 text-cyan-400 font-normal normal-case">
+                                <span>{showSubmissionsSnapshots ? "Hide" : "Show"}</span>
+                                {showSubmissionsSnapshots ? (
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                )}
+                              </span>
+                            </button>
+                            {showSubmissionsSnapshots && (
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-2 no-scrollbar">
+                                {sess.proctoring.snapshots.map((snap, sIdx) => (
+                                  <div
+                                    key={snap.id || sIdx}
+                                    className="shrink-0 rounded-lg border border-slate-800 overflow-hidden bg-black text-[10px]"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={snap.dataUrl}
+                                      alt={`Snapshot ${sIdx + 1}`}
+                                      className="w-28 h-16 object-cover"
+                                    />
+                                    <div className="p-1 text-slate-400 truncate w-28 text-[9px]">
+                                      {snap.type === "screen" ? "🖥️ Screen" : "📷 Camera"} •{" "}
+                                      {new Date(snap.timestamp).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        second: "2-digit",
+                                      })}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2875,104 +3967,115 @@ export default function RecruitmentModuleViews({
 
                             {/* INTERVIEWER BRIEFING: THE 3 STARTUPS GIVEN TO THE CANDIDATE */}
                             <div className="space-y-2">
-                              <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => setShowPhase3CheatSheet((v) => !v)}
+                                className="w-full p-2.5 rounded-lg bg-slate-950/70 border border-cyan-500/25 hover:border-cyan-500/50 text-[11px] font-bold uppercase tracking-wider text-cyan-300 flex items-center justify-between transition"
+                              >
                                 <span>
-                                  📋 Interviewer Cheat-Sheet: The 3 Startups & Data Room Numbers Given to Candidate
+                                  📋 Interviewer Cheat-Sheet: 3 Startups &amp; Data Room Ledger ({assignedCaseSet.title.split("—")[0]})
                                 </span>
-                                <span className="text-[10px] font-normal text-slate-400">
-                                  For interviewers who haven&apos;t read {assignedCaseSet.title.split("—")[0]}
+                                <span className="flex items-center gap-1 text-[10px] font-semibold text-cyan-200 normal-case">
+                                  <span>{showPhase3CheatSheet ? "Hide Reference Key" : "Expand Reference Key"}</span>
+                                  {showPhase3CheatSheet ? (
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  )}
                                 </span>
-                              </div>
-                              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-                                {assignedCaseSet.startups.map((st) => {
-                                  const isWinner =
-                                    st.groundTruthClassification === "BEST_INVESTMENT_CANDIDATE";
-                                  const isArrTrap =
-                                    st.groundTruthClassification === "TRAP_INFLATED_ARR";
-                                  return (
-                                    <div
-                                      key={st.id}
-                                      className={`p-3 rounded-xl border space-y-2 ${
-                                        isWinner
-                                          ? "bg-emerald-950/25 border-emerald-500/40"
-                                          : isArrTrap
-                                          ? "bg-amber-950/20 border-amber-500/35"
-                                          : "bg-rose-950/20 border-rose-500/35"
-                                      }`}
-                                    >
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="font-bold text-white text-xs">
-                                            {st.code.replace("_", " ")}: {st.name}
-                                          </div>
-                                          <div className="text-[10px] text-slate-400">
-                                            {st.sector} • Ask: {st.askAmountINR} ({st.proposedValuationINR})
-                                          </div>
-                                        </div>
-                                        <span
-                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
-                                            isWinner
-                                              ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                                              : isArrTrap
-                                              ? "bg-amber-500/25 text-amber-300 border border-amber-500/40"
-                                              : "bg-rose-500/25 text-rose-300 border border-rose-500/40"
-                                          }`}
-                                        >
-                                          {isWinner
-                                            ? "✓ True ₹1Cr Winner"
+                              </button>
+                              {showPhase3CheatSheet && (
+                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 pt-1">
+                                  {assignedCaseSet.startups.map((st) => {
+                                    const isWinner =
+                                      st.groundTruthClassification === "BEST_INVESTMENT_CANDIDATE";
+                                    const isArrTrap =
+                                      st.groundTruthClassification === "TRAP_INFLATED_ARR";
+                                    return (
+                                      <div
+                                        key={st.id}
+                                        className={`p-3 rounded-xl border space-y-2 ${
+                                          isWinner
+                                            ? "bg-emerald-950/25 border-emerald-500/40"
                                             : isArrTrap
-                                            ? "⚠️ Inflated ARR Trap"
-                                            : "🚨 Unit Econ Trap"}
-                                        </span>
-                                      </div>
-
-                                      <div className="p-2 rounded bg-slate-950/80 border border-slate-800/80 text-[11px]">
-                                        <span className="text-slate-400 font-semibold">
-                                          Founder Pitch Claim:{" "}
-                                        </span>
-                                        <span className="text-slate-200 italic">
-                                          {st.founderHeadlineClaim}
-                                        </span>
-                                      </div>
-
-                                      <div className="space-y-1">
-                                        <div className="text-[10px] font-semibold uppercase text-slate-400">
-                                          Verified Data Room Ledger vs. Deck Claim:
-                                        </div>
-                                        {st.financialMetricsTable.map((m, mIdx) => (
-                                          <div
-                                            key={mIdx}
-                                            className="p-1.5 rounded bg-slate-950/60 border border-slate-800/60 text-[10px] space-y-0.5"
-                                          >
-                                            <div className="font-semibold text-slate-300">
-                                              {m.metric}
+                                            ? "bg-amber-950/20 border-amber-500/35"
+                                            : "bg-rose-950/20 border-rose-500/35"
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div>
+                                            <div className="font-bold text-white text-xs">
+                                              {st.code.replace("_", " ")}: {st.name}
                                             </div>
-                                            <div className="text-slate-400">
-                                              Deck: <span className="line-through">{m.founderDeckValue}</span>{" "}
-                                              →{" "}
-                                              <strong className="text-white">
-                                                Actual: {m.dataRoomVerifiedValue}
-                                              </strong>
-                                            </div>
-                                            <div className="text-amber-300/90">
-                                              Footnote: {m.auditFootnote}
+                                            <div className="text-[10px] text-slate-400">
+                                              {st.sector} • Ask: {st.askAmountINR} ({st.proposedValuationINR})
                                             </div>
                                           </div>
-                                        ))}
-                                      </div>
+                                          <span
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
+                                              isWinner
+                                                ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                                                : isArrTrap
+                                                ? "bg-amber-500/25 text-amber-300 border border-amber-500/40"
+                                                : "bg-rose-500/25 text-rose-300 border border-rose-500/40"
+                                            }`}
+                                          >
+                                            {isWinner
+                                              ? "✓ True ₹1Cr Winner"
+                                              : isArrTrap
+                                              ? "⚠️ Inflated ARR Trap"
+                                              : "🚨 Unit Econ Trap"}
+                                          </span>
+                                        </div>
 
-                                      <div className="pt-1 border-t border-slate-800/70 text-[10px]">
-                                        <span className="font-semibold text-rose-300">
-                                          Hidden Red Flags to Spot:{" "}
-                                        </span>
-                                        <span className="text-slate-300">
-                                          {st.hiddenRedFlags.join(" • ")}
-                                        </span>
+                                        <div className="p-2 rounded bg-slate-950/80 border border-slate-800/80 text-[11px]">
+                                          <span className="text-slate-400 font-semibold">
+                                            Founder Pitch Claim:{" "}
+                                          </span>
+                                          <span className="text-slate-200 italic">
+                                            {st.founderHeadlineClaim}
+                                          </span>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <div className="text-[10px] font-semibold uppercase text-slate-400">
+                                            Verified Data Room Ledger vs. Deck Claim:
+                                          </div>
+                                          {st.financialMetricsTable.map((m, mIdx) => (
+                                            <div
+                                              key={mIdx}
+                                              className="p-1.5 rounded bg-slate-950/60 border border-slate-800/60 text-[10px] space-y-0.5"
+                                            >
+                                              <div className="font-semibold text-slate-300">
+                                                {m.metric}
+                                              </div>
+                                              <div className="text-slate-400">
+                                                Deck: <span className="line-through">{m.founderDeckValue}</span>{" "}
+                                                →{" "}
+                                                <strong className="text-white">
+                                                  Actual: {m.dataRoomVerifiedValue}
+                                                </strong>
+                                              </div>
+                                              <div className="text-amber-300/90">
+                                                Footnote: {m.auditFootnote}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+
+                                        <div className="pt-1 border-t border-slate-800/70 text-[10px]">
+                                          <span className="font-semibold text-rose-300">
+                                            Hidden Red Flags to Spot:{" "}
+                                          </span>
+                                          <span className="text-slate-300">
+                                            {st.hiddenRedFlags.join(" • ")}
+                                          </span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
 
                             {/* CANDIDATE SUBMISSION VS MODEL ANSWERS */}
@@ -3361,13 +4464,12 @@ export default function RecruitmentModuleViews({
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedCandidateId(sess.candidateId);
-                              onChangeSubTab("rec-interviews");
+                              setScheduleModalCandidateIds([sess.candidateId]);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 border border-blue-500/30 font-semibold text-xs flex items-center gap-1"
                           >
+                            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
                             <span>Schedule Call</span>
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                           </button>
 
                           <button
@@ -4051,14 +5153,13 @@ export default function RecruitmentModuleViews({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setSelectedCandidateId(c.id);
-                                      onChangeSubTab("rec-interviews");
+                                      setScheduleModalCandidateIds([c.id]);
                                     }}
                                     className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold inline-flex items-center gap-1"
-                                    title="Schedule Partner Defence Interview"
+                                    title="Schedule Partner Defence Interview & Send Calendar Invite"
                                   >
+                                    <Calendar className="w-3 h-3 text-cyan-400" />
                                     <span>Schedule Call</span>
-                                    <ChevronRight className="w-3 h-3 text-slate-400" />
                                   </button>
 
                                   <button
@@ -4503,119 +5604,29 @@ export default function RecruitmentModuleViews({
       })()}
 
       {/* =====================================================================
-          9. FINAL PARTNER INTERVIEWS (STAGE 5 RESEARCH DEFENCE)
+          9. FINAL PARTNER INTERVIEWS (STAGE 5 PIPELINE & RESEARCH DEFENCE)
          ===================================================================== */}
       {activeSubTab === "rec-interviews" && selectedCandidate && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-6 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 text-xs">
-            <div className="font-bold text-base text-white">
-              Schedule / Score Final Partner Defence Interview
-            </div>
-            <select
-              value={selectedCandidate.id}
-              onChange={(e) => setSelectedCandidateId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
-            >
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.candidateCode} — {c.fullName}
-                </option>
-              ))}
-            </select>
-
-            <div>
-              <label className="block text-slate-400 mb-1">Google Meet / Zoom Link</label>
-              <input
-                type="text"
-                value={intMeetingLink}
-                onChange={(e) => setIntMeetingLink(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-400 mb-1">
-                Overall Partner Defence Score ({intScore}/100)
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={intScore}
-                onChange={(e) => setIntScore(Number(e.target.value))}
-                className="w-full accent-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-400 mb-1">
-                Research Defence & AI Verification Notes
-              </label>
-              <textarea
-                rows={3}
-                value={intNotes}
-                onChange={(e) => setIntNotes(e.target.value)}
-                placeholder="Notes on how the candidate defended their startup thesis and what they could/could not verify..."
-                className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-white"
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <select
-                value={intDecision}
-                onChange={(e) =>
-                  setIntDecision(
-                    e.target.value as "Strong Hire" | "Hire" | "Waitlist" | "No Hire"
-                  )
-                }
-                className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white"
-              >
-                <option value="Strong Hire">Strong Hire</option>
-                <option value="Hire">Hire</option>
-                <option value="Waitlist">Waitlist</option>
-                <option value="No Hire">No Hire</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  await postAction(
-                    {
-                      action: "interview.save",
-                      interview: {
-                        candidateId: selectedCandidate.id,
-                        meetingLink: intMeetingLink,
-                        status: "Completed",
-                        overallInterviewScore: intScore,
-                        overallNotes: intNotes,
-                        decisionRecommendation: intDecision,
-                      },
-                    },
-                    `Recorded Stage 5 Partner Interview scorecard for ${selectedCandidate.fullName}`
-                  );
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold"
-              >
-                Save Interview Scorecard
-              </button>
-            </div>
-          </div>
-
-          <div className="lg:col-span-6 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 text-xs">
-            <div className="font-bold text-base text-white">
-              Standard Deevee Capital Research Defence Question Guide
-            </div>
-            <ol className="list-decimal list-inside space-y-2 text-slate-300 leading-relaxed">
-              <li>Why did you choose this startup over the other two in the Data Room?</li>
-              <li>How did you verify its billed revenue vs founder pitch claims?</li>
-              <li>What are the two biggest operational or working-capital risks in this business?</li>
-              <li>Who is the most dangerous competitor or unorganised substitute?</li>
-              <li>What could you NOT verify from public data, and how would you test it on a call?</li>
-              <li>Would you invest ₹25 Lakhs of Deevee Capital&apos;s money today? Under what milestone conditions?</li>
-              <li>Which exact metrics were cross-checked independently without relying on AI summaries?</li>
-            </ol>
-          </div>
-        </div>
+        <PartnerCallsSection
+          candidates={candidates}
+          interviews={recruitment?.interviews || []}
+          aiSessions={aiSessions}
+          selectedCandidate={selectedCandidate}
+          setSelectedCandidateId={setSelectedCandidateId}
+          setSelectedSessionId={setSelectedSessionId}
+          onChangeSubTab={(tab) => onChangeSubTab(tab)}
+          onOpenScheduleModal={(ids) => setScheduleModalCandidateIds(ids)}
+          intMeetingLink={intMeetingLink}
+          setIntMeetingLink={setIntMeetingLink}
+          intScore={intScore}
+          setIntScore={setIntScore}
+          intNotes={intNotes}
+          setIntNotes={setIntNotes}
+          intDecision={intDecision}
+          setIntDecision={setIntDecision}
+          postAction={postAction}
+          showToast={showToast}
+        />
       )}
 
       {/* =====================================================================
@@ -5901,6 +6912,21 @@ export default function RecruitmentModuleViews({
           </div>
         </div>
       )}
+
+      {/* INTERVIEW SCHEDULE & INVITE MODAL (SINGLE OR BATCH) */}
+      <InterviewScheduleModal
+        isOpen={Boolean(scheduleModalCandidateIds && scheduleModalCandidateIds.length > 0)}
+        onClose={() => setScheduleModalCandidateIds(null)}
+        candidates={
+          scheduleModalCandidateIds
+            ? candidates.filter((c) => scheduleModalCandidateIds.includes(c.id))
+            : []
+        }
+        existingInterviews={recruitment?.interviews || []}
+        defaultMeetingLink={intMeetingLink}
+        postAction={postAction}
+        showToast={showToast}
+      />
     </div>
   );
 }

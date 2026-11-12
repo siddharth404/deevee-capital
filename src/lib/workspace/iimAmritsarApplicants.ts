@@ -3713,20 +3713,30 @@ Deevee Capital`,
     id: "tpl-interview-invite",
     name: "Stage 5: Interview & Research Defence Invitation",
     stageTrigger: "Stage 5: Interview & Defence",
-    subject: "Interview Invitation: Deevee Capital Research Defence – {{candidateName}} ({{candidateCode}})",
+    subject: "Interview Invitation: Deevee Capital Final Partner Defence – {{candidateName}} ({{candidateCode}})",
     bodyText: `Dear {{candidateName}},
 
-We were impressed by your startup research submission and would like to invite you to Stage 5: Live Interview & Research Defence with the Deevee Capital Investment Team.
+Congratulations! Based on your performance in the Deevee Capital Investment Assessment, you have been shortlisted for the Final Partner & Research Defence Interview.
 
-During this 45-minute session, we will discuss the startups you sourced, your market sizing methodology, what you could not verify, and how you evaluate investment risks.
+============================================================
+INTERVIEW SCHEDULE & MEETING DETAILS
+============================================================
+• Round:       Stage 5: Final Partner & Research Defence
+• Date & Time: {{interviewSlot}}
+• Duration:    {{interviewDuration}}
+• Panelist:    {{interviewerName}}
+• Meet Link:   {{meetingLink}}
 
-Please check the Candidate Portal for your scheduled slot and meeting link:
+During this session, we will discuss your startup thesis, financial/unit-economics reasoning, risk identification, and practical investing judgement.
+
+A calendar invite (.ics) is attached to this email. You can also view your interview details and join link directly from the Candidate Portal:
 {{portalInviteUrl}}
 
 Warm regards,
-Investment & Talent Team
-Deevee Capital`,
-    updatedAt: "2026-11-06T00:00:00.000Z",
+Siddharth Kaushik
+Managing Partner | Deevee Capital
+siddharth@deeveecapital.com`,
+    updatedAt: "2026-11-13T00:00:00.000Z",
   },
   {
     id: "tpl-selection-offer",

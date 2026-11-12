@@ -105,7 +105,24 @@ function verifyCandidateSessionToken(token?: string | null): string | null {
   return candidateId;
 }
 
-function sanitizeCandidateForPortal(cand: CandidateRecord) {
+function sanitizeCandidateForPortal(
+  cand: CandidateRecord,
+  interviews?: Array<{
+    candidateId: string;
+    scheduledAt: string;
+    durationMinutes?: number;
+    roundLabel?: string;
+    meetingLink: string;
+    interviewerName: string;
+    schedulingNote?: string;
+    status: string;
+  }>
+) {
+  const activeInt = (interviews || []).find(
+    (i) =>
+      i.candidateId === cand.id &&
+      (i.status === "Scheduled" || i.status === "Rescheduled")
+  );
   return {
     id: cand.id,
     candidateCode: cand.candidateCode,
@@ -129,6 +146,17 @@ function sanitizeCandidateForPortal(cand: CandidateRecord) {
     assessmentStatus: cand.assessmentStatus,
     passwordConfigured: cand.passwordConfigured,
     assessmentDeadlineAt: cand.assessmentDeadlineAt,
+    scheduledInterview: activeInt
+      ? {
+          scheduledAt: activeInt.scheduledAt,
+          durationMinutes: activeInt.durationMinutes || 30,
+          roundLabel: activeInt.roundLabel || "Stage 5: Final Partner & Research Defence",
+          meetingLink: activeInt.meetingLink,
+          interviewerName: activeInt.interviewerName,
+          schedulingNote: activeInt.schedulingNote || "",
+          status: activeInt.status,
+        }
+      : null,
   };
 }
 
@@ -328,7 +356,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     authenticated: true,
     sessionToken: autoSessionToken,
-    candidate: sanitizeCandidateForPortal(cand),
+    candidate: sanitizeCandidateForPortal(cand, rec.interviews),
     campaign: {
       title: rec.settings.campaignTitle,
       institution: rec.settings.institution,
@@ -545,7 +573,7 @@ export async function POST(request: NextRequest) {
     const sessionToken = createCandidateSessionToken(cand.id);
     return NextResponse.json({
       sessionToken,
-      candidate: sanitizeCandidateForPortal(cand),
+      candidate: sanitizeCandidateForPortal(cand, rec.interviews),
     });
   }
 
@@ -625,7 +653,7 @@ export async function POST(request: NextRequest) {
     const sessionToken = createCandidateSessionToken(cand.id);
     return NextResponse.json({
       sessionToken,
-      candidate: sanitizeCandidateForPortal(cand),
+      candidate: sanitizeCandidateForPortal(cand, rec.interviews),
     });
   }
 

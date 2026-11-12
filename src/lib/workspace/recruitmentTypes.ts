@@ -502,7 +502,12 @@ export interface InterviewEvaluationRecord {
   interviewerId: string;
   interviewerName: string;
   scheduledAt: string;
+  durationMinutes?: number;
+  roundLabel?: string;
   meetingLink: string;
+  schedulingNote?: string;
+  inviteEmailSentAt?: string | null;
+  calendarInviteSent?: boolean;
   status: "Scheduled" | "Completed" | "No Show" | "Rescheduled";
   defenceQuestions: Array<{
     id: string;

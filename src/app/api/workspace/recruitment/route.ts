@@ -33,7 +33,12 @@ import {
   saveSingleCandidateSessionToFirestore,
   saveWorkspaceDb,
 } from "@/lib/workspace/db";
-import { sendAssessmentContinuationEmail, sendRecruitmentAssessmentEmail } from "@/lib/email";
+import {
+  formatInterviewSlotIST,
+  sendAssessmentContinuationEmail,
+  sendInterviewScheduleEmail,
+  sendRecruitmentAssessmentEmail,
+} from "@/lib/email";
 import {
   buildCandidatesFromWorkbookRows,
   buildInitialRecruitmentState,
@@ -739,6 +744,20 @@ export async function POST(request: NextRequest) {
     }
     if (typeof updates.applicationStatus === "string") {
       cand.applicationStatus = updates.applicationStatus as CandidateSelectionStatus;
+      if (!updates.currentStage) {
+        if (
+          updates.applicationStatus === "Shortlisted for Final Interview" ||
+          updates.applicationStatus === "Interview Stage"
+        ) {
+          cand.currentStage = "Stage 5: Interview & Defence";
+        } else if (updates.applicationStatus === "Waitlisted") {
+          cand.currentStage = "Waitlisted";
+        } else if (updates.applicationStatus === "Rejected") {
+          cand.currentStage = "Rejected";
+        } else if (updates.applicationStatus === "Selected") {
+          cand.currentStage = "Selected";
+        }
+      }
     }
     if (typeof updates.assessmentStatus === "string") {
       cand.assessmentStatus = updates.assessmentStatus as CandidateAssessmentStatus;
@@ -814,6 +833,11 @@ export async function POST(request: NextRequest) {
         cand.applicationStatus = body.applicationStatus as CandidateSelectionStatus;
         if (body.applicationStatus === "Shortlisted for Assessment") {
           cand.currentStage = "Stage 1B: AI Interview & Startup Simulation";
+        } else if (
+          body.applicationStatus === "Shortlisted for Final Interview" ||
+          body.applicationStatus === "Interview Stage"
+        ) {
+          cand.currentStage = "Stage 5: Interview & Defence";
         } else if (body.applicationStatus === "Selected") {
           cand.currentStage = "Selected";
         } else if (body.applicationStatus === "Rejected") {
@@ -1758,8 +1782,186 @@ export async function POST(request: NextRequest) {
   }
 
   // ==========================================================================
-  // 8. LIVE INTERVIEW & RESEARCH DEFENCE SCORECARD (STAGE 5)
+  // 8. LIVE INTERVIEW & RESEARCH DEFENCE SCORECARD & SCHEDULER (STAGE 5)
   // ==========================================================================
+  if (action === "interview.schedule_and_send") {
+    const rawItems = Array.isArray(body.items)
+      ? (body.items as Array<{
+          candidateId: string;
+          scheduledAt: string;
+          durationMinutes?: number;
+          meetingLink?: string;
+          interviewerName?: string;
+          roundLabel?: string;
+          customNote?: string;
+        }>)
+      : [
+          {
+            candidateId: String(body.candidateId || ""),
+            scheduledAt: String(body.scheduledAt || ""),
+            durationMinutes: Number(body.durationMinutes || 30),
+            meetingLink: String(body.meetingLink || "https://meet.google.com/dvc-iima-defence"),
+            interviewerName: String(body.interviewerName || user.name || "Siddharth Kaushik"),
+            roundLabel: String(body.roundLabel || "Stage 5: Final Partner & Research Defence"),
+            customNote: typeof body.customNote === "string" ? body.customNote : "",
+          },
+        ];
+
+    const sendEmail = body.sendEmail !== false;
+    const isReschedule = body.isReschedule === true;
+    const originHeader = request.headers.get("origin") || request.nextUrl.origin || "https://deeveecapital.com";
+    const safeOrigin =
+      originHeader.includes("0.0.0.0") ||
+      originHeader.includes("127.0.0.1") ||
+      originHeader.includes("localhost")
+        ? "https://deeveecapital.com"
+        : originHeader.replace(/\/$/, "");
+
+    let scheduledCount = 0;
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    const scheduledRecords: InterviewEvaluationRecord[] = [];
+
+    for (const item of rawItems) {
+      const cand = rec.candidates.find((c) => c.id === item.candidateId);
+      if (!cand) {
+        errors.push(`Candidate not found: ${item.candidateId}`);
+        continue;
+      }
+      const scheduledIso =
+        item.scheduledAt && !Number.isNaN(new Date(item.scheduledAt).getTime())
+          ? new Date(item.scheduledAt).toISOString()
+          : new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      const durationMinutes = Math.max(15, Number(item.durationMinutes || 30));
+      const meetingLink =
+        (item.meetingLink || "https://meet.google.com/dvc-iima-defence").trim();
+      const interviewerName =
+        (item.interviewerName || user.name || "Siddharth Kaushik").trim();
+      const roundLabel =
+        (item.roundLabel || "Stage 5: Final Partner & Research Defence").trim();
+      const customNote = (item.customNote || "").trim();
+
+      const existingIdx = rec.interviews.findIndex((i) => i.candidateId === cand.id);
+      const existing = existingIdx >= 0 ? rec.interviews[existingIdx] : null;
+      const wasAlreadyScheduled = Boolean(existing && existing.status === "Scheduled");
+
+      const record: InterviewEvaluationRecord = {
+        id: existing?.id || `int-${cand.id}`,
+        candidateId: cand.id,
+        candidateCode: cand.candidateCode,
+        candidateName: cand.fullName,
+        candidateEmail: cand.email,
+        interviewerId: existing?.interviewerId || user.id,
+        interviewerName,
+        scheduledAt: scheduledIso,
+        durationMinutes,
+        roundLabel,
+        meetingLink,
+        schedulingNote: customNote,
+        inviteEmailSentAt: existing?.inviteEmailSentAt || null,
+        calendarInviteSent: existing?.calendarInviteSent || false,
+        status: "Scheduled",
+        defenceQuestions: existing?.defenceQuestions || [],
+        aiToolDefenceAssessment: existing?.aiToolDefenceAssessment || "",
+        independentVerificationRating: existing?.independentVerificationRating || 4,
+        ownershipAndCuriosityRating: existing?.ownershipAndCuriosityRating || 4,
+        overallInterviewScore: existing?.overallInterviewScore || 0,
+        overallNotes: existing?.overallNotes || "",
+        decisionRecommendation: existing?.decisionRecommendation || "Hire",
+        completedAt: null,
+      };
+
+      let emailSendStatus: "Sent (SMTP)" | "Sent (Logged Sandbox)" | "Failed" | "Skipped" = "Skipped";
+      const slotFormatted = formatInterviewSlotIST(scheduledIso, durationMinutes);
+
+      if (sendEmail) {
+        const portalLink = `${safeOrigin}/candidate?code=${encodeURIComponent(cand.candidateCode)}&email=${encodeURIComponent(cand.email)}`;
+        const sendResult = await sendInterviewScheduleEmail({
+          to: cand.email,
+          candidateName: cand.fullName,
+          candidateCode: cand.candidateCode,
+          candidateEmail: cand.email,
+          scheduledAtIso: scheduledIso,
+          durationMinutes,
+          interviewerName,
+          roundLabel,
+          meetingLink,
+          portalLink,
+          customNote: customNote || undefined,
+          isReschedule: isReschedule || wasAlreadyScheduled,
+        });
+
+        emailSendStatus = sendResult.success
+          ? sendResult.mode === "smtp"
+            ? "Sent (SMTP)"
+            : "Sent (Logged Sandbox)"
+          : "Failed";
+
+        if (sendResult.success) {
+          record.inviteEmailSentAt = now;
+          record.calendarInviteSent = true;
+          cand.lastCommunicationAt = now;
+          sentCount += 1;
+        } else {
+          failedCount += 1;
+          errors.push(`${cand.email}: ${sendResult.error || "SMTP send failed"}`);
+        }
+
+        rec.emailLogs.unshift({
+          id: `eml-${Date.now()}-${scheduledCount}`,
+          candidateId: cand.id,
+          candidateName: cand.fullName,
+          recipientEmail: cand.email,
+          templateId: "tpl-interview-invite",
+          subject: `${isReschedule || wasAlreadyScheduled ? "Updated Schedule: " : ""}Interview Invitation (${slotFormatted.fullSlotLabel}) – ${cand.candidateCode}`,
+          status:
+            emailSendStatus === "Sent (SMTP)"
+              ? "Sent (SMTP)"
+              : emailSendStatus === "Sent (Logged Sandbox)"
+              ? "Sent (Logged Sandbox)"
+              : "Failed",
+          isTestSend: false,
+          sentBy: user.name,
+          sentAt: now,
+          error: sendResult.error,
+        });
+      }
+
+      if (existingIdx >= 0) {
+        rec.interviews[existingIdx] = record;
+      } else {
+        rec.interviews.unshift(record);
+      }
+
+      cand.currentStage = "Stage 5: Interview & Defence";
+      cand.applicationStatus = "Interview Stage";
+      cand.updatedAt = now;
+      cand.activityTimeline.unshift({
+        id: `act-${Date.now()}-${scheduledCount}`,
+        action: sendEmail ? "interview.scheduled_and_emailed" : "interview.scheduled",
+        summary: `${user.name} scheduled Stage 5 interview for ${slotFormatted.fullSlotLabel}${
+          sendEmail ? ` (${emailSendStatus})` : " (email skipped)"
+        }`,
+        actorName: user.name,
+        timestamp: now,
+      });
+
+      scheduledRecords.push(record);
+      scheduledCount += 1;
+    }
+
+    await saveRecruitmentMetadataAndCandidatesToFirestore(db);
+    return NextResponse.json({
+      scheduledCount,
+      sentCount,
+      failedCount,
+      errors,
+      interviews: scheduledRecords,
+      recruitment: rec,
+    });
+  }
+
   if (action === "interview.save") {
     const interviewPayload = body.interview as Partial<InterviewEvaluationRecord>;
     const candidateId = String(interviewPayload?.candidateId || "");
@@ -1771,22 +1973,31 @@ export async function POST(request: NextRequest) {
     const existingIdx = rec.interviews.findIndex(
       (i) => i.id === interviewPayload.id || i.candidateId === cand.id
     );
+    const existing = existingIdx >= 0 ? rec.interviews[existingIdx] : null;
 
     const record: InterviewEvaluationRecord = {
-      id: interviewPayload.id || `int-${cand.id}`,
+      id: existing?.id || interviewPayload.id || `int-${cand.id}`,
       candidateId: cand.id,
       candidateCode: cand.candidateCode,
       candidateName: cand.fullName,
       candidateEmail: cand.email,
-      interviewerId: interviewPayload.interviewerId || user.id,
-      interviewerName: interviewPayload.interviewerName || user.name,
+      interviewerId: interviewPayload.interviewerId || existing?.interviewerId || user.id,
+      interviewerName: interviewPayload.interviewerName || existing?.interviewerName || user.name,
       scheduledAt:
         interviewPayload.scheduledAt ||
+        existing?.scheduledAt ||
         new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      durationMinutes: interviewPayload.durationMinutes || existing?.durationMinutes || 30,
+      roundLabel: interviewPayload.roundLabel || existing?.roundLabel || "Stage 5: Final Partner & Research Defence",
       meetingLink:
-        interviewPayload.meetingLink || "https://meet.google.com/dvc-iima-defence",
+        interviewPayload.meetingLink ||
+        existing?.meetingLink ||
+        "https://meet.google.com/dvc-iima-defence",
+      schedulingNote: interviewPayload.schedulingNote ?? existing?.schedulingNote ?? "",
+      inviteEmailSentAt: existing?.inviteEmailSentAt || null,
+      calendarInviteSent: existing?.calendarInviteSent || false,
       status: interviewPayload.status || "Scheduled",
-      defenceQuestions: interviewPayload.defenceQuestions || [],
+      defenceQuestions: interviewPayload.defenceQuestions || existing?.defenceQuestions || [],
       aiToolDefenceAssessment: interviewPayload.aiToolDefenceAssessment || "",
       independentVerificationRating: Number(
         interviewPayload.independentVerificationRating || 4

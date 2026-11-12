@@ -146,6 +146,15 @@ interface CandidatePortalProfile {
   assessmentStatus: string;
   passwordConfigured: boolean;
   assessmentDeadlineAt: string | null;
+  scheduledInterview?: {
+    scheduledAt: string;
+    durationMinutes: number;
+    roundLabel: string;
+    meetingLink: string;
+    interviewerName: string;
+    schedulingNote?: string;
+    status: string;
+  } | null;
 }
 
 const SAMPLE_TEST_CANDIDATES = [
@@ -1943,6 +1952,49 @@ function CandidatePortalInner() {
                 </div>
               </div>
             </div>
+
+            {candidate.scheduledInterview && (
+              <div className="p-5 rounded-xl bg-emerald-950/35 border border-emerald-500/45 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                      🎉 Shortlisted for Final Interview • Confirmed Slot
+                    </div>
+                    <h3 className="text-lg font-bold text-white mt-0.5">
+                      {candidate.scheduledInterview.roundLabel}
+                    </h3>
+                    <div className="text-xs text-slate-300 mt-1">
+                      <strong>When:</strong>{" "}
+                      {new Date(candidate.scheduledInterview.scheduledAt).toLocaleString("en-IN", {
+                        timeZone: "Asia/Kolkata",
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}{" "}
+                      IST ({candidate.scheduledInterview.durationMinutes} mins) •{" "}
+                      <strong>Panelist:</strong> {candidate.scheduledInterview.interviewerName}
+                    </div>
+                    {candidate.scheduledInterview.schedulingNote && (
+                      <div className="text-xs text-slate-300 mt-1 italic">
+                        Note: {candidate.scheduledInterview.schedulingNote}
+                      </div>
+                    )}
+                  </div>
+                  <a
+                    href={candidate.scheduledInterview.meetingLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition shrink-0"
+                  >
+                    Join Interview Call &rarr;
+                  </a>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
