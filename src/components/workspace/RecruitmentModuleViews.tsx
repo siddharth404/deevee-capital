@@ -65,6 +65,12 @@ import {
 } from "@/lib/workspace/aiInterviewEngine";
 import InterviewScheduleModal from "./InterviewScheduleModal";
 import PartnerCallsSection from "./PartnerCallsSection";
+import {
+  CandidateShortlistMetrics,
+  computeCandidateShortlistMetrics,
+  DEFAULT_SHORTLIST_WEIGHTS,
+  ShortlistWeightsConfig,
+} from "@/lib/workspace/shortlistCompositeEngine";
 
 export type RecruitmentSubTab =
   | "rec-dashboard"
@@ -237,10 +243,24 @@ export default function RecruitmentModuleViews({
   const [submissionIntegrityFilter, setSubmissionIntegrityFilter] = useState<
     "ALL" | "CLEAN" | "MEDIUM" | "FLAGGED"
   >("ALL");
+  const [submissionHumannessFilter, setSubmissionHumannessFilter] = useState<
+    "ALL" | "AUTHENTIC" | "MIXED" | "SUSPECT"
+  >("ALL");
   const [submissionOnlyWinner, setSubmissionOnlyWinner] = useState<boolean>(false);
   const [submissionSort, setSubmissionSort] = useState<
-    "score_desc" | "composite_desc" | "phase3_desc" | "integrity_desc" | "recent"
-  >("score_desc");
+    | "composite_desc"
+    | "score_desc"
+    | "humanness_desc"
+    | "research_desc"
+    | "profile_desc"
+    | "phase3_desc"
+    | "integrity_desc"
+    | "recent"
+  >("composite_desc");
+  const [shortlistWeights, setShortlistWeights] = useState<ShortlistWeightsConfig>(
+    DEFAULT_SHORTLIST_WEIGHTS
+  );
+  const [showWeightsEditor, setShowWeightsEditor] = useState<boolean>(false);
   const [submissionViewMode, setSubmissionViewMode] = useState<"audit" | "table">("audit");
   const [submissionSearch, setSubmissionSearch] = useState<string>("");
   const [selectedSubmissionCandidateIds, setSelectedSubmissionCandidateIds] = useState<
@@ -505,6 +525,51 @@ export default function RecruitmentModuleViews({
     );
   }, []);
 
+  const caseSetByIdMap = useMemo(() => {
+    const map = new Map<string, StartupCaseSet>();
+    const sets =
+      recruitment?.startupCaseSets && recruitment.startupCaseSets.length > 0
+        ? recruitment.startupCaseSets
+        : DEFAULT_STARTUP_CASE_SETS;
+    for (const cs of sets) {
+      map.set(cs.id, cs);
+    }
+    return map;
+  }, [recruitment?.startupCaseSets]);
+
+  const metricsBySessionId = useMemo(() => {
+    const map = new Map<string, CandidateShortlistMetrics>();
+    for (const s of aiSessions) {
+      const cand = candidateByIdMap.get(s.candidateId) || candidateByIdMap.get(s.candidateCode);
+      const cs =
+        caseSetByIdMap.get(s.assignedCaseSetId) ||
+        (cand ? selectCaseSetForCandidate(cand) : DEFAULT_STARTUP_CASE_SETS[0]);
+      map.set(s.id, computeCandidateShortlistMetrics(cand, s, cs, shortlistWeights));
+    }
+    return map;
+  }, [aiSessions, candidateByIdMap, caseSetByIdMap, shortlistWeights]);
+
+  const metricsByCandidateId = useMemo(() => {
+    const sessByCand = new Map<string, AIInterviewSessionRecord>();
+    for (const s of aiSessions) {
+      if (s.candidateId) sessByCand.set(s.candidateId, s);
+      if (s.candidateCode) sessByCand.set(s.candidateCode, s);
+    }
+    const map = new Map<string, CandidateShortlistMetrics>();
+    for (const c of candidates) {
+      const s = sessByCand.get(c.id) || sessByCand.get(c.candidateCode);
+      if (s && metricsBySessionId.has(s.id)) {
+        map.set(c.id, metricsBySessionId.get(s.id)!);
+      } else {
+        map.set(
+          c.id,
+          computeCandidateShortlistMetrics(c, s, selectCaseSetForCandidate(c), shortlistWeights)
+        );
+      }
+    }
+    return map;
+  }, [candidates, aiSessions, metricsBySessionId, shortlistWeights]);
+
   const filteredSessions = useMemo(() => {
     const list = aiSessions.filter((s) => {
       const isSample =
@@ -564,6 +629,20 @@ export default function RecruitmentModuleViews({
       if (submissionIntegrityFilter === "MEDIUM" && (integ < 50 || integ >= 80)) return false;
       if (submissionIntegrityFilter === "FLAGGED" && integ >= 50) return false;
 
+      const met = metricsBySessionId.get(s.id);
+      if (submissionHumannessFilter === "AUTHENTIC" && (met?.humannessScore ?? 0) < 75) {
+        return false;
+      }
+      if (
+        submissionHumannessFilter === "MIXED" &&
+        ((met?.humannessScore ?? 0) < 52 || (met?.humannessScore ?? 0) >= 75)
+      ) {
+        return false;
+      }
+      if (submissionHumannessFilter === "SUSPECT" && (met?.humannessScore ?? 0) >= 52) {
+        return false;
+      }
+
       if (submissionOnlyWinner && !s.scoringBreakdown?.pickedCorrectWinningStartup) {
         return false;
       }
@@ -577,18 +656,25 @@ export default function RecruitmentModuleViews({
     });
 
     return [...list].sort((a, b) => {
+      const ma = metricsBySessionId.get(a.id);
+      const mb = metricsBySessionId.get(b.id);
+      if (submissionSort === "composite_desc") {
+        return (mb?.compositeScore ?? 0) - (ma?.compositeScore ?? 0);
+      }
+      if (submissionSort === "humanness_desc") {
+        return (mb?.humannessScore ?? 0) - (ma?.humannessScore ?? 0);
+      }
+      if (submissionSort === "research_desc") {
+        return (mb?.researchRelevancyScore ?? 0) - (ma?.researchRelevancyScore ?? 0);
+      }
+      if (submissionSort === "profile_desc") {
+        return (mb?.profileScore ?? 0) - (ma?.profileScore ?? 0);
+      }
       if (submissionSort === "phase3_desc") {
         return getPhase3Score(b) - getPhase3Score(a);
       }
       if (submissionSort === "integrity_desc") {
         return (b.proctoring?.integrityScore ?? 0) - (a.proctoring?.integrityScore ?? 0);
-      }
-      if (submissionSort === "composite_desc") {
-        const ca = candidateByIdMap.get(a.candidateId) || candidateByIdMap.get(a.candidateCode);
-        const cb = candidateByIdMap.get(b.candidateId) || candidateByIdMap.get(b.candidateCode);
-        const compA = Math.round(((ca?.profileScore ?? 0) * 0.3) + (getEffectiveSessionScore(a) * 0.7));
-        const compB = Math.round(((cb?.profileScore ?? 0) * 0.3) + (getEffectiveSessionScore(b) * 0.7));
-        return compB - compA;
       }
       if (submissionSort === "recent") {
         const ta = new Date(a.completedAt || a.startedAt || 0).getTime();
@@ -604,11 +690,13 @@ export default function RecruitmentModuleViews({
     submissionCohortFilter,
     submissionStatusFilter,
     submissionIntegrityFilter,
+    submissionHumannessFilter,
     submissionOnlyWinner,
     submissionSearch,
     submissionSort,
     candidateByIdMap,
     interviewByCandidateMap,
+    metricsBySessionId,
     getCandidateCohort,
     getEffectiveSessionScore,
     getPhase3Score,
@@ -667,8 +755,15 @@ export default function RecruitmentModuleViews({
       "Cohort",
       "Submission Status",
       "Decision Status",
-      "Stage 1 Profile Score",
-      "Overall AI Score",
+      "Trusted Shortlist Composite",
+      "Trust Tier",
+      "Profile Score",
+      "Humanness & Trust Score",
+      "Linguistic Humanness Score",
+      "Research & Domain Relevancy Score",
+      "Humanness Verdict",
+      "AI Fingerprint Alerts",
+      "Overall AI Test Score",
       "Partner Override Score",
       "Phase 1 Resume Score",
       "Phase 2 Startup Score",
@@ -690,6 +785,7 @@ export default function RecruitmentModuleViews({
     const rows = sessionsToExport.map((s) => {
       const cand = candidateByIdMap.get(s.candidateId) || candidateByIdMap.get(s.candidateCode);
       const sb = s.scoringBreakdown;
+      const met = metricsBySessionId.get(s.id);
       const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
       return [
         s.candidateCode,
@@ -698,7 +794,14 @@ export default function RecruitmentModuleViews({
         getCandidateCohort(cand, s.candidateCode),
         s.status,
         cand?.applicationStatus || "",
-        cand?.profileScore ?? "",
+        met?.compositeScore ?? "",
+        met?.trustTier ?? "",
+        met?.profileScore ?? cand?.profileScore ?? "",
+        met?.humannessScore ?? "",
+        met?.linguisticHumannessScore ?? "",
+        met?.researchRelevancyScore ?? "",
+        met?.humannessVerdict ?? "",
+        met?.aiFingerprintHits.join("; ") ?? "",
         sb?.overallAiInterviewScore ?? "",
         s.reviewerOverrideScore ?? "",
         sb?.phase1ResumeProbeScore ?? "",
@@ -2788,21 +2891,57 @@ export default function RecruitmentModuleViews({
                     onChange={(e) =>
                       setSubmissionSort(
                         e.target.value as
-                          | "score_desc"
                           | "composite_desc"
+                          | "score_desc"
+                          | "humanness_desc"
+                          | "research_desc"
+                          | "profile_desc"
                           | "phase3_desc"
                           | "integrity_desc"
                           | "recent"
                       )
                     }
-                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs font-medium"
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-emerald-500/40 text-white text-xs font-medium"
                   >
-                    <option value="score_desc">Sort: AI / Override Score (High → Low)</option>
-                    <option value="composite_desc">Sort: Composite (70% AI + 30% Stage 1)</option>
+                    <option value="composite_desc">Sort: Trusted Shortlist Composite (High → Low)</option>
+                    <option value="humanness_desc">Sort: Humanness &amp; Anti-Cheat (High → Low)</option>
+                    <option value="research_desc">Sort: Research &amp; Domain Relevancy</option>
+                    <option value="profile_desc">Sort: Profile &amp; Resume Score</option>
+                    <option value="score_desc">Sort: Raw AI / Override Score</option>
                     <option value="phase3_desc">Sort: Phase 3 Deal Triage Score</option>
                     <option value="integrity_desc">Sort: Proctoring Integrity %</option>
                     <option value="recent">Sort: Most Recent Submission</option>
                   </select>
+
+                  <select
+                    value={submissionHumannessFilter}
+                    onChange={(e) =>
+                      setSubmissionHumannessFilter(
+                        e.target.value as "ALL" | "AUTHENTIC" | "MIXED" | "SUSPECT"
+                      )
+                    }
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                  >
+                    <option value="ALL">Humanness: All</option>
+                    <option value="AUTHENTIC">Authentic Human (&ge; 75%)</option>
+                    <option value="MIXED">Mixed / Verify on Call (52–74%)</option>
+                    <option value="SUSPECT">Likely AI / Cheated (&lt; 52%)</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowWeightsEditor((v) => !v)}
+                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition ${
+                      showWeightsEditor
+                        ? "bg-indigo-600/30 border-indigo-500 text-indigo-200"
+                        : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                    }`}
+                  >
+                    <Settings className="w-3 h-3 text-indigo-400" />
+                    <span>
+                      Weights ({shortlistWeights.profileWeight}/{shortlistWeights.humannessWeight}/{shortlistWeights.researchRelevancyWeight}/{shortlistWeights.assessmentWeight})
+                    </span>
+                  </button>
 
                   <select
                     value={submissionCohortFilter}
@@ -2905,6 +3044,105 @@ export default function RecruitmentModuleViews({
                   </button>
                 </div>
               </div>
+
+              {showWeightsEditor && (
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-indigo-500/35 space-y-2.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-indigo-300">
+                      Trusted Shortlist Composite Formula (Normalized automatically to 100%)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShortlistWeights(DEFAULT_SHORTLIST_WEIGHTS)}
+                      className="text-[11px] text-slate-400 hover:text-white underline"
+                    >
+                      Reset Defaults (25 / 25 / 30 / 20)
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 flex justify-between">
+                        <span>Profile &amp; Track Record</span>
+                        <strong className="text-white">{shortlistWeights.profileWeight}%</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60}
+                        step={5}
+                        value={shortlistWeights.profileWeight}
+                        onChange={(e) =>
+                          setShortlistWeights((w) => ({
+                            ...w,
+                            profileWeight: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-blue-500 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 flex justify-between">
+                        <span>Humanness &amp; Anti-Cheat</span>
+                        <strong className="text-emerald-300">{shortlistWeights.humannessWeight}%</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60}
+                        step={5}
+                        value={shortlistWeights.humannessWeight}
+                        onChange={(e) =>
+                          setShortlistWeights((w) => ({
+                            ...w,
+                            humannessWeight: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-emerald-500 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 flex justify-between">
+                        <span>Research Relevancy</span>
+                        <strong className="text-cyan-300">{shortlistWeights.researchRelevancyWeight}%</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60}
+                        step={5}
+                        value={shortlistWeights.researchRelevancyWeight}
+                        onChange={(e) =>
+                          setShortlistWeights((w) => ({
+                            ...w,
+                            researchRelevancyWeight: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-cyan-500 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 flex justify-between">
+                        <span>Test Performance Score</span>
+                        <strong className="text-amber-300">{shortlistWeights.assessmentWeight}%</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60}
+                        step={5}
+                        value={shortlistWeights.assessmentWeight}
+                        onChange={(e) =>
+                          setShortlistWeights((w) => ({
+                            ...w,
+                            assessmentWeight: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-amber-500 mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3071,12 +3309,13 @@ export default function RecruitmentModuleViews({
                     <th className="py-2 px-2">Rank</th>
                     <th className="py-2 px-2">Candidate</th>
                     <th className="py-2 px-2">Cohort</th>
-                    <th className="py-2 px-2">Stg 1</th>
-                    <th className="py-2 px-2">Ph 1 / 2</th>
-                    <th className="py-2 px-2">Ph 3 Tasks</th>
-                    <th className="py-2 px-2">AI Score</th>
+                    <th className="py-2 px-2 text-emerald-300">Composite</th>
+                    <th className="py-2 px-2">Profile</th>
+                    <th className="py-2 px-2">Humanness</th>
+                    <th className="py-2 px-2">Research</th>
+                    <th className="py-2 px-2">Test Score</th>
+                    <th className="py-2 px-2">Trust Tier</th>
                     <th className="py-2 px-2">Winner</th>
-                    <th className="py-2 px-2">Integrity</th>
                     <th className="py-2 px-2">Decision</th>
                     <th className="py-2 pl-2 text-right">Quick Actions</th>
                   </tr>
@@ -3088,6 +3327,7 @@ export default function RecruitmentModuleViews({
                       candidateByIdMap.get(s.candidateCode);
                     const cohort = getCandidateCohort(cand, s.candidateCode);
                     const sb = s.scoringBreakdown;
+                    const met = metricsBySessionId.get(s.id);
                     const effScore = getEffectiveSessionScore(s);
                     const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
                     const checked = selectedSubmissionCandidateIds.includes(s.candidateId);
@@ -3139,23 +3379,49 @@ export default function RecruitmentModuleViews({
                             {cohort}
                           </span>
                         </td>
-                        <td className="py-2.5 px-2 font-mono text-slate-300">
-                          {cand?.profileScore ?? "—"}
+                        <td className="py-2.5 px-2 font-mono font-bold text-emerald-400 text-sm">
+                          {met?.compositeScore ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-2 font-mono text-slate-200">
+                          {met?.profileScore ?? cand?.profileScore ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-2 font-mono">
+                          <span
+                            className={
+                              (met?.humannessScore ?? 0) >= 75
+                                ? "text-emerald-400 font-semibold"
+                                : (met?.humannessScore ?? 0) >= 52
+                                ? "text-amber-300 font-semibold"
+                                : "text-rose-400 font-bold"
+                            }
+                          >
+                            {met?.humannessScore ?? "—"}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-2 font-mono text-cyan-300 font-semibold">
+                          {met?.researchRelevancyScore ?? "—"}
                         </td>
                         <td className="py-2.5 px-2 font-mono text-slate-300">
-                          {sb ? `${sb.phase1ResumeProbeScore} / ${sb.phase2StartupThinkingScore}` : "—"}
-                        </td>
-                        <td className="py-2.5 px-2 font-mono text-cyan-300">
-                          {sb
-                            ? `${sb.phase3Task1RedFlagAuditScore}/${sb.phase3Task2CapitalAllocationScore}/${sb.phase3Task3RiskAndFounderQuestionsScore}`
-                            : "—"}
-                        </td>
-                        <td className="py-2.5 px-2 font-bold text-emerald-400 font-mono">
-                          {effScore}/100
+                          {effScore}
                           {s.reviewerOverrideScore !== null &&
                             s.reviewerOverrideScore !== undefined && (
                               <span className="ml-1 text-[9px] text-amber-300">(Ed)</span>
                             )}
+                        </td>
+                        <td className="py-2.5 px-2">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              met?.trustTier === "Top Shortlist"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : met?.trustTier === "Strong Candidate"
+                                ? "bg-blue-500/20 text-blue-300"
+                                : met?.trustTier === "Verify Integrity"
+                                ? "bg-amber-500/20 text-amber-300"
+                                : "bg-rose-500/20 text-rose-300"
+                            }`}
+                          >
+                            {met?.trustTier || "—"}
+                          </span>
                         </td>
                         <td className="py-2.5 px-2">
                           {sb?.pickedCorrectWinningStartup ? (
@@ -3163,19 +3429,6 @@ export default function RecruitmentModuleViews({
                           ) : (
                             <span className="text-rose-400">NO ✗</span>
                           )}
-                        </td>
-                        <td className="py-2.5 px-2 font-mono">
-                          <span
-                            className={
-                              (s.proctoring?.integrityScore ?? 0) >= 80
-                                ? "text-emerald-400"
-                                : (s.proctoring?.integrityScore ?? 0) >= 50
-                                ? "text-amber-300"
-                                : "text-rose-400"
-                            }
-                          >
-                            {s.proctoring?.integrityScore ?? 0}%
-                          </span>
                         </td>
                         <td className="py-2.5 px-2">
                           <span
@@ -3285,6 +3538,7 @@ export default function RecruitmentModuleViews({
                   const appStatus = cand?.applicationStatus || "";
                   const inv = cand ? interviewByCandidateMap.get(cand.id) : undefined;
                   const isChecked = selectedSubmissionCandidateIds.includes(s.candidateId);
+                  const met = metricsBySessionId.get(s.id);
 
                   return (
                     <div
@@ -3329,18 +3583,16 @@ export default function RecruitmentModuleViews({
                         </div>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                            s.status === "Completed"
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : liveScore !== undefined
-                              ? "bg-blue-500/15 text-blue-300 border border-blue-500/30"
-                              : "bg-amber-500/15 text-amber-300"
+                            met?.trustTier === "Top Shortlist"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : met?.trustTier === "Strong Candidate"
+                              ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                              : met?.trustTier === "Verify Integrity"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                              : "bg-rose-500/15 text-rose-300"
                           }`}
                         >
-                          {s.status === "Completed"
-                            ? `${liveScore ?? "—"}/100`
-                            : liveScore !== undefined
-                            ? `${liveScore}/100 (${answeredCount}/6)`
-                            : `In Prog (${answeredCount}/6)`}
+                          Comp: {met?.compositeScore ?? liveScore ?? "—"}
                         </span>
                       </div>
 
@@ -3358,6 +3610,38 @@ export default function RecruitmentModuleViews({
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                      </div>
+
+                      {/* 4-PILLAR MINI SCORE STRIP */}
+                      <div className="grid grid-cols-4 gap-1 text-[10px] font-mono bg-slate-900/70 rounded-lg p-1.5 border border-slate-800/80">
+                        <div>
+                          <span className="text-slate-500">Prof:</span>{" "}
+                          <strong className="text-slate-200">{met?.profileScore ?? "—"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Hum:</span>{" "}
+                          <strong
+                            className={
+                              (met?.humannessScore ?? 0) >= 75
+                                ? "text-emerald-400"
+                                : (met?.humannessScore ?? 0) >= 52
+                                ? "text-amber-300"
+                                : "text-rose-400"
+                            }
+                          >
+                            {met?.humannessScore ?? "—"}%
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Res:</span>{" "}
+                          <strong className="text-cyan-300">{met?.researchRelevancyScore ?? "—"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Test:</span>{" "}
+                          <strong className="text-slate-200">
+                            {s.status === "Completed" ? liveScore ?? "—" : `${answeredCount}/6`}
+                          </strong>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] pt-0.5">
@@ -3428,6 +3712,7 @@ export default function RecruitmentModuleViews({
                 const activeInterview = targetCand
                   ? interviewByCandidateMap.get(targetCand.id)
                   : undefined;
+                const activeMetrics = metricsBySessionId.get(sess.id);
 
                 return (
                   <div className="lg:col-span-8 space-y-5">
@@ -3716,6 +4001,152 @@ export default function RecruitmentModuleViews({
                           </div>
                         )}
                       </div>
+
+                      {/* TRUSTED SHORTLIST COMPOSITE: PROFILE + HUMANNESS + RESEARCH RELEVANCY + TEST */}
+                      {activeMetrics && (
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-slate-950 via-slate-950 to-indigo-950/30 border border-indigo-500/35 space-y-3 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+                                Multi-Factor Shortlist Verification (Anti-Cheat Weighted)
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-xl font-extrabold text-emerald-400 font-mono">
+                                  Composite: {activeMetrics.compositeScore}/100
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                    activeMetrics.trustTier === "Top Shortlist"
+                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                      : activeMetrics.trustTier === "Strong Candidate"
+                                      ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                                      : activeMetrics.trustTier === "Verify Integrity"
+                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                      : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  }`}
+                                >
+                                  {activeMetrics.trustTier}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                    activeMetrics.humannessVerdict === "Authentic Human"
+                                      ? "bg-emerald-950/60 text-emerald-300 border border-emerald-500/30"
+                                      : activeMetrics.humannessVerdict === "Mixed / Check on Call"
+                                      ? "bg-amber-950/60 text-amber-300 border border-amber-500/30"
+                                      : "bg-rose-950/60 text-rose-300 border border-rose-500/30"
+                                  }`}
+                                >
+                                  Humanness: {activeMetrics.humannessVerdict}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowWeightsEditor((v) => !v)}
+                              className="text-[11px] text-indigo-300 hover:text-indigo-200 underline"
+                            >
+                              Weights: {shortlistWeights.profileWeight}% Prof / {shortlistWeights.humannessWeight}% Hum / {shortlistWeights.researchRelevancyWeight}% Res / {shortlistWeights.assessmentWeight}% Test
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">
+                                1. Profile &amp; Resume ({shortlistWeights.profileWeight}%)
+                              </div>
+                              <div className="text-base font-bold text-white font-mono">
+                                {activeMetrics.profileScore}/100
+                              </div>
+                              {targetCand?.stage1ProfileBreakdown && (
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  Res: {targetCand.stage1ProfileBreakdown.researchExperienceScore}/30 • Exp: {targetCand.stage1ProfileBreakdown.startupCommercialExposureScore}/20
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">
+                                2. Humanness &amp; Trust ({shortlistWeights.humannessWeight}%)
+                              </div>
+                              <div
+                                className={`text-base font-bold font-mono ${
+                                  activeMetrics.humannessScore >= 75
+                                    ? "text-emerald-400"
+                                    : activeMetrics.humannessScore >= 52
+                                    ? "text-amber-300"
+                                    : "text-rose-400"
+                                }`}
+                              >
+                                {activeMetrics.humannessScore}/100
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Text: {activeMetrics.linguisticHumannessScore}% • Proc: {activeMetrics.proctoringTrustScore}%
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">
+                                3. Research Relevancy ({shortlistWeights.researchRelevancyWeight}%)
+                              </div>
+                              <div className="text-base font-bold text-cyan-300 font-mono">
+                                {activeMetrics.researchRelevancyScore}/100
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Specificity, Verification &amp; Data Room
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                              <div className="text-[10px] text-slate-400">
+                                4. Test Performance ({shortlistWeights.assessmentWeight}%)
+                              </div>
+                              <div className="text-base font-bold text-amber-300 font-mono">
+                                {activeMetrics.assessmentScore}/100
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {sess.reviewerOverrideScore !== null &&
+                                sess.reviewerOverrideScore !== undefined
+                                  ? "Partner Override Active"
+                                  : "Raw Auto-Rubric Score"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px]">
+                            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 space-y-1">
+                              <div className="font-bold text-emerald-300">
+                                Humanness &amp; Anti-Cheat Signals
+                              </div>
+                              {activeMetrics.humannessWarnings.map((w, wi) => (
+                                <div key={wi} className="text-rose-300">
+                                  ⚠️ {w}
+                                </div>
+                              ))}
+                              {activeMetrics.humannessPositives.map((p, pi) => (
+                                <div key={pi} className="text-emerald-300/90">
+                                  ✓ {p}
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 space-y-1">
+                              <div className="font-bold text-cyan-300">
+                                Research &amp; Domain Relevancy Signals
+                              </div>
+                              {activeMetrics.researchStrengths.map((sItem, si) => (
+                                <div key={si} className="text-cyan-200/90">
+                                  ✓ {sItem}
+                                </div>
+                              ))}
+                              {activeMetrics.researchGaps.map((gItem, gi) => (
+                                <div key={gi} className="text-amber-300/90">
+                                  • Gap: {gItem}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SAMPLE SANDBOX BANNER */}
                       {isSampleSess && (
@@ -4742,8 +5173,16 @@ export default function RecruitmentModuleViews({
           filteredList = poolCandidates
             .filter(isCandidateSubmitted)
             .sort((a, b) => {
-              const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? 0;
-              const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? 0;
+              const scoreB =
+                b.manualScoreOverride ??
+                metricsByCandidateId.get(b.id)?.compositeScore ??
+                b.aiInterviewScore ??
+                0;
+              const scoreA =
+                a.manualScoreOverride ??
+                metricsByCandidateId.get(a.id)?.compositeScore ??
+                a.aiInterviewScore ??
+                0;
               return scoreB - scoreA;
             });
         } else if (shortlistingFilter === "PENDING") {
@@ -4759,18 +5198,33 @@ export default function RecruitmentModuleViews({
             .filter(
               (c) =>
                 c.applicationStatus === "Shortlisted for Final Interview" ||
+                c.applicationStatus === "Interview Stage" ||
                 c.applicationStatus === "Selected"
             )
             .sort((a, b) => {
-              const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? 0;
-              const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? 0;
+              const scoreB =
+                b.manualScoreOverride ??
+                metricsByCandidateId.get(b.id)?.compositeScore ??
+                b.aiInterviewScore ??
+                0;
+              const scoreA =
+                a.manualScoreOverride ??
+                metricsByCandidateId.get(a.id)?.compositeScore ??
+                a.aiInterviewScore ??
+                0;
               return scoreB - scoreA;
             });
         } else {
           // "ALL"
           filteredList = [...poolCandidates].sort((a, b) => {
-            const scoreB = b.manualScoreOverride ?? b.aiInterviewScore ?? b.finalWeightedScore ?? b.profileScore;
-            const scoreA = a.manualScoreOverride ?? a.aiInterviewScore ?? a.finalWeightedScore ?? a.profileScore;
+            const scoreB =
+              b.manualScoreOverride ??
+              metricsByCandidateId.get(b.id)?.compositeScore ??
+              b.profileScore;
+            const scoreA =
+              a.manualScoreOverride ??
+              metricsByCandidateId.get(a.id)?.compositeScore ??
+              a.profileScore;
             return scoreB - scoreA;
           });
         }
@@ -5025,10 +5479,11 @@ export default function RecruitmentModuleViews({
                           <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
                             <th className="py-2.5 pr-2">Rank</th>
                             <th className="py-2.5 px-2">Candidate</th>
-                            <th className="py-2.5 px-2">Stage 1 Profile</th>
-                            <th className="py-2.5 px-2">AI Interview + Task</th>
-                            <th className="py-2.5 px-2">Proctoring</th>
-                            <th className="py-2.5 px-2">Composite Score</th>
+                            <th className="py-2.5 px-2">Profile ({shortlistWeights.profileWeight}%)</th>
+                            <th className="py-2.5 px-2">Humanness ({shortlistWeights.humannessWeight}%)</th>
+                            <th className="py-2.5 px-2">Research ({shortlistWeights.researchRelevancyWeight}%)</th>
+                            <th className="py-2.5 px-2">Test ({shortlistWeights.assessmentWeight}%)</th>
+                            <th className="py-2.5 px-2 text-emerald-300">Trusted Composite</th>
                             <th className="py-2.5 px-2">Submitted Responses</th>
                             <th className="py-2.5 px-2">Status</th>
                             <th className="py-2.5 pl-2 text-right">Shortlist Actions</th>
@@ -5036,11 +5491,8 @@ export default function RecruitmentModuleViews({
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
                           {filteredList.map((c, idx) => {
-                            const comp =
-                              c.manualScoreOverride ??
-                              c.aiInterviewScore ??
-                              c.finalWeightedScore ??
-                              c.profileScore;
+                            const met = metricsByCandidateId.get(c.id);
+                            const comp = c.manualScoreOverride ?? met?.compositeScore ?? c.profileScore;
                             const isSample = c.candidateCode === "DVC-SAMPLE-001";
                             const sess = sessionByCand.get(c.id) || sessionByCand.get(c.candidateCode);
 
@@ -5067,32 +5519,55 @@ export default function RecruitmentModuleViews({
                                     {c.candidateCode} • {c.ugDegree} ({c.totalWorkExMonths > 0 ? `${c.totalWorkExMonths}m Work-Ex` : "Fresher"})
                                   </div>
                                 </td>
-                                <td className="py-3 px-2">
-                                  <span className="text-slate-300">{c.profileScore}/100</span>
+                                <td className="py-3 px-2 font-mono text-slate-200">
+                                  {met?.profileScore ?? c.profileScore}/100
                                 </td>
                                 <td className="py-3 px-2">
-                                  <span className="font-bold text-emerald-400 text-sm">
-                                    {c.aiInterviewScore !== null && c.aiInterviewScore !== undefined
-                                      ? `${c.aiInterviewScore}/100`
-                                      : "—"}
+                                  <div
+                                    className={`font-bold font-mono ${
+                                      (met?.humannessScore ?? 0) >= 75
+                                        ? "text-emerald-400"
+                                        : (met?.humannessScore ?? 0) >= 52
+                                        ? "text-amber-300"
+                                        : "text-rose-400"
+                                    }`}
+                                  >
+                                    {met?.humannessScore ?? 0}%
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {met?.humannessVerdict || "—"}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2 font-mono font-bold text-cyan-300">
+                                  {met?.researchRelevancyScore ?? "—"}/100
+                                </td>
+                                <td className="py-3 px-2 font-mono">
+                                  <span className="text-slate-200 font-semibold">
+                                    {met?.assessmentScore ?? c.aiInterviewScore ?? "—"}/100
                                   </span>
                                 </td>
                                 <td className="py-3 px-2">
-                                  {c.proctoringIntegrityScore !== null &&
-                                  c.proctoringIntegrityScore !== undefined ? (
-                                    <span className="inline-flex items-center gap-1 text-slate-300">
-                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span>{c.proctoringIntegrityScore}% ({c.proctoringIntegrityStatus})</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-500">—</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-2 font-bold text-white text-sm">
-                                  {comp}/100
-                                  {c.manualScoreOverride && (
-                                    <span className="ml-1 text-[10px] text-amber-300 font-normal">
-                                      (Override)
+                                  <div className="font-bold text-emerald-400 text-sm font-mono">
+                                    {comp}/100
+                                    {c.manualScoreOverride && (
+                                      <span className="ml-1 text-[10px] text-amber-300 font-normal">
+                                        (Override)
+                                      </span>
+                                    )}
+                                  </div>
+                                  {met && (
+                                    <span
+                                      className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-semibold ${
+                                        met.trustTier === "Top Shortlist"
+                                          ? "bg-emerald-500/20 text-emerald-300"
+                                          : met.trustTier === "Strong Candidate"
+                                          ? "bg-blue-500/20 text-blue-300"
+                                          : met.trustTier === "Verify Integrity"
+                                          ? "bg-amber-500/20 text-amber-300"
+                                          : "bg-rose-500/20 text-rose-300"
+                                      }`}
+                                    >
+                                      {met.trustTier}
                                     </span>
                                   )}
                                 </td>
